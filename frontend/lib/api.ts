@@ -1,0 +1,215 @@
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
+
+function getToken() {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("trippilot_token");
+}
+
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const token = getToken();
+  const res = await fetch(`${API_URL}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers || {}),
+    },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Request failed" }));
+    const message = typeof err.detail === "string"
+      ? err.detail
+      : typeof err.detail === "object"
+        ? JSON.stringify(err.detail)
+        : `HTTP ${res.status}`;
+    throw new Error(message);
+  }
+  if (res.status === 204) return undefined as T;
+  return res.json();
+}
+
+export const api = {
+  get: <T>(path: string) => request<T>(path),
+  post: <T>(path: string, body: unknown) =>
+    request<T>(path, { method: "POST", body: JSON.stringify(body) }),
+  put: <T>(path: string, body: unknown) =>
+    request<T>(path, { method: "PUT", body: JSON.stringify(body) }),
+  delete: (path: string) => request(path, { method: "DELETE" }),
+};
+
+// ── Auth / current user ──
+export const authApi = {
+  me: () => api.get<any>("/auth/me"),
+  updateMe: (data: any) => api.put<any>("/auth/me", data),
+  listUsers: () => api.get<any[]>("/auth/users"),
+  register: (data: any) => api.post<any>("/auth/register", data),
+};
+
+// ── User Groups ──
+export const userGroupsApi = {
+  list: () => api.get<any[]>("/user-groups"),
+};
+
+// ── Customers ──
+export const customersApi = {
+  list: (params?: Record<string, string | number | boolean>) => {
+    const qs = params ? "?" + new URLSearchParams(params as any).toString() : "";
+    return api.get<any>(`/customers${qs}`);
+  },
+  get: (id: number) => api.get<any>(`/customers/${id}`),
+  create: (data: any) => api.post<any>("/customers", data),
+  update: (id: number, data: any) => api.put<any>(`/customers/${id}`, data),
+  delete: (id: number) => api.delete(`/customers/${id}`),
+};
+
+// ── B2B Partners ──
+export const b2bPartnersApi = {
+  list: (params?: Record<string, string | number | boolean>) => {
+    const qs = params ? "?" + new URLSearchParams(params as any).toString() : "";
+    return api.get<any>(`/b2b-partners${qs}`);
+  },
+  get: (id: number) => api.get<any>(`/b2b-partners/${id}`),
+  create: (data: any) => api.post<any>("/b2b-partners", data),
+  update: (id: number, data: any) => api.put<any>(`/b2b-partners/${id}`, data),
+  delete: (id: number) => api.delete(`/b2b-partners/${id}`),
+};
+
+// ── Leads ──
+export const leadsApi = {
+  list: (params?: Record<string, string | number | boolean>) => {
+    const qs = params ? "?" + new URLSearchParams(params as any).toString() : "";
+    return api.get<any>(`/leads${qs}`);
+  },
+  get: (id: number) => api.get<any>(`/leads/${id}`),
+  create: (data: any) => api.post<any>("/leads", data),
+  update: (id: number, data: any) => api.put<any>(`/leads/${id}`, data),
+  remove: (id: number) => api.delete(`/leads/${id}`),
+  delete: (id: number) => api.delete(`/leads/${id}`),
+  aiEntry: (text: string) => api.post<any>("/leads/ai", { text }),
+  getTodayReminders: () => api.get<any[]>("/leads/today-reminders"),
+  exportCsv: () =>
+    fetch(`${API_URL}/leads/export/csv`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    }).then((r) => r.blob()),
+  importCsv: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return fetch(`${API_URL}/leads/import/csv`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${getToken()}` },
+      body: form,
+    }).then((r) => r.json());
+  },
+};
+
+// ── Follow-ups ──
+export const followupsApi = {
+  // Get all follow-ups for a lead
+  listForLead: (leadId: number) => api.get<any[]>(`/leads/${leadId}/followups`),
+  // Create follow-up
+  create: (leadId: number, data: any) => api.post<any>(`/leads/${leadId}/followups`, data),
+  // Get single follow-up
+  get: (id: number) => api.get<any>(`/followups/${id}`),
+  // Update follow-up
+  update: (id: number, data: any) => api.put<any>(`/followups/${id}`, data),
+  // Delete follow-up
+  delete: (id: number) => api.delete(`/followups/${id}`),
+  // Get pending follow-ups
+  getPending: () => api.get<any[]>("/followups/pending"),
+  // Get today's follow-ups
+  getToday: () => api.get<any[]>("/followups/today"),
+};
+
+// ── Itinerary ──
+export const itineraryApi = {
+  list: () => api.get<any[]>("/itinerary"),
+  create: (data: any) => api.post<any>("/itinerary", data),
+  get: (id: number) => api.get<any>(`/itinerary/${id}`),
+  update: (id: number, data: any) => api.put<any>(`/itinerary/${id}`, data),
+  delete: (id: number) => api.delete(`/itinerary/${id}`),
+  remove: (id: number) => api.delete(`/itinerary/${id}`),
+  generate: (data: { raw_text: string; layout: string; lead_id?: number | null }) =>
+    api.post<any>("/itinerary/generate", data),
+  chatEdit: (id: number, command: string) =>
+    api.post<any>(`/itinerary/${id}/chat-edit`, { command }),
+};
+
+// ── Vouchers ──
+export const vouchersApi = {
+  list: (params?: Record<string, string | number | boolean>) => {
+    const qs = params ? "?" + new URLSearchParams(params as any).toString() : "";
+    return api.get<any>(`/vouchers${qs}`);
+  },
+  create: (data: any) => api.post<any>("/vouchers", data),
+  get: (id: number) => api.get<any>(`/vouchers/${id}`),
+  update: (id: number, data: any) => api.put<any>(`/vouchers/${id}`, data),
+  delete: (id: number) => api.delete(`/vouchers/${id}`),
+  aiEntry: (description: string) => api.post<any>("/vouchers/ai", { description }),
+};
+
+// ── Dashboard ──
+export const dashboardApi = {
+  summary: () => api.get<any>("/dashboard/summary"),
+  bySource: () => api.get<any[]>("/dashboard/leads-by-source"),
+  byStage: () => api.get<any[]>("/dashboard/leads-by-stage"),
+  leaderboard: () => api.get<any[]>("/dashboard/leaderboard"),
+  aiInsights: () => api.get<any>("/dashboard/ai-insights"),
+};
+
+// ── Inventory ──
+export const inventoryApi = {
+  hotels: (params?: Record<string, string | number | boolean>) => {
+    const qs = params ? "?" + new URLSearchParams(params as any).toString() : "";
+    return api.get<any>(`/inventory/hotels${qs}`);
+  },
+  createHotel: (data: any) => api.post<any>("/inventory/hotels", data),
+  updateHotel: (id: number, data: any) => api.put<any>(`/inventory/hotels/${id}`, data),
+  deleteHotel: (id: number) => api.delete(`/inventory/hotels/${id}`),
+  activities: (params?: Record<string, string | number | boolean>) => {
+    const qs = params ? "?" + new URLSearchParams(params as any).toString() : "";
+    return api.get<any>(`/inventory/activities${qs}`);
+  },
+  createActivity: (data: any) => api.post<any>("/inventory/activities", data),
+  updateActivity: (id: number, data: any) => api.put<any>(`/inventory/activities/${id}`, data),
+  deleteActivity: (id: number) => api.delete(`/inventory/activities/${id}`),
+};
+
+// ── Pricing ──
+export const pricingApi = {
+  usage: () => api.get<any>("/pricing/usage"),
+  plans: () => api.get<any[]>("/pricing/plans"),
+};
+
+// ── Invoices ──
+export const invoicesApi = {
+  list: (params?: Record<string, string | number | boolean>) => {
+    const qs = params ? "?" + new URLSearchParams(params as any).toString() : "";
+    return api.get<any>(`/invoices${qs}`);
+  },
+  create: (data: any) => api.post<any>("/invoices", data),
+  get: (id: number) => api.get<any>(`/invoices/${id}`),
+  update: (id: number, data: any) => api.put<any>(`/invoices/${id}`, data),
+};
+
+// ── Chats ──
+export const chatsApi = {
+  getThreads: () => api.get<any[]>("/chats/threads"),
+  getHistory: (leadId: number) => api.get<any[]>(`/chats/history/${leadId}`),
+  sendMessage: (data: { lead_id: number; channel: string; message_text: string }) =>
+    api.post<any>("/chats/send", data),
+  getConfig: () => api.get<any>("/chats/config"),
+  saveConfig: (data: {
+    meta_access_token?: string;
+    meta_verify_token?: string;
+    whatsapp_phone_number_id?: string;
+    instagram_page_id?: string;
+  }) => api.post<any>("/chats/config", data),
+  toggleAutopilot: (enabled: boolean) =>
+    api.post<any>("/chats/autopilot", { enabled }),
+};
+
+// ── Lead Costing ──
+export const leadCostingApi = {
+  get: (leadId: number) => api.get<any>(`/leads/${leadId}/costing`),
+  upsert: (leadId: number, data: any) => api.put<any>(`/leads/${leadId}/costing`, data),
+};

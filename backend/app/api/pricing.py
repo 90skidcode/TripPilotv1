@@ -1,0 +1,330 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from datetime import datetime
+from pydantic import BaseModel
+
+from app.core.database import get_db
+from app.core.security import get_current_user, require_superadmin
+from app.models.user import User
+from app.models.pricing_plan import PricingPlan, Subscription, UsageTracking
+
+router = APIRouter()
+
+
+class PricingPlanOut(BaseModel):
+    id: int
+    name: str
+    monthly_price: float
+    itineraries_limit: int
+    leads_limit: int
+    vouchers_limit: int
+    bills_limit: int
+    team_members_limit: int
+    storage_gb: int
+    trial_days: int
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+
+class UsageOut(BaseModel):
+    itineraries_used: int
+    itineraries_limit: int
+    leads_used: int
+    leads_limit: int
+    vouchers_used: int
+    vouchers_limit: int
+    bills_used: int
+    bills_limit: int
+    team_members_used: int
+    team_members_limit: int
+    plan_name: str
+    monthly_price: float
+    subscription_status: str
+    renewal_date: str | None
+    trial_ends_at: str | None
+    days_left_in_trial: int | None
+
+    class Config:
+        from_attributes = True
+
+
+@router.get("/plans", response_model=list[PricingPlanOut])
+def list_plans(db: Session = Depends(get_db)):
+    """Get all available pricing plans."""
+    plans = db.query(PricingPlan).filter(PricingPlan.is_active == True).all()
+    return plans
+
+
+@router.get("/plans/all", response_model=list[PricingPlanOut])
+def list_all_plans(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_superadmin),
+):
+    """Get all pricing plans (including inactive) - superadmin only."""
+    plans = db.query(PricingPlan).all()
+    return plans
+
+
+class PricingPlanCreate(BaseModel):
+    name: str
+    monthly_price: float
+    itineraries_limit: int
+    leads_limit: int
+    vouchers_limit: int
+    bills_limit: int
+    team_members_limit: int
+    storage_gb: int = 1
+    trial_days: int = 0
+
+
+class PricingPlanUpdate(BaseModel):
+    name: str | None = None
+    monthly_price: float | None = None
+    itineraries_limit: int | None = None
+    leads_limit: int | None = None
+    vouchers_limit: int | None = None
+    bills_limit: int | None = None
+    team_members_limit: int | None = None
+    storage_gb: int | None = None
+    trial_days: int | None = None
+    is_active: bool | None = None
+
+
+@router.post("/plans", response_model=PricingPlanOut, status_code=201)
+def create_plan(
+    payload: PricingPlanCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_superadmin),
+):
+    """Create a new pricing plan - superadmin only."""
+    # Check if plan name already exists
+    existing = db.query(PricingPlan).filter(PricingPlan.name == payload.name).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Plan name already exists"
+        )
+
+    plan = PricingPlan(
+        name=payload.name,
+        monthly_price=payload.monthly_price,
+        itineraries_limit=payload.itineraries_limit,
+        leads_limit=payload.leads_limit,
+        vouchers_limit=payload.vouchers_limit,
+        bills_limit=payload.bills_limit,
+        team_members_limit=payload.team_members_limit,
+        storage_gb=payload.storage_gb,
+        trial_days=payload.trial_days,
+        is_active=True,
+    )
+    db.add(plan)
+    db.commit()
+    db.refresh(plan)
+    return plan
+
+
+@router.put("/plans/{plan_id}", response_model=PricingPlanOut)
+def update_plan(
+    plan_id: int,
+    payload: PricingPlanUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_superadmin),
+):
+    """Update a pricing plan - superadmin only."""
+    plan = db.query(PricingPlan).filter(PricingPlan.id == plan_id).first()
+    if not plan:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Plan not found"
+        )
+
+    # Check if new name already exists
+    if payload.name and payload.name != plan.name:
+        existing = db.query(PricingPlan).filter(PricingPlan.name == payload.name).first()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Plan name already exists"
+            )
+
+    # Update fields
+    if payload.name is not None:
+        plan.name = payload.name
+    if payload.monthly_price is not None:
+        plan.monthly_price = payload.monthly_price
+    if payload.itineraries_limit is not None:
+        plan.itineraries_limit = payload.itineraries_limit
+    if payload.leads_limit is not None:
+        plan.leads_limit = payload.leads_limit
+    if payload.vouchers_limit is not None:
+        plan.vouchers_limit = payload.vouchers_limit
+    if payload.bills_limit is not None:
+        plan.bills_limit = payload.bills_limit
+    if payload.team_members_limit is not None:
+        plan.team_members_limit = payload.team_members_limit
+    if payload.storage_gb is not None:
+        plan.storage_gb = payload.storage_gb
+    if payload.trial_days is not None:
+        plan.trial_days = payload.trial_days
+    if payload.is_active is not None:
+        plan.is_active = payload.is_active
+
+    db.commit()
+    db.refresh(plan)
+    return plan
+
+
+@router.delete("/plans/{plan_id}", status_code=204)
+def delete_plan(
+    plan_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_superadmin),
+):
+    """Delete a pricing plan (soft delete - sets is_active to False) - superadmin only."""
+    plan = db.query(PricingPlan).filter(PricingPlan.id == plan_id).first()
+    if not plan:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Plan not found"
+        )
+
+    # Soft delete
+    plan.is_active = False
+    db.commit()
+    return None
+
+
+@router.get("/usage", response_model=UsageOut)
+def get_usage(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get current usage for the user's organization."""
+    # Get current subscription
+    subscription = db.query(Subscription).filter(
+        Subscription.org_id == current_user.org_id,
+        Subscription.status == "active"
+    ).first()
+
+    if not subscription:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No active subscription found"
+        )
+
+    # Get plan details
+    plan = db.query(PricingPlan).filter(PricingPlan.id == subscription.plan_id).first()
+
+    if not plan:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Plan not found"
+        )
+
+    # Get current month usage
+    current_month = datetime.utcnow().strftime("%Y-%m")
+    usage = db.query(UsageTracking).filter(
+        UsageTracking.org_id == current_user.org_id,
+        UsageTracking.month == current_month
+    ).first()
+
+    if not usage:
+        # Create usage record if it doesn't exist
+        usage = UsageTracking(
+            org_id=current_user.org_id,
+            month=current_month
+        )
+        db.add(usage)
+        db.commit()
+        db.refresh(usage)
+
+    # Calculate days left in trial
+    days_left_in_trial = None
+    if subscription.trial_ends_at:
+        days_left = (subscription.trial_ends_at - datetime.utcnow()).days
+        days_left_in_trial = max(0, days_left)
+
+    return {
+        "itineraries_used": usage.itineraries_used,
+        "itineraries_limit": plan.itineraries_limit,
+        "leads_used": usage.leads_used,
+        "leads_limit": plan.leads_limit,
+        "vouchers_used": usage.vouchers_used,
+        "vouchers_limit": plan.vouchers_limit,
+        "bills_used": usage.bills_used,
+        "bills_limit": plan.bills_limit,
+        "team_members_used": usage.team_members_used,
+        "team_members_limit": plan.team_members_limit,
+        "plan_name": plan.name,
+        "monthly_price": plan.monthly_price,
+        "subscription_status": subscription.status,
+        "renewal_date": subscription.renewal_date.isoformat() if subscription.renewal_date else None,
+        "trial_ends_at": subscription.trial_ends_at.isoformat() if subscription.trial_ends_at else None,
+        "days_left_in_trial": days_left_in_trial,
+    }
+
+
+def increment_usage(
+    db: Session,
+    org_id: int,
+    usage_type: str,  # itineraries, leads, vouchers, bills, team_members
+) -> bool:
+    """
+    Increment usage counter. Returns True if successful, False if limit exceeded.
+    """
+    current_month = datetime.utcnow().strftime("%Y-%m")
+
+    # Get usage record
+    usage = db.query(UsageTracking).filter(
+        UsageTracking.org_id == org_id,
+        UsageTracking.month == current_month
+    ).first()
+
+    if not usage:
+        usage = UsageTracking(org_id=org_id, month=current_month)
+        db.add(usage)
+        db.commit()
+        db.refresh(usage)
+
+    # Get plan limit
+    subscription = db.query(Subscription).filter(
+        Subscription.org_id == org_id,
+        Subscription.status == "active"
+    ).first()
+
+    if not subscription:
+        return False
+
+    plan = db.query(PricingPlan).filter(PricingPlan.id == subscription.plan_id).first()
+
+    if not plan:
+        return False
+
+    # Check if subscription is expired
+    if subscription.status == "expired":
+        return False
+
+    # Check trial expiry
+    if subscription.trial_ends_at and datetime.utcnow() > subscription.trial_ends_at:
+        subscription.status = "expired"
+        db.commit()
+        return False
+
+    # Get current usage and limits
+    usage_field = f"{usage_type}_used"
+    limit_field = f"{usage_type}_limit"
+
+    current_usage = getattr(usage, usage_field, 0)
+    limit = getattr(plan, limit_field, float('inf'))
+
+    # Check if limit exceeded
+    if limit != float('inf') and current_usage >= limit:
+        return False
+
+    # Increment usage
+    setattr(usage, usage_field, current_usage + 1)
+    db.commit()
+
+    return True
