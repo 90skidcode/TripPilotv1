@@ -88,7 +88,7 @@ export default function AddLeadModal({ lead, onClose, onSaved }: Props) {
 
   async function searchCustomers() {
     try {
-      const data = await customersApi.list(searchCustomer);
+      const data = await customersApi.list({ search: searchCustomer });
       setCustomers(data);
     } catch (err) {
       console.error("Failed to search customers:", err);

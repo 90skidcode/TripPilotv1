@@ -7,6 +7,7 @@ export interface PageHeaderProps {
   title: string;
   description?: string;
   children?: React.ReactNode;
+  action?: React.ReactNode;
   className?: string;
 }
 
@@ -26,6 +27,7 @@ export function PageHeader({
   title,
   description,
   children,
+  action,
   className,
 }: PageHeaderProps) {
   return (
@@ -38,8 +40,11 @@ export function PageHeader({
           <p className="text-xs text-muted-foreground">{description}</p>
         )}
       </div>
-      {children && (
-        <div className="flex gap-1">{children}</div>
+      {(children || action) && (
+        <div className="flex gap-1">
+          {children}
+          {action}
+        </div>
       )}
     </div>
   );

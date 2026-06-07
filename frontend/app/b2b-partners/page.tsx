@@ -141,8 +141,9 @@ export default function B2BPartnersPage() {
         <PageHeader
           title="B2B Partners"
           description="Manage DMCs, hotel suppliers, ground operators and other business partners."
-          action={canWrite ? <Button variant="primary" onClick={openAdd}>+ Add Partner</Button> : undefined}
-        />
+        >
+          {canWrite && <Button variant="primary" onClick={openAdd}>+ Add Partner</Button>}
+        </PageHeader>
 
         <Card>
           <CardContent>
