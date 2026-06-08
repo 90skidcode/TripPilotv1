@@ -1,5 +1,5 @@
 from typing import Optional, Any
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from datetime import datetime
@@ -8,8 +8,20 @@ from app.core.database import get_db
 from app.core.security import get_current_user, require_permission
 from app.models.itinerary import Itinerary
 from app.models.user import User
+from app.services.activity import log_activity
 
 router = APIRouter()
+
+
+def _log_itinerary(db, itin, current_user):
+    if itin.lead_id:
+        log_activity(
+            db, org_id=current_user.org_id, lead_id=itin.lead_id,
+            actor_id=current_user.id, type="itinerary_created",
+            title=f"Itinerary created: {itin.title}",
+            description=itin.destination or None,
+            ref_type="itinerary", ref_id=itin.id,
+        )
 
 
 class ItineraryCreate(BaseModel):
@@ -75,14 +87,18 @@ class GenerateRequest(BaseModel):
 
 @router.get("")
 def list_itineraries(
+    lead_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("itinerary", "read")),
 ):
-    items = db.query(Itinerary).filter(
-        Itinerary.org_id == current_user.org_id,
-        Itinerary.created_by == current_user.id
-    ).order_by(Itinerary.created_at.desc()).all()
-    return items
+    q = db.query(Itinerary).filter(Itinerary.org_id == current_user.org_id)
+    if lead_id is not None:
+        # Lead workspace: show all itineraries attached to this lead in the org
+        q = q.filter(Itinerary.lead_id == lead_id)
+    else:
+        # Default list: only the current user's itineraries
+        q = q.filter(Itinerary.created_by == current_user.id)
+    return q.order_by(Itinerary.created_at.desc()).all()
 
 
 @router.post("", response_model=ItineraryOut, status_code=201)
@@ -95,6 +111,7 @@ def create_itinerary(
     db.add(itin)
     db.commit()
     db.refresh(itin)
+    _log_itinerary(db, itin, current_user)
     return itin
 
 
@@ -143,6 +160,14 @@ async def generate_itinerary(
 
     data = await ai_generate(payload.raw_text, payload.layout)
 
+    # ai_generate returns an empty fallback ({"days": []}) when the Gemini call
+    # fails — don't persist a blank itinerary; surface a clear error instead.
+    if not data.get("days"):
+        raise HTTPException(
+            status_code=502,
+            detail="AI itinerary generation failed. Please retry — if it persists, check the GEMINI_API_KEY and Gemini quota.",
+        )
+
     itin = Itinerary(
         org_id=current_user.org_id,
         title=data.get("title", "New Itinerary"),
@@ -164,6 +189,7 @@ async def generate_itinerary(
     db.add(itin)
     db.commit()
     db.refresh(itin)
+    _log_itinerary(db, itin, current_user)
     return itin
 
 

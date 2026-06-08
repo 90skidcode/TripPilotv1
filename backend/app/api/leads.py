@@ -15,6 +15,7 @@ from app.models.customer import Customer
 from app.models.b2b_partner import B2BPartner
 from app.models.user import User
 from app.models.followup import Followup, FollowupStatus
+from app.services.activity import log_activity
 
 router = APIRouter()
 
@@ -223,6 +224,12 @@ def create_lead(
     db.add(lead)
     db.commit()
     db.refresh(lead)
+
+    log_activity(
+        db, org_id=current_user.org_id, lead_id=lead.id, customer_id=lead.customer_id,
+        actor_id=current_user.id, type="lead_created", title="Lead created",
+        description=lead.destination or None, ref_type="lead", ref_id=lead.id,
+    )
     return lead
 
 
@@ -252,10 +259,196 @@ def get_today_reminders(
 
 @router.get("/{lead_id}", response_model=LeadOut)
 def get_lead(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    lead = db.query(Lead).filter(Lead.id == lead_id, Lead.org_id == current_user.org_id).first()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     return lead
+
+
+@router.get("/{lead_id}/workspace")
+def get_lead_workspace(
+    lead_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("leads", "read")),
+):
+    """Aggregate of everything attached to a lead — counts + recent items in one call."""
+    from app.models.itinerary import Itinerary
+    from app.models.tools import HotelVoucher, Invoice, FlightTicket
+    from app.models.lead_partner import LeadPartner
+
+    lead = db.query(Lead).filter(
+        Lead.id == lead_id, Lead.org_id == current_user.org_id
+    ).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    org_id = current_user.org_id
+
+    itineraries = db.query(Itinerary).filter(
+        Itinerary.org_id == org_id, Itinerary.lead_id == lead_id
+    ).order_by(Itinerary.created_at.desc()).all()
+
+    vouchers = db.query(HotelVoucher).filter(
+        HotelVoucher.org_id == org_id, HotelVoucher.lead_id == lead_id
+    ).order_by(HotelVoucher.created_at.desc()).all()
+
+    invoices = db.query(Invoice).filter(
+        Invoice.org_id == org_id, Invoice.lead_id == lead_id
+    ).order_by(Invoice.created_at.desc()).all()
+
+    flights = db.query(FlightTicket).filter(
+        FlightTicket.org_id == org_id, FlightTicket.lead_id == lead_id
+    ).order_by(FlightTicket.created_at.desc()).all()
+
+    partners = db.query(LeadPartner).filter(
+        LeadPartner.org_id == org_id, LeadPartner.lead_id == lead_id
+    ).order_by(LeadPartner.created_at.desc()).all()
+
+    return {
+        "counts": {
+            "itineraries": len(itineraries),
+            "vouchers": len(vouchers),
+            "invoices": len(invoices),
+            "flights": len(flights),
+            "partners": len(partners),
+        },
+        "itineraries": [
+            {
+                "id": i.id,
+                "title": i.title,
+                "destination": i.destination,
+                "total_days": i.total_days,
+                "total_nights": i.total_nights,
+                "package_cost": i.package_cost,
+                "pdf_url": i.pdf_url,
+                "share_url": i.share_url,
+                "created_at": i.created_at,
+            }
+            for i in itineraries
+        ],
+        "vouchers": [
+            {
+                "id": v.id,
+                "hotel_name": v.hotel_name,
+                "check_in": v.check_in,
+                "check_out": v.check_out,
+                "room_type": v.room_type,
+                "pdf_url": v.pdf_url,
+                "created_at": v.created_at,
+            }
+            for v in vouchers
+        ],
+        "invoices": [
+            {
+                "id": inv.id,
+                "invoice_number": inv.invoice_number,
+                "grand_total": inv.grand_total,
+                "status": inv.status,
+                "created_at": inv.created_at,
+            }
+            for inv in invoices
+        ],
+        "flights": [
+            {
+                "id": f.id,
+                "airline": f.airline,
+                "flight_number": f.flight_number,
+                "origin": f.origin,
+                "destination": f.destination,
+                "depart_at": f.depart_at,
+                "pnr": f.pnr,
+                "created_at": f.created_at,
+            }
+            for f in flights
+        ],
+        "partners": [
+            {
+                "id": p.id,
+                "b2b_partner_id": p.b2b_partner_id,
+                "company_name": p.partner.company_name if p.partner else None,
+                "category": (p.partner.category.value if p.partner and hasattr(p.partner.category, "value") else (p.partner.category if p.partner else None)),
+                "role": p.role,
+                "cost": p.cost,
+                "notes": p.notes,
+                "created_at": p.created_at,
+            }
+            for p in partners
+        ],
+    }
+
+
+class NoteCreate(BaseModel):
+    title: Optional[str] = None
+    description: str
+
+
+@router.get("/{lead_id}/activities")
+def list_lead_activities(
+    lead_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("leads", "read")),
+):
+    """Timeline of activities for a lead (newest first)."""
+    from app.models.activity import LeadActivity
+
+    lead = db.query(Lead).filter(
+        Lead.id == lead_id, Lead.org_id == current_user.org_id
+    ).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    activities = db.query(LeadActivity).filter(
+        LeadActivity.org_id == current_user.org_id,
+        LeadActivity.lead_id == lead_id,
+    ).order_by(LeadActivity.created_at.desc()).all()
+
+    return [
+        {
+            "id": a.id,
+            "type": a.type,
+            "title": a.title,
+            "description": a.description,
+            "ref_type": a.ref_type,
+            "ref_id": a.ref_id,
+            "meta": a.meta,
+            "actor_id": a.actor_id,
+            "actor_name": a.actor.name if a.actor else None,
+            "created_at": a.created_at,
+        }
+        for a in activities
+    ]
+
+
+@router.post("/{lead_id}/activities", status_code=201)
+def add_lead_note(
+    lead_id: int,
+    payload: NoteCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("leads", "write")),
+):
+    """Add a manual note to the lead timeline."""
+    lead = db.query(Lead).filter(
+        Lead.id == lead_id, Lead.org_id == current_user.org_id
+    ).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    activity = log_activity(
+        db, org_id=current_user.org_id, lead_id=lead_id, customer_id=lead.customer_id,
+        actor_id=current_user.id, type="note",
+        title=payload.title or "Note", description=payload.description,
+    )
+    if not activity:
+        raise HTTPException(status_code=500, detail="Failed to add note")
+    return {
+        "id": activity.id,
+        "type": activity.type,
+        "title": activity.title,
+        "description": activity.description,
+        "actor_id": activity.actor_id,
+        "actor_name": current_user.name,
+        "created_at": activity.created_at,
+    }
 
 
 @router.put("/{lead_id}", response_model=LeadOut)
@@ -278,10 +471,25 @@ def update_lead(
         if not customer:
             raise HTTPException(status_code=404, detail="Customer not found")
 
-    for field, value in payload.dict(exclude_unset=True).items():
+    old_stage = lead.stage
+    updates = payload.dict(exclude_unset=True)
+    for field, value in updates.items():
         setattr(lead, field, value)
     db.commit()
     db.refresh(lead)
+
+    new_stage = lead.stage
+    if "stage" in updates and old_stage != new_stage:
+        old_label = old_stage.value if hasattr(old_stage, "value") else str(old_stage)
+        new_label = new_stage.value if hasattr(new_stage, "value") else str(new_stage)
+        log_activity(
+            db, org_id=current_user.org_id, lead_id=lead.id, customer_id=lead.customer_id,
+            actor_id=current_user.id, type="stage_changed",
+            title=f"Stage changed to {new_label.replace('_', ' ')}",
+            description=f"{old_label.replace('_', ' ')} → {new_label.replace('_', ' ')}",
+            ref_type="lead", ref_id=lead.id,
+            meta={"from": old_label, "to": new_label},
+        )
     return lead
 
 

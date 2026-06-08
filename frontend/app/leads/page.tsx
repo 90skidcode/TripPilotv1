@@ -1,25 +1,26 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import { PageHeader, PageContainer } from "@/components/layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { leadsApi } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import { useAuth } from "@/context/AuthContext";
 import AddLeadSidePanel from "./AddLeadSidePanel";
-import LeadDetailView from "./LeadDetailView";
 import FilterDrawer from "./FilterDrawer";
 import LeadTable from "./LeadTable";
 import { cn } from "@/lib/cn";
+import { Filter, Download, Upload, Plus, Sparkles, Phone } from "lucide-react";
 
 export default function LeadsPage() {
   const { showToast } = useToast();
   const { hasPermission } = useAuth();
+  const router = useRouter();
   const canWrite = hasPermission("leads", "write");
   const [leads, setLeads] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
@@ -33,8 +34,6 @@ export default function LeadsPage() {
   const [useAiForAdd, setUseAiForAdd] = useState(false);
   const [showFilter, setShowFilter] = useState(false);
   const [editLead, setEditLead] = useState<any>(null);
-  const [showDetails, setShowDetails] = useState(false);
-  const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
 
   const fetchLeads = useCallback(async () => {
     setLoading(true);
@@ -104,13 +103,13 @@ export default function LeadsPage() {
   }
 
   const tabs = [
-    { id: "today-reminders", label: "📞 Today's Reminders", count: tab === "today-reminders" ? total : null },
-    { id: "all", label: "All Leads", count: tab === "all" ? total : null },
-    { id: "fresh", label: "Fresh Leads", count: tab === "fresh" ? total : null },
-    { id: "qualified_hot", label: "Qualified Leads", count: tab === "qualified_hot" ? total : null },
-    { id: "lost", label: "Lost Leads", count: tab === "lost" ? total : null },
-    { id: "disqualified", label: "Disqualified", count: tab === "disqualified" ? total : null },
-    { id: "unassigned", label: "Unassigned Leads", count: tab === "unassigned" ? total : null },
+    { id: "today-reminders", label: "Today's Reminders", icon: Phone, count: tab === "today-reminders" ? total : null },
+    { id: "all", label: "All Leads", icon: null, count: tab === "all" ? total : null },
+    { id: "fresh", label: "Fresh Leads", icon: null, count: tab === "fresh" ? total : null },
+    { id: "qualified_hot", label: "Qualified Leads", icon: null, count: tab === "qualified_hot" ? total : null },
+    { id: "lost", label: "Lost Leads", icon: null, count: tab === "lost" ? total : null },
+    { id: "disqualified", label: "Disqualified", icon: null, count: tab === "disqualified" ? total : null },
+    { id: "unassigned", label: "Unassigned Leads", icon: null, count: tab === "unassigned" ? total : null },
   ];
 
   return (
@@ -130,14 +129,19 @@ export default function LeadsPage() {
                 setPage(1);
               }}
               className={cn(
-                "px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
+                "inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
                 tab === t.id
                   ? "border-primary text-primary"
                   : "border-transparent text-muted-foreground hover:text-foreground"
               )}
             >
+              {t.icon && <t.icon className="h-4 w-4" />}
               {t.label}
-              {t.count !== null && <span className="ml-2 text-xs">{t.count}</span>}
+              {t.count !== null && (
+                <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 text-xs font-semibold text-muted-foreground">
+                  {t.count}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -164,7 +168,7 @@ export default function LeadsPage() {
             size="sm"
             onClick={() => setShowFilter(true)}
           >
-            🔧 Filters {Object.keys(filters).length > 0 && `(${Object.keys(filters).length})`}
+            <Filter className="h-4 w-4" /> Filters {Object.keys(filters).length > 0 && `(${Object.keys(filters).length})`}
           </Button>
 
           <Button
@@ -173,7 +177,7 @@ export default function LeadsPage() {
             size="sm"
             onClick={handleExport}
           >
-            ⬇️ Export CSV
+            <Download className="h-4 w-4" /> Export CSV
           </Button>
 
           {canWrite && (
@@ -185,7 +189,7 @@ export default function LeadsPage() {
                   size="sm"
                   asChild
                 >
-                  <span>⬆️ Upload CSV</span>
+                  <span><Upload className="h-4 w-4" /> Upload CSV</span>
                 </Button>
               </label>
               <input
@@ -237,7 +241,7 @@ export default function LeadsPage() {
                   setShowAdd(true);
                 }}
               >
-                ＋ Add Lead
+                <Plus className="h-4 w-4" /> Add Lead
               </Button>
               <Button
                 id="leads-ai-btn"
@@ -246,7 +250,7 @@ export default function LeadsPage() {
                 onClick={handleAIImport}
                 title="AI Lead Entry"
               >
-                🤖 AI Entry
+                <Sparkles className="h-4 w-4" /> AI Entry
               </Button>
             </>
           )}
@@ -264,10 +268,7 @@ export default function LeadsPage() {
                 setShowAdd(true);
               }}
               onDelete={handleDelete}
-              onViewDetails={(id) => {
-                setSelectedLeadId(id);
-                setShowDetails(true);
-              }}
+              onViewDetails={(id) => router.push(`/leads/${id}`)}
               onAdd={() => {
                 setEditLead(null);
                 setUseAiForAdd(false);
@@ -356,13 +357,6 @@ export default function LeadsPage() {
         />
       )}
 
-      {showDetails && selectedLeadId && (
-        <LeadDetailView
-          leadId={selectedLeadId}
-          onClose={() => setShowDetails(false)}
-          onLeadUpdated={fetchLeads}
-        />
-      )}
     </PageContainer>
     </AppShell>
   );

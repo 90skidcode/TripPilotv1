@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import { PageHeader, PageContainer } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -79,6 +80,26 @@ export default function InvoicePage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // When arriving from a lead workspace (?lead_id=…), open the create drawer
+  // prefilled with that lead's customer details.
+  const searchParams = useSearchParams();
+  const leadIdParam = searchParams.get("lead_id");
+  useEffect(() => {
+    if (!leadIdParam) return;
+    openCreateDrawer();
+    setLeadId(leadIdParam);
+    leadsApi.get(Number(leadIdParam)).then((lead) => {
+      const c = lead?.customer;
+      if (c) {
+        setCustomerName(c.name || "");
+        setCustomerEmail(c.email || "");
+        setCustomerPhone(c.phone || "");
+      }
+      if (lead?.destination) setCustomerAddress(lead.destination);
+    }).catch((err) => console.error("Failed to prefill lead:", err));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leadIdParam]);
 
   function handleAddLineItem() {
     setLineItems([...lineItems, { description: "", qty: 1, rate: 0, amount: 0 }]);

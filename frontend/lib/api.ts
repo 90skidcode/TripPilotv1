@@ -81,6 +81,14 @@ export const leadsApi = {
     return api.get<any>(`/leads${qs}`);
   },
   get: (id: number) => api.get<any>(`/leads/${id}`),
+  workspace: (id: number) => api.get<any>(`/leads/${id}/workspace`),
+  activities: (id: number) => api.get<any[]>(`/leads/${id}/activities`),
+  addNote: (id: number, data: { title?: string; description: string }) =>
+    api.post<any>(`/leads/${id}/activities`, data),
+  partners: (id: number) => api.get<any[]>(`/leads/${id}/partners`),
+  connectPartner: (id: number, data: { b2b_partner_id: number; role?: string; cost?: number; notes?: string }) =>
+    api.post<any>(`/leads/${id}/partners`, data),
+  disconnectPartner: (id: number, linkId: number) => api.delete(`/leads/${id}/partners/${linkId}`),
   create: (data: any) => api.post<any>("/leads", data),
   update: (id: number, data: any) => api.put<any>(`/leads/${id}`, data),
   remove: (id: number) => api.delete(`/leads/${id}`),
@@ -122,7 +130,10 @@ export const followupsApi = {
 
 // ── Itinerary ──
 export const itineraryApi = {
-  list: () => api.get<any[]>("/itinerary"),
+  list: (params?: Record<string, string | number | boolean>) => {
+    const qs = params ? "?" + new URLSearchParams(params as any).toString() : "";
+    return api.get<any[]>(`/itinerary${qs}`);
+  },
   create: (data: any) => api.post<any>("/itinerary", data),
   get: (id: number) => api.get<any>(`/itinerary/${id}`),
   update: (id: number, data: any) => api.put<any>(`/itinerary/${id}`, data),
@@ -144,7 +155,20 @@ export const vouchersApi = {
   get: (id: number) => api.get<any>(`/vouchers/${id}`),
   update: (id: number, data: any) => api.put<any>(`/vouchers/${id}`, data),
   delete: (id: number) => api.delete(`/vouchers/${id}`),
-  aiEntry: (description: string) => api.post<any>("/vouchers/ai", { description }),
+  aiEntry: (description: string, opts?: { lead_id?: number; customer_id?: number }) =>
+    api.post<any>("/vouchers/ai", { description, ...opts }),
+};
+
+// ── Flights ──
+export const flightsApi = {
+  list: (params?: Record<string, string | number | boolean>) => {
+    const qs = params ? "?" + new URLSearchParams(params as any).toString() : "";
+    return api.get<any>(`/flights${qs}`);
+  },
+  create: (data: any) => api.post<any>("/flights", data),
+  get: (id: number) => api.get<any>(`/flights/${id}`),
+  update: (id: number, data: any) => api.put<any>(`/flights/${id}`, data),
+  delete: (id: number) => api.delete(`/flights/${id}`),
 };
 
 // ── Dashboard ──

@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import AppShell from "@/components/AppShell";
 import { itineraryApi } from "@/lib/api";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 
 const LAYOUTS = [
@@ -31,6 +31,9 @@ const LAYOUTS = [
 
 export default function NewItineraryPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const leadIdParam = searchParams.get("lead_id");
+  const leadId = leadIdParam ? Number(leadIdParam) : null;
   const { hasPermission } = useAuth();
   const canWrite = hasPermission("itinerary", "write");
 
@@ -62,7 +65,7 @@ export default function NewItineraryPage() {
     setLoading(true);
     setError("");
     try {
-      const itin = await itineraryApi.generate({ raw_text: rawText, layout, lead_id: null });
+      const itin = await itineraryApi.generate({ raw_text: rawText, layout, lead_id: leadId });
       router.push(`/itinerary/${itin.id}`);
     } catch (e: any) {
       setError(e.message || "Generation failed. Please try again.");

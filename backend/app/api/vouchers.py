@@ -9,8 +9,20 @@ from app.core.security import get_current_user, require_permission
 from app.models.tools import HotelVoucher
 from app.models.customer import Customer
 from app.models.user import User
+from app.services.activity import log_activity
 
 router = APIRouter()
+
+
+def _log_voucher(db, voucher, current_user):
+    if voucher.lead_id:
+        log_activity(
+            db, org_id=current_user.org_id, lead_id=voucher.lead_id,
+            customer_id=voucher.customer_id, actor_id=current_user.id,
+            type="voucher_created", title=f"Hotel voucher: {voucher.hotel_name}",
+            description=voucher.room_type or None,
+            ref_type="voucher", ref_id=voucher.id,
+        )
 
 
 class VoucherCreate(BaseModel):
@@ -57,6 +69,8 @@ class VoucherOut(BaseModel):
 
 class AIVoucherInput(BaseModel):
     description: str
+    lead_id: Optional[int] = None
+    customer_id: Optional[int] = None
 
 
 class PaginatedVouchers(BaseModel):
@@ -71,14 +85,17 @@ class PaginatedVouchers(BaseModel):
 def list_vouchers(
     page: int = Query(1, ge=1),
     per_page: int = Query(10, ge=1, le=100),
+    lead_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("vouchers", "read")),
 ):
-    q = db.query(HotelVoucher).filter(
-        HotelVoucher.org_id == current_user.org_id,
-        HotelVoucher.created_by == current_user.id
-    )
-    
+    q = db.query(HotelVoucher).filter(HotelVoucher.org_id == current_user.org_id)
+    if lead_id is not None:
+        # Lead workspace: all vouchers attached to this lead in the org
+        q = q.filter(HotelVoucher.lead_id == lead_id)
+    else:
+        q = q.filter(HotelVoucher.created_by == current_user.id)
+
     total = q.count()
     vouchers = q.order_by(HotelVoucher.created_at.desc()).offset((page - 1) * per_page).limit(per_page).all()
 
@@ -125,6 +142,7 @@ def create_voucher(
     db.add(voucher)
     db.commit()
     db.refresh(voucher)
+    _log_voucher(db, voucher, current_user)
     return voucher
 
 
@@ -187,6 +205,8 @@ async def ai_voucher(
 
     voucher = HotelVoucher(
         org_id=current_user.org_id,
+        lead_id=payload.lead_id,
+        customer_id=payload.customer_id,
         hotel_name=parsed.get("hotel_name") or "Unknown Hotel",
         hotel_stars=parsed.get("hotel_stars"),
         hotel_address=parsed.get("hotel_address"),
@@ -204,4 +224,5 @@ async def ai_voucher(
     db.add(voucher)
     db.commit()
     db.refresh(voucher)
+    _log_voucher(db, voucher, current_user)
     return voucher

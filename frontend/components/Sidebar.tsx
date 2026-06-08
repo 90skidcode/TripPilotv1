@@ -5,7 +5,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import {
   LayoutDashboard,
-  BarChart3,
   Users,
   Users2,
   Handshake,
@@ -23,7 +22,6 @@ import {
 
 const NAV = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard", screen: "dashboard" },
-  { icon: BarChart3, label: "Usage", href: "/usage", screen: null },
   { icon: Users, label: "Customer Master", href: "/customers", screen: "leads" },
   { icon: Users2, label: "Master Leads", href: "/leads", screen: "leads" },
   { icon: Handshake, label: "B2B Partners", href: "/b2b-partners", screen: "leads" },

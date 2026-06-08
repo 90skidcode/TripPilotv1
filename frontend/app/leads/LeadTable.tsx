@@ -1,6 +1,24 @@
 "use client";
-import { stageLabel, sourceLabel } from "@/components/Sidebar";
+import {
+  Eye,
+  Pencil,
+  Trash2,
+  Plus,
+  Users,
+  MessageCircle,
+  Camera,
+  Globe,
+  Megaphone,
+  PenLine,
+  Mail,
+  Tag,
+  AlertTriangle,
+} from "lucide-react";
+import { Avatar } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { SkeletonTable } from "@/components/SkeletonLoader";
+import { cn } from "@/lib/cn";
 
 interface Props {
   leads: any[];
@@ -13,6 +31,35 @@ interface Props {
   onSearchCustomer?: (query: string) => void;
 }
 
+const STAGE_STYLES: Record<string, { label: string; className: string }> = {
+  fresh: { label: "Fresh", className: "bg-teal-50 text-teal-700 border-teal-200" },
+  qualified_hot: { label: "Qualified Hot", className: "bg-red-50 text-red-700 border-red-200" },
+  qualified_warm: { label: "Qualified Warm", className: "bg-orange-50 text-orange-700 border-orange-200" },
+  won: { label: "Won", className: "bg-green-50 text-green-700 border-green-200" },
+  lost: { label: "Lost", className: "bg-gray-100 text-gray-600 border-gray-200" },
+  not_responding: { label: "Not Responding", className: "bg-yellow-50 text-yellow-700 border-yellow-200" },
+  disqualified: { label: "Disqualified", className: "bg-gray-100 text-gray-600 border-gray-200" },
+  future_prospect: { label: "Future Prospect", className: "bg-blue-50 text-blue-700 border-blue-200" },
+};
+
+const SOURCE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  whatsapp: MessageCircle,
+  instagram: Camera,
+  website: Globe,
+  referral: Users,
+  advertisement: Megaphone,
+  manual: PenLine,
+  email: Mail,
+};
+
+function sourceText(source?: string) {
+  if (!source) return "—";
+  if (source.toLowerCase() === "whatsapp") return "WhatsApp";
+  return source.charAt(0).toUpperCase() + source.slice(1).toLowerCase();
+}
+
+const TH = "text-left font-semibold text-xs uppercase tracking-wide text-muted-foreground px-4 py-3";
+
 export default function LeadTable({
   leads,
   loading,
@@ -24,24 +71,28 @@ export default function LeadTable({
   onSearchCustomer,
 }: Props) {
   if (loading && leads.length === 0) {
-    return <SkeletonTable rows={5} />;
+    return (
+      <div className="p-4">
+        <SkeletonTable rows={5} />
+      </div>
+    );
   }
 
   if (!leads.length) {
     return (
-      <div className="empty-state" style={{ padding: "80px 20px" }}>
-        <div style={{ fontSize: 64, marginBottom: 16 }}>👥</div>
-        <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8, color: "var(--text-primary)" }}>
-          No leads found
-        </h3>
-        <p style={{ color: "var(--text-secondary)", marginBottom: 24 }}>
-          Get started by adding your first lead or adjusting your filters
-        </p>
-        <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-          {canWrite && onAdd && (
-            <button className="btn btn-primary btn-sm" onClick={onAdd}>+ Add Lead</button>
-          )}
+      <div className="flex flex-col items-center justify-center px-6 py-20 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted text-muted-foreground mb-4">
+          <Users className="h-8 w-8" />
         </div>
+        <h3 className="text-lg font-semibold text-foreground mb-1">No leads found</h3>
+        <p className="text-sm text-muted-foreground mb-6 max-w-sm">
+          Get started by adding your first lead, or adjust your filters to see more results.
+        </p>
+        {canWrite && onAdd && (
+          <Button variant="primary" size="lg" onClick={onAdd}>
+            <Plus className="h-4 w-4" /> Add Lead
+          </Button>
+        )}
       </div>
     );
   }
@@ -56,121 +107,164 @@ export default function LeadTable({
   }, {});
 
   return (
-    <div className="table-wrap">
-      <table className="table">
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm border-collapse">
         <thead>
-          <tr>
-            <th style={{ width: "40px" }}><input type="checkbox" /></th>
-            <th style={{ width: "120px" }}>Date Added</th>
-            <th style={{ width: "240px" }}>Lead Name</th>
-            <th style={{ width: "180px" }}>Phone</th>
-            <th style={{ width: "130px" }}>Source</th>
-            <th style={{ width: "130px" }}>Destination</th>
-            <th style={{ width: "150px" }}>Stage</th>
-            <th style={{ width: "130px" }}>Assigned To</th>
-            <th style={{ width: "100px", textAlign: "right" }}>Actions</th>
+          <tr className="border-b border-border bg-muted/40">
+            <th className={cn(TH, "w-10")}>
+              <input type="checkbox" className="rounded border-input" />
+            </th>
+            <th className={TH}>Lead</th>
+            <th className={TH}>Phone</th>
+            <th className={TH}>Source</th>
+            <th className={TH}>Destination</th>
+            <th className={TH}>Stage</th>
+            <th className={TH}>Assigned</th>
+            <th className={TH}>Added</th>
+            <th className={cn(TH, "text-right")}>Actions</th>
           </tr>
         </thead>
         <tbody>
           {leads.map((lead) => {
-            const stage = stageLabel(lead.stage);
+            const stage = STAGE_STYLES[lead.stage] || { label: lead.stage || "—", className: "bg-gray-100 text-gray-600 border-gray-200" };
             const customer = lead.customer;
             const phone = customer?.phone;
             const email = customer?.email;
             const isDuplicate = (phone && customerCounts[phone] > 1) || (email && customerCounts[email] > 1);
+            const SourceIcon = SOURCE_ICONS[lead.source?.toLowerCase()] || Tag;
 
             return (
-              <tr key={lead.id} style={isDuplicate ? { backgroundColor: "rgba(245, 158, 11, 0.04)" } : undefined}>
-                <td><input type="checkbox" /></td>
-                <td style={{ color: "var(--text-secondary)", fontSize: 13, whiteSpace: "nowrap" }}>
-                  {lead.created_at ? new Date(lead.created_at).toLocaleDateString("en-IN") : "—"}
+              <tr
+                key={lead.id}
+                className={cn(
+                  "border-b border-border last:border-0 transition-colors group hover:bg-muted/40",
+                  isDuplicate && "bg-amber-50/40"
+                )}
+              >
+                <td className="px-4 py-3">
+                  <input type="checkbox" className="rounded border-input" />
                 </td>
-                <td>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                      <span style={{ fontWeight: 600 }}>{customer?.name || "Unknown"}</span>
-                      {isDuplicate && (
-                        <span 
-                          className="badge badge-yellow"
-                          title="This customer has multiple inquiries/leads on the current page"
-                          style={{ fontSize: "10px", padding: "2px 6px", display: "inline-flex", alignItems: "center", gap: 3 }}
-                        >
-                          ⚠️ Duplicate
+
+                {/* Lead (avatar + name + email) */}
+                <td className="px-4 py-3">
+                  <button
+                    type="button"
+                    onClick={() => onViewDetails(lead.id)}
+                    className="flex items-center gap-3 text-left"
+                  >
+                    <Avatar name={customer?.name} />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-semibold text-foreground group-hover:text-primary transition-colors truncate">
+                          {customer?.name || "Unknown"}
                         </span>
-                      )}
+                        {isDuplicate && (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700"
+                            title="This customer has multiple leads on the current page"
+                          >
+                            <AlertTriangle className="h-3 w-3" /> Dup
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span className="truncate">{email || "No email"}</span>
+                        {isDuplicate && onSearchCustomer && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSearchCustomer(phone || email || customer?.name || "");
+                            }}
+                            className="text-primary hover:underline font-medium shrink-0"
+                            title="Search all leads for this customer"
+                          >
+                            Show all
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div style={{ fontSize: 12, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 6 }}>
-                      <span>{customer?.email || "—"}</span>
-                      {isDuplicate && onSearchCustomer && (
-                        <button
-                          onClick={() => onSearchCustomer(phone || email || customer?.name || "")}
-                          style={{
-                            background: "none",
-                            border: "none",
-                            padding: "0",
-                            color: "rgb(var(--color-primary))",
-                            cursor: "pointer",
-                            fontSize: "11px",
-                            fontWeight: 500,
-                            textDecoration: "underline"
-                          }}
-                          title="Search all leads for this customer"
-                        >
-                          Show all
-                        </button>
-                      )}
-                    </div>
-                  </div>
+                  </button>
                 </td>
-                <td style={{ whiteSpace: "nowrap" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span>{customer?.phone || "—"}</span>
+
+                {/* Phone */}
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <div className="flex items-center gap-2">
+                    <span className="text-foreground">{customer?.phone || "—"}</span>
                     {customer?.whatsapp_number && (
                       <a
                         href={`https://wa.me/${customer.whatsapp_number?.replace(/\D/g, "")}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         title="Open WhatsApp"
-                        style={{ fontSize: 16 }}
-                      >💬</a>
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-green-600 hover:text-green-700"
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                      </a>
                     )}
                   </div>
                 </td>
-                <td style={{ whiteSpace: "nowrap" }}>
-                  <span title={lead.source}>
-                    {sourceLabel(lead.source)} {lead.source ? (lead.source.toLowerCase() === "whatsapp" ? "WhatsApp" : lead.source.charAt(0).toUpperCase() + lead.source.slice(1).toLowerCase()) : "—"}
+
+                {/* Source */}
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <span className="inline-flex items-center gap-1.5 text-foreground" title={lead.source}>
+                    <SourceIcon className="h-4 w-4 text-muted-foreground" />
+                    {sourceText(lead.source)}
                   </span>
                 </td>
-                <td>{lead.destination || "—"}</td>
-                <td style={{ whiteSpace: "nowrap" }}>
-                  <span className={`badge ${stage.cls}`}>{stage.label}</span>
+
+                {/* Destination */}
+                <td className="px-4 py-3 text-foreground">{lead.destination || "—"}</td>
+
+                {/* Stage */}
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <Badge className={cn("font-medium", stage.className)}>{stage.label}</Badge>
                 </td>
-                <td style={{ color: "var(--text-secondary)", fontSize: 13, whiteSpace: "nowrap" }}>
+
+                {/* Assigned */}
+                <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
                   {lead.assigned_to ? `Agent #${lead.assigned_to}` : "Unassigned"}
                 </td>
-                <td style={{ whiteSpace: "nowrap", textAlign: "right" }}>
-                  <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                    <button
-                      className="btn btn-ghost btn-sm btn-icon"
+
+                {/* Added */}
+                <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
+                  {lead.created_at ? new Date(lead.created_at).toLocaleDateString("en-IN") : "—"}
+                </td>
+
+                {/* Actions */}
+                <td className="px-4 py-3 whitespace-nowrap text-right">
+                  <div className="flex items-center justify-end gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       onClick={() => onViewDetails(lead.id)}
                       id={`lead-view-${lead.id}`}
-                      title="View Details & Follow-ups"
-                    >👁️</button>
+                      title="View details & follow-ups"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
                     {canWrite && (
                       <>
-                        <button
-                          className="btn btn-ghost btn-sm btn-icon"
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={() => onEdit(lead)}
                           id={`lead-edit-${lead.id}`}
-                          title="Edit"
-                        >✏️</button>
-                        <button
-                          className="btn btn-ghost btn-sm btn-icon"
+                          title="Edit lead"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={() => onDelete(lead.id)}
                           id={`lead-delete-${lead.id}`}
-                          title="Delete"
-                          style={{ color: "var(--danger)" }}
-                        >🗑️</button>
+                          title="Delete lead"
+                          className="hover:bg-destructive/10 hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </>
                     )}
                   </div>

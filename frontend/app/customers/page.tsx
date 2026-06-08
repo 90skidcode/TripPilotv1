@@ -1,15 +1,44 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import AppShell from "@/components/AppShell";
 import { PageHeader, PageContainer } from "@/components/layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Avatar } from "@/components/ui/avatar";
 import { customersApi, leadsApi } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import { useAuth } from "@/context/AuthContext";
 import { SkeletonTable } from "@/components/SkeletonLoader";
+import { cn } from "@/lib/cn";
+import {
+  Eye,
+  Pencil,
+  Trash2,
+  Plus,
+  X,
+  Search,
+  Phone,
+  Mail,
+  MessageCircle,
+  MapPin,
+  Calendar,
+  Users,
+  Handshake,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
+
+const TH = "text-left font-semibold text-xs uppercase tracking-wide text-muted-foreground px-4 py-3";
+
+const STAGE_STYLES: Record<string, string> = {
+  won: "bg-green-50 text-green-700 border-green-200",
+  lost: "bg-gray-100 text-gray-600 border-gray-200",
+  fresh: "bg-teal-50 text-teal-700 border-teal-200",
+};
 
 export default function CustomersPage() {
   const { showToast } = useToast();
@@ -124,74 +153,145 @@ export default function CustomersPage() {
         <PageHeader
           title="Customer Master"
           description="Manage all your customers in one place."
-          action={canWrite ? <Button variant="primary" onClick={openAddPanel}>+ Add Customer</Button> : undefined}
+          action={canWrite ? (
+            <Button variant="primary" onClick={openAddPanel}>
+              <Plus className="h-4 w-4" /> Add Customer
+            </Button>
+          ) : undefined}
         />
 
         <Card>
-          <CardContent>
-            {/* Search */}
-            <div style={{ display: "flex", gap: 12, marginBottom: 20, alignItems: "center" }}>
-              <Input
-                placeholder="Search by name, phone, email..."
-                value={search}
-                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                style={{ maxWidth: 400 }}
-                id="customer-search"
-              />
-              <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>{total} customers</span>
+          <CardContent className="p-0">
+            {/* Toolbar */}
+            <div className="flex flex-wrap items-center gap-3 p-4 border-b border-border">
+              <div className="relative flex-1 min-w-64 max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  placeholder="Search by name, phone, email…"
+                  value={search}
+                  onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                  className="pl-9"
+                  id="customer-search"
+                />
+              </div>
+              <span className="text-sm text-muted-foreground">
+                <strong className="text-foreground">{total}</strong> customers
+              </span>
             </div>
 
             {/* Table */}
             {loading && customers.length === 0 ? (
-              <SkeletonTable rows={5} />
+              <div className="p-4">
+                <SkeletonTable rows={5} />
+              </div>
             ) : customers.length === 0 ? (
-              <div style={{ padding: "60px 20px", textAlign: "center" }}>
-                <div style={{ fontSize: 48, marginBottom: 12 }}>👤</div>
-                <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>No customers found</h3>
-                <p style={{ color: "var(--text-secondary)", marginBottom: 20 }}>
+              <div className="flex flex-col items-center justify-center px-6 py-20 text-center">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted text-muted-foreground mb-4">
+                  <Users className="h-8 w-8" />
+                </div>
+                <h3 className="text-lg font-semibold text-foreground mb-1">No customers found</h3>
+                <p className="text-sm text-muted-foreground mb-6 max-w-sm">
                   Customers are created automatically when you add leads, or add one manually.
                 </p>
-                {canWrite && <Button variant="primary" onClick={openAddPanel}>+ Add Customer</Button>}
+                {canWrite && (
+                  <Button variant="primary" size="lg" onClick={openAddPanel}>
+                    <Plus className="h-4 w-4" /> Add Customer
+                  </Button>
+                )}
               </div>
             ) : (
-              <div className="table-wrap">
-                <table className="table">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm border-collapse">
                   <thead>
-                    <tr>
-                      <th style={{ width: 200 }}>Name</th>
-                      <th style={{ width: 160 }}>Phone</th>
-                      <th style={{ width: 220 }}>Email</th>
-                      <th style={{ width: 140 }}>WhatsApp</th>
-                      <th style={{ width: 100, textAlign: "center" }}>Leads</th>
-                      <th style={{ width: 120 }}>Added On</th>
-                      <th style={{ width: 100, textAlign: "right" }}>Actions</th>
+                    <tr className="border-b border-border bg-muted/40">
+                      <th className={TH}>Customer</th>
+                      <th className={TH}>Phone</th>
+                      <th className={TH}>WhatsApp</th>
+                      <th className={cn(TH, "text-center")}>Leads</th>
+                      <th className={TH}>Added</th>
+                      <th className={cn(TH, "text-right")}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {customers.map((c) => (
-                      <tr key={c.id}>
-                        <td>
+                      <tr key={c.id} className="border-b border-border last:border-0 transition-colors group hover:bg-muted/40">
+                        {/* Customer */}
+                        <td className="px-4 py-3">
                           <button
+                            type="button"
                             onClick={() => openDetailPanel(c)}
-                            style={{ background: "none", border: "none", padding: 0, fontWeight: 600, color: "rgb(var(--color-primary))", cursor: "pointer", textDecoration: "underline" }}
-                          >{c.name}</button>
+                            className="flex items-center gap-3 text-left"
+                          >
+                            <Avatar name={c.name} />
+                            <div className="min-w-0">
+                              <div className="font-semibold text-foreground group-hover:text-primary transition-colors truncate">
+                                {c.name}
+                              </div>
+                              <div className="text-xs text-muted-foreground truncate">
+                                {c.email || "No email"}
+                              </div>
+                            </div>
+                          </button>
                         </td>
-                        <td style={{ whiteSpace: "nowrap" }}>{c.phone}</td>
-                        <td style={{ fontSize: 13, color: "var(--text-secondary)" }}>{c.email || "—"}</td>
-                        <td style={{ whiteSpace: "nowrap" }}>{c.whatsapp_number || "—"}</td>
-                        <td style={{ textAlign: "center" }}>
-                          <span className={`badge ${c.lead_count > 0 ? "badge-blue" : "badge-gray"}`}>{c.lead_count}</span>
+
+                        {/* Phone */}
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <span className="inline-flex items-center gap-2 text-foreground">
+                            <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                            {c.phone}
+                          </span>
                         </td>
-                        <td style={{ fontSize: 13, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
+
+                        {/* WhatsApp */}
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {c.whatsapp_number ? (
+                            <a
+                              href={`https://wa.me/${c.whatsapp_number?.replace(/\D/g, "")}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 text-green-600 hover:text-green-700"
+                              title="Open WhatsApp"
+                            >
+                              <MessageCircle className="h-3.5 w-3.5" />
+                              {c.whatsapp_number}
+                            </a>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+
+                        {/* Leads count */}
+                        <td className="px-4 py-3 text-center">
+                          <Badge variant={c.lead_count > 0 ? "info" : "default"} className="font-medium">
+                            {c.lead_count}
+                          </Badge>
+                        </td>
+
+                        {/* Added */}
+                        <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
                           {c.created_at ? new Date(c.created_at).toLocaleDateString("en-IN") : "—"}
                         </td>
-                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                          <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
-                            <button className="btn btn-ghost btn-sm btn-icon" onClick={() => openDetailPanel(c)} title="View Details">👁️</button>
+
+                        {/* Actions */}
+                        <td className="px-4 py-3 whitespace-nowrap text-right">
+                          <div className="flex items-center justify-end gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
+                            <Button variant="ghost" size="icon" onClick={() => openDetailPanel(c)} title="View details">
+                              <Eye className="h-4 w-4" />
+                            </Button>
                             {canWrite && (
                               <>
-                                <button className="btn btn-ghost btn-sm btn-icon" onClick={() => openEditPanel(c)} title="Edit">✏️</button>
-                                <button className="btn btn-ghost btn-sm btn-icon" onClick={() => handleDelete(c.id)} title="Delete" style={{ color: "var(--danger)" }}>🗑️</button>
+                                <Button variant="ghost" size="icon" onClick={() => openEditPanel(c)} title="Edit customer">
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDelete(c.id)}
+                                  title="Delete customer"
+                                  className="hover:bg-destructive/10 hover:text-destructive"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
                               </>
                             )}
                           </div>
@@ -205,12 +305,18 @@ export default function CustomersPage() {
 
             {/* Pagination */}
             {pages > 1 && (
-              <div style={{ display: "flex", justifyContent: "center", gap: 8, marginTop: 20 }}>
-                <Button variant="ghost" disabled={page <= 1} onClick={() => setPage(page - 1)}>← Prev</Button>
-                <span style={{ display: "flex", alignItems: "center", fontSize: 13, color: "var(--text-secondary)" }}>
-                  Page {page} of {pages}
+              <div className="flex items-center justify-between gap-2 p-4 border-t border-border bg-muted/30">
+                <span className="text-sm text-muted-foreground">
+                  Page <strong className="text-foreground">{page}</strong> of {pages}
                 </span>
-                <Button variant="ghost" disabled={page >= pages} onClick={() => setPage(page + 1)}>Next →</Button>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+                    <ChevronLeft className="h-4 w-4" /> Prev
+                  </Button>
+                  <Button variant="outline" size="sm" disabled={page >= pages} onClick={() => setPage(page + 1)}>
+                    Next <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             )}
           </CardContent>
@@ -222,31 +328,33 @@ export default function CustomersPage() {
             <div className="side-panel">
               <div className="side-panel-header">
                 <h2 className="side-panel-title">{showPanel === "edit" ? "Edit Customer" : "Add Customer"}</h2>
-                <button className="btn btn-ghost btn-icon" onClick={() => setShowPanel(null)}>✕</button>
+                <button className="btn btn-ghost btn-icon" onClick={() => setShowPanel(null)} aria-label="Close">
+                  <X className="h-5 w-5" />
+                </button>
               </div>
               <div className="side-panel-content" style={{ padding: 24 }}>
-                <div style={{ display: "grid", gap: 20 }}>
+                <div className="grid gap-5">
                   <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6, display: "block" }}>Full Name *</label>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Full Name *</label>
                     <Input value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="e.g. Deepika Gandhi" id="customer-name" />
                   </div>
                   <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6, display: "block" }}>Phone *</label>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Phone *</label>
                     <Input value={formPhone} onChange={(e) => setFormPhone(e.target.value)} placeholder="e.g. +91 98765 43210" id="customer-phone" />
                   </div>
                   <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6, display: "block" }}>Email</label>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Email</label>
                     <Input value={formEmail} onChange={(e) => setFormEmail(e.target.value)} placeholder="e.g. deepika@gmail.com" id="customer-email" />
                   </div>
                   <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6, display: "block" }}>WhatsApp Number</label>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">WhatsApp Number</label>
                     <Input value={formWhatsapp} onChange={(e) => setFormWhatsapp(e.target.value)} placeholder="e.g. +91 98765 43210" id="customer-whatsapp" />
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: 12, marginTop: 32, justifyContent: "flex-end" }}>
+                <div className="flex gap-3 mt-8 justify-end">
                   <Button variant="ghost" onClick={() => setShowPanel(null)}>Cancel</Button>
                   <Button variant="primary" onClick={handleSave} disabled={saving}>
-                    {saving ? "Saving..." : showPanel === "edit" ? "Update Customer" : "Add Customer"}
+                    {saving ? "Saving…" : showPanel === "edit" ? "Update Customer" : "Add Customer"}
                   </Button>
                 </div>
               </div>
@@ -259,68 +367,75 @@ export default function CustomersPage() {
           <div className="side-panel-overlay" onClick={(e) => e.target === e.currentTarget && setShowPanel(null)}>
             <div className="side-panel">
               <div className="side-panel-header">
-                <div>
-                  <h2 className="side-panel-title">{detailCustomer.name}</h2>
-                  <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>Customer Details & Lead History</p>
+                <div className="flex items-center gap-3">
+                  <Avatar name={detailCustomer.name} className="h-10 w-10" />
+                  <div>
+                    <h2 className="side-panel-title">{detailCustomer.name}</h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">Customer details &amp; lead history</p>
+                  </div>
                 </div>
-                <button className="btn btn-ghost btn-icon" onClick={() => setShowPanel(null)}>✕</button>
+                <button className="btn btn-ghost btn-icon" onClick={() => setShowPanel(null)} aria-label="Close">
+                  <X className="h-5 w-5" />
+                </button>
               </div>
               <div className="side-panel-content" style={{ padding: 24 }}>
-                {/* Customer Info */}
-                <h3 style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--text-secondary)", marginBottom: 12, letterSpacing: "0.6px" }}>
+                {/* Contact info */}
+                <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-3">
                   Contact Information
                 </h3>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 32 }}>
-                  <div>
-                    <label style={{ fontSize: 11, color: "var(--text-secondary)", fontWeight: 600 }}>Phone</label>
-                    <p style={{ fontSize: 15, fontWeight: 600, marginTop: 4 }}>{detailCustomer.phone}</p>
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 11, color: "var(--text-secondary)", fontWeight: 600 }}>Email</label>
-                    <p style={{ fontSize: 15, fontWeight: 600, marginTop: 4 }}>{detailCustomer.email || "—"}</p>
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 11, color: "var(--text-secondary)", fontWeight: 600 }}>WhatsApp</label>
-                    <p style={{ fontSize: 15, fontWeight: 600, marginTop: 4 }}>{detailCustomer.whatsapp_number || "—"}</p>
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 11, color: "var(--text-secondary)", fontWeight: 600 }}>Since</label>
-                    <p style={{ fontSize: 15, fontWeight: 600, marginTop: 4 }}>
-                      {detailCustomer.created_at ? new Date(detailCustomer.created_at).toLocaleDateString("en-IN") : "—"}
-                    </p>
-                  </div>
+                <div className="grid grid-cols-2 gap-4 mb-8">
+                  <InfoItem icon={Phone} label="Phone" value={detailCustomer.phone} />
+                  <InfoItem icon={Mail} label="Email" value={detailCustomer.email || "—"} />
+                  <InfoItem icon={MessageCircle} label="WhatsApp" value={detailCustomer.whatsapp_number || "—"} />
+                  <InfoItem
+                    icon={Calendar}
+                    label="Since"
+                    value={detailCustomer.created_at ? new Date(detailCustomer.created_at).toLocaleDateString("en-IN") : "—"}
+                  />
                 </div>
 
-                {/* Lead History */}
-                <h3 style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--text-secondary)", marginBottom: 12, letterSpacing: "0.6px" }}>
-                  📋 Lead History ({detailLeads.length})
+                {/* Lead history */}
+                <h3 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-3">
+                  <Users className="h-3.5 w-3.5" /> Lead History ({detailLeads.length})
                 </h3>
                 {detailLoading ? (
-                  <p style={{ color: "var(--text-muted)", fontSize: 13 }}>Loading leads...</p>
+                  <p className="text-sm text-muted-foreground">Loading leads…</p>
                 ) : detailLeads.length === 0 ? (
-                  <div style={{ padding: 24, textAlign: "center", borderRadius: 8, border: "1px dashed var(--border)", color: "var(--text-muted)" }}>
+                  <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
                     No leads found for this customer
                   </div>
                 ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div className="flex flex-col gap-2.5">
                     {detailLeads.map((lead: any) => (
-                      <div key={lead.id} style={{ padding: 14, borderRadius: 8, border: "1px solid var(--border)", backgroundColor: "rgba(var(--color-muted), 0.1)" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ fontWeight: 600, fontSize: 14 }}>📍 {lead.destination || "General Inquiry"}</span>
-                          <span className={`badge ${lead.stage === "won" ? "badge-green" : lead.stage === "lost" ? "badge-gray" : "badge-teal"}`} style={{ fontSize: 10, padding: "2px 8px" }}>
-                            {lead.stage?.replace("_", " ")}
+                      <Link
+                        key={lead.id}
+                        href={`/leads/${lead.id}`}
+                        className="block rounded-lg border border-border bg-muted/30 p-3.5 hover:border-primary/50 hover:bg-muted/60 transition-colors"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="inline-flex items-center gap-1.5 font-semibold text-sm">
+                            <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+                            {lead.destination || "General Inquiry"}
                           </span>
+                          <Badge
+                            className={cn(
+                              "text-[10px]",
+                              STAGE_STYLES[lead.stage] || "bg-teal-50 text-teal-700 border-teal-200"
+                            )}
+                          >
+                            {lead.stage?.replace("_", " ")}
+                          </Badge>
                         </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 12, color: "var(--text-secondary)" }}>
-                          <span>Source: {lead.source || "—"} | Budget: {lead.budget || "—"}</span>
+                        <div className="flex items-center justify-between mt-1.5 text-xs text-muted-foreground">
+                          <span>Source: {lead.source || "—"} • Budget: {lead.budget || "—"}</span>
                           <span>{lead.created_at ? new Date(lead.created_at).toLocaleDateString("en-IN") : ""}</span>
                         </div>
                         {lead.b2b_partner && (
-                          <div style={{ marginTop: 6, fontSize: 11, color: "var(--text-secondary)" }}>
-                            🤝 B2B: {lead.b2b_partner.company_name}
+                          <div className="mt-1.5 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <Handshake className="h-3.5 w-3.5" /> B2B: {lead.b2b_partner.company_name}
                           </div>
                         )}
-                      </div>
+                      </Link>
                     ))}
                   </div>
                 )}
@@ -330,5 +445,16 @@ export default function CustomersPage() {
         )}
       </PageContainer>
     </AppShell>
+  );
+}
+
+function InfoItem({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string }) {
+  return (
+    <div>
+      <label className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
+        <Icon className="h-3.5 w-3.5" /> {label}
+      </label>
+      <p className="text-sm font-semibold text-foreground mt-1 break-words">{value}</p>
+    </div>
   );
 }

@@ -2,13 +2,18 @@
 
 import { useState } from "react";
 import AppShell from "@/components/AppShell";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { vouchersApi } from "@/lib/api";
 
 const BRAND = "#2D9B7A";
 
 export default function NewVoucherWizard() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const leadIdParam = searchParams.get("lead_id");
+  const customerIdParam = searchParams.get("customer_id");
+  const leadId = leadIdParam ? Number(leadIdParam) : undefined;
+  const customerId = customerIdParam ? Number(customerIdParam) : undefined;
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,9 +26,9 @@ export default function NewVoucherWizard() {
     setLoading(true);
     setError(null);
     try {
-      const res = await vouchersApi.aiEntry(text);
+      const res = await vouchersApi.aiEntry(text, { lead_id: leadId, customer_id: customerId });
       if (res && res.id) {
-        router.push(`/vouchers/${res.id}`);
+        router.push(leadId ? `/leads/${leadId}` : `/vouchers/${res.id}`);
       } else {
         throw new Error("Failed to generate voucher. No ID returned.");
       }

@@ -1,8 +1,8 @@
 """baseline schema
 
-Revision ID: a1f0e1c1a800
+Revision ID: 0792e455d8dd
 Revises: 
-Create Date: 2026-06-08 15:13:05.335141
+Create Date: 2026-06-08 16:45:06.952590
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'a1f0e1c1a800'
+revision: str = '0792e455d8dd'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -244,6 +244,73 @@ def upgrade() -> None:
     op.create_index(op.f('ix_followups_id'), 'followups', ['id'], unique=False)
     op.create_index(op.f('ix_followups_lead_id'), 'followups', ['lead_id'], unique=False)
     op.create_index(op.f('ix_followups_org_id'), 'followups', ['org_id'], unique=False)
+    op.create_table('hotel_vouchers',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('org_id', sa.Integer(), nullable=False),
+    sa.Column('lead_id', sa.Integer(), nullable=True),
+    sa.Column('customer_id', sa.Integer(), nullable=True),
+    sa.Column('created_by', sa.Integer(), nullable=True),
+    sa.Column('hotel_name', sa.String(length=300), nullable=False),
+    sa.Column('hotel_stars', sa.Integer(), nullable=True),
+    sa.Column('hotel_address', sa.Text(), nullable=True),
+    sa.Column('banner_image_url', sa.String(length=500), nullable=True),
+    sa.Column('check_in', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('check_out', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('room_type', sa.String(length=200), nullable=True),
+    sa.Column('num_rooms', sa.Integer(), nullable=True),
+    sa.Column('num_guests', sa.Integer(), nullable=True),
+    sa.Column('meal_plan', sa.String(length=100), nullable=True),
+    sa.Column('cancellation_policy', sa.Text(), nullable=True),
+    sa.Column('special_requests', sa.Text(), nullable=True),
+    sa.Column('extra_data', sa.JSON(), nullable=True),
+    sa.Column('pdf_url', sa.String(length=500), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=True),
+    sa.ForeignKeyConstraint(['created_by'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['customer_id'], ['customers.id'], ),
+    sa.ForeignKeyConstraint(['lead_id'], ['leads.id'], ),
+    sa.ForeignKeyConstraint(['org_id'], ['organizations.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_hotel_vouchers_id'), 'hotel_vouchers', ['id'], unique=False)
+    op.create_index(op.f('ix_hotel_vouchers_org_id'), 'hotel_vouchers', ['org_id'], unique=False)
+    op.create_table('invoices',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('org_id', sa.Integer(), nullable=False),
+    sa.Column('invoice_number', sa.String(length=50), nullable=True),
+    sa.Column('lead_id', sa.Integer(), nullable=True),
+    sa.Column('created_by', sa.Integer(), nullable=True),
+    sa.Column('agency_name', sa.String(length=300), nullable=True),
+    sa.Column('agency_address', sa.Text(), nullable=True),
+    sa.Column('agency_gst', sa.String(length=50), nullable=True),
+    sa.Column('customer_name', sa.String(length=200), nullable=True),
+    sa.Column('customer_email', sa.String(length=255), nullable=True),
+    sa.Column('customer_phone', sa.String(length=20), nullable=True),
+    sa.Column('customer_address', sa.Text(), nullable=True),
+    sa.Column('customer_gst', sa.String(length=50), nullable=True),
+    sa.Column('booking_type', sa.String(length=100), nullable=True),
+    sa.Column('line_items', sa.JSON(), nullable=True),
+    sa.Column('subtotal', sa.String(length=50), nullable=True),
+    sa.Column('advance_payment', sa.String(length=50), nullable=True),
+    sa.Column('total_gst', sa.String(length=50), nullable=True),
+    sa.Column('grand_total', sa.String(length=50), nullable=True),
+    sa.Column('tax_basis', sa.String(length=50), nullable=True),
+    sa.Column('payment_terms', sa.Text(), nullable=True),
+    sa.Column('bank_holder', sa.String(length=200), nullable=True),
+    sa.Column('bank_account', sa.String(length=50), nullable=True),
+    sa.Column('bank_name', sa.String(length=200), nullable=True),
+    sa.Column('bank_ifsc', sa.String(length=20), nullable=True),
+    sa.Column('pdf_url', sa.String(length=500), nullable=True),
+    sa.Column('status', sa.String(length=50), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=True),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
+    sa.ForeignKeyConstraint(['created_by'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['lead_id'], ['leads.id'], ),
+    sa.ForeignKeyConstraint(['org_id'], ['organizations.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_invoices_id'), 'invoices', ['id'], unique=False)
+    op.create_index(op.f('ix_invoices_invoice_number'), 'invoices', ['invoice_number'], unique=True)
+    op.create_index(op.f('ix_invoices_org_id'), 'invoices', ['org_id'], unique=False)
     op.create_table('itineraries',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('org_id', sa.Integer(), nullable=False),
@@ -329,6 +396,13 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_itineraries_org_id'), table_name='itineraries')
     op.drop_index(op.f('ix_itineraries_id'), table_name='itineraries')
     op.drop_table('itineraries')
+    op.drop_index(op.f('ix_invoices_org_id'), table_name='invoices')
+    op.drop_index(op.f('ix_invoices_invoice_number'), table_name='invoices')
+    op.drop_index(op.f('ix_invoices_id'), table_name='invoices')
+    op.drop_table('invoices')
+    op.drop_index(op.f('ix_hotel_vouchers_org_id'), table_name='hotel_vouchers')
+    op.drop_index(op.f('ix_hotel_vouchers_id'), table_name='hotel_vouchers')
+    op.drop_table('hotel_vouchers')
     op.drop_index(op.f('ix_followups_org_id'), table_name='followups')
     op.drop_index(op.f('ix_followups_lead_id'), table_name='followups')
     op.drop_index(op.f('ix_followups_id'), table_name='followups')

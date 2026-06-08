@@ -9,6 +9,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.tools import Invoice
 from app.models.user import User
+from app.services.activity import log_activity
 
 router = APIRouter()
 
@@ -51,9 +52,10 @@ class InvoiceOut(BaseModel):
         from_attributes = True
 
 
-def _next_invoice_number(db: Session) -> str:
+def _next_invoice_number(db: Session, org_id: int) -> str:
     year = datetime.now().year
     count = db.query(func.count(Invoice.id)).filter(
+        Invoice.org_id == org_id,
         func.extract("year", Invoice.created_at) == year
     ).scalar() or 0
     return f"PLAN-{year}-{str(count + 1).zfill(4)}"
@@ -71,11 +73,17 @@ class PaginatedInvoices(BaseModel):
 def list_invoices(
     page: int = Query(1, ge=1),
     per_page: int = Query(10, ge=1, le=100),
+    lead_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    q = db.query(Invoice).filter(Invoice.created_by == current_user.id)
-    
+    q = db.query(Invoice).filter(Invoice.org_id == current_user.org_id)
+    if lead_id is not None:
+        # Lead workspace: all invoices attached to this lead in the org
+        q = q.filter(Invoice.lead_id == lead_id)
+    else:
+        q = q.filter(Invoice.created_by == current_user.id)
+
     total = q.count()
     invoices = q.order_by(Invoice.created_at.desc()).offset((page - 1) * per_page).limit(per_page).all()
     
@@ -95,19 +103,31 @@ def create_invoice(
     current_user: User = Depends(get_current_user),
 ):
     inv = Invoice(
-        invoice_number=_next_invoice_number(db),
+        invoice_number=_next_invoice_number(db, current_user.org_id),
+        org_id=current_user.org_id,
         created_by=current_user.id,
         **payload.dict(),
     )
     db.add(inv)
     db.commit()
     db.refresh(inv)
+    if inv.lead_id:
+        log_activity(
+            db, org_id=current_user.org_id, lead_id=inv.lead_id,
+            actor_id=current_user.id, type="invoice_created",
+            title=f"Invoice {inv.invoice_number}",
+            description=f"₹{inv.grand_total}" if inv.grand_total else None,
+            ref_type="invoice", ref_id=inv.id,
+        )
     return inv
 
 
 @router.get("/{inv_id}")
 def get_invoice(inv_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    inv = db.query(Invoice).filter(Invoice.id == inv_id).first()
+    inv = db.query(Invoice).filter(
+        Invoice.id == inv_id,
+        Invoice.org_id == current_user.org_id,
+    ).first()
     if not inv:
         raise HTTPException(status_code=404, detail="Invoice not found")
     return inv
@@ -120,7 +140,10 @@ def update_invoice(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    inv = db.query(Invoice).filter(Invoice.id == inv_id).first()
+    inv = db.query(Invoice).filter(
+        Invoice.id == inv_id,
+        Invoice.org_id == current_user.org_id,
+    ).first()
     if not inv:
         raise HTTPException(status_code=404, detail="Invoice not found")
     for field, value in payload.dict(exclude_unset=True).items():

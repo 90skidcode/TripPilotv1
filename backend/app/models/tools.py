@@ -7,6 +7,7 @@ class HotelVoucher(Base):
     __tablename__ = "hotel_vouchers"
 
     id = Column(Integer, primary_key=True, index=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
@@ -37,6 +38,7 @@ class Invoice(Base):
     __tablename__ = "invoices"
 
     id = Column(Integer, primary_key=True, index=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     invoice_number = Column(String(50), unique=True, index=True)
     lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
@@ -75,4 +77,36 @@ class Invoice(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     lead = relationship("Lead")
+    creator = relationship("User")
+
+
+class FlightTicket(Base):
+    __tablename__ = "flight_tickets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True, index=True)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    airline = Column(String(200), nullable=False)
+    flight_number = Column(String(50), nullable=True)
+    pnr = Column(String(50), nullable=True)
+    cabin_class = Column(String(50), nullable=True)
+    origin = Column(String(150), nullable=True)        # From (airport / city)
+    destination = Column(String(150), nullable=True)   # To (airport / city)
+    depart_at = Column(DateTime(timezone=True), nullable=True)
+    arrive_at = Column(DateTime(timezone=True), nullable=True)
+    num_passengers = Column(Integer, nullable=True)
+    passengers = Column(JSON, nullable=True)           # [{name, type, seat, ticket_no}]
+    fare = Column(String(50), nullable=True)
+    baggage = Column(String(100), nullable=True)
+    notes = Column(Text, nullable=True)
+    extra_data = Column(JSON, nullable=True)
+
+    pdf_url = Column(String(500), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    lead = relationship("Lead")
+    customer = relationship("Customer")
     creator = relationship("User")
