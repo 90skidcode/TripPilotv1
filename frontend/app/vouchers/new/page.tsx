@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import AppShell from "@/components/AppShell";
 import { useRouter, useSearchParams } from "next/navigation";
 import { vouchersApi } from "@/lib/api";
 
 const BRAND = "#2D9B7A";
 
-export default function NewVoucherWizard() {
+function VoucherForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const leadIdParam = searchParams.get("lead_id");
@@ -130,5 +130,13 @@ export default function NewVoucherWizard() {
         </div>
       </div>
     </AppShell>
+  );
+}
+
+export default function NewVoucherWizard() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <VoucherForm />
+    </Suspense>
   );
 }

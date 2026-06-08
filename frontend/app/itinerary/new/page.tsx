@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import AppShell from "@/components/AppShell";
 import { itineraryApi } from "@/lib/api";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -29,7 +29,7 @@ const LAYOUTS = [
   },
 ];
 
-export default function NewItineraryPage() {
+function ItineraryForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const leadIdParam = searchParams.get("lead_id");
@@ -229,5 +229,13 @@ export default function NewItineraryPage() {
         )}
       </div>
     </AppShell>
+  );
+}
+
+export default function NewItineraryPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <ItineraryForm />
+    </Suspense>
   );
 }

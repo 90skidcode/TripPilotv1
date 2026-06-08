@@ -65,7 +65,7 @@ def create_followup(
     db.refresh(followup)
 
     log_activity(
-        db, org_id=current_user.org_id, lead_id=lead_id, customer_id=lead.customer_id,
+        db, org_id=lead.org_id, lead_id=lead_id, customer_id=lead.customer_id,
         actor_id=current_user.id, type="followup_scheduled", title="Follow-up scheduled",
         description=payload.notes or None, ref_type="followup", ref_id=followup.id,
         meta={"scheduled_date": payload.scheduled_date.isoformat() if payload.scheduled_date else None},

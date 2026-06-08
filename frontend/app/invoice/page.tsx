@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import { PageHeader, PageContainer } from "@/components/layout";
@@ -20,7 +20,7 @@ interface LineItem {
   amount: number;
 }
 
-export default function InvoicePage() {
+function InvoiceContent() {
   const { showToast } = useToast();
   const { hasPermission } = useAuth();
   const canWrite = hasPermission("bills" as any, "write") || hasPermission("vouchers", "write");
@@ -396,5 +396,13 @@ export default function InvoicePage() {
         )}
       </PageContainer>
     </AppShell>
+  );
+}
+
+export default function InvoicePage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <InvoiceContent />
+    </Suspense>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import { PageContainer, PageHeader } from "@/components/layout";
@@ -21,7 +21,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-export default function NewFlightPage() {
+function FlightForm() {
   const router = useRouter();
   const { showToast } = useToast();
   const { hasPermission } = useAuth();
@@ -181,5 +181,13 @@ export default function NewFlightPage() {
         </Card>
       </PageContainer>
     </AppShell>
+  );
+}
+
+export default function NewFlightPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <FlightForm />
+    </Suspense>
   );
 }
