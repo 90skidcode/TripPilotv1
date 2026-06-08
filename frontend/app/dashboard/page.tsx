@@ -2,13 +2,12 @@
 
 import { useState, useEffect } from "react";
 import AppShell from "@/components/AppShell";
-import { PageHeader, PageContainer, Section, ResponsiveGrid } from "@/components/layout";
+import { PageHeader, PageContainer } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { dashboardApi } from "@/lib/api";
-import { cn } from "@/lib/cn";
 
 const formatLabel = (str: string) => {
   if (!str) return "";
@@ -85,46 +84,157 @@ export default function DashboardPage() {
     );
   }
 
+  const featuredKpi = KPI_CONFIG[0];
+  const restKpis = KPI_CONFIG.slice(1);
+
   return (
     <AppShell title="Dashboard">
       <PageContainer>
-        <div className="space-y-8">
+        <div className="space-y-6">
           <PageHeader title="Dashboard" description="Real-time sales metrics and AI insights" />
 
-          {/* KPI Grid */}
-          <ResponsiveGrid columns={4} gap="md">
-            {KPI_CONFIG.map((kpi) => (
-              <Card key={kpi.key}>
-                <CardContent className="pt-6">
+          {/* Bento Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 auto-rows-min gap-4 grid-flow-row-dense">
+            {/* Featured KPI — large tile */}
+            <Card
+              className="md:col-span-2 lg:col-span-2 overflow-hidden relative"
+              style={{
+                background: `linear-gradient(135deg, color-mix(in srgb, ${featuredKpi.color} 14%, white), white)`,
+              }}
+            >
+              <CardContent className="h-full flex flex-col justify-between gap-6 py-7">
+                <div className="flex items-start justify-between">
+                  <div
+                    className="w-14 h-14 rounded-xl flex items-center justify-center text-3xl"
+                    style={{ backgroundColor: `color-mix(in srgb, ${featuredKpi.color} 22%, white)` }}
+                  >
+                    {featuredKpi.icon}
+                  </div>
+                  <Badge variant="primary">Live</Badge>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">{featuredKpi.label}</p>
+                  <p className="text-5xl font-extrabold tracking-tight" style={{ color: featuredKpi.color }}>
+                    {summary?.[featuredKpi.key] ?? "—"}
+                    {featuredKpi.suffix && <span className="text-2xl">{featuredKpi.suffix}</span>}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* AI Sales Co-Pilot — tall tile */}
+            <Card className="md:col-span-2 lg:col-span-2 lg:row-span-2 bg-gradient-to-br from-green-50 to-white flex flex-col">
+              <CardHeader>
+                <div className="flex items-center justify-between gap-4">
+                  <CardTitle className="flex items-center gap-2">
+                    <span>🤖</span> AI Sales Co-Pilot
+                  </CardTitle>
+                  <Badge variant="success">Active Agent</Badge>
+                </div>
+                <CardDescription>Insights &amp; alerts from your lead data</CardDescription>
+              </CardHeader>
+              <CardContent className="flex-1 overflow-y-auto max-h-[520px]">
+                {loadingInsights ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-full bg-green-200 animate-pulse" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-3 bg-green-200 rounded w-1/3 animate-pulse" />
+                        <div className="h-2 bg-green-100 rounded w-2/3 animate-pulse" />
+                      </div>
+                    </div>
+                    <p className="text-sm text-muted-foreground text-center italic">
+                      🤖 Agent is analyzing lead profiles, budgets, and response times...
+                    </p>
+                  </div>
+                ) : insights.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-6">
+                    No insights generated yet. Add high-value leads or chat history to begin.
+                  </p>
+                ) : (
                   <div className="space-y-3">
+                    {insights.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className="p-4 rounded-lg border bg-white space-y-3 hover:shadow-md transition-shadow"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-2xl">
+                            {item.type === "high_value" ? "💎" : "🔥"}
+                          </span>
+                          <Badge
+                            variant={
+                              item.badge === "High Value"
+                                ? "primary"
+                                : item.badge === "Hot Lead"
+                                  ? "warning"
+                                  : "secondary"
+                            }
+                          >
+                            {item.badge}
+                          </Badge>
+                        </div>
+
+                        <div>
+                          <h4 className="font-semibold text-sm mb-1">{item.title}</h4>
+                          <p className="text-xs text-muted-foreground line-clamp-2">
+                            {item.description}
+                          </p>
+                        </div>
+
+                        {item.action_type !== "none" && (
+                          <div className="border-t pt-3 flex justify-end">
+                            {item.action_type === "whatsapp" ? (
+                              <Button asChild variant="primary" size="sm" className="text-xs">
+                                <a
+                                  href={`https://wa.me/${item.action_target?.replace(/\D/g, "")}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  💬 {item.action_text || "Chat WhatsApp"}
+                                </a>
+                              </Button>
+                            ) : (
+                              <Button asChild variant="outline" size="sm" className="text-xs">
+                                <a href="/leads">
+                                  👤 {item.action_text || "View Lead"}
+                                </a>
+                              </Button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Compact KPI tiles */}
+            {restKpis.map((kpi) => (
+              <Card key={kpi.key} className="h-full">
+                <CardContent className="py-5">
+                  <div className="flex items-center gap-3">
                     <div
-                      className="w-12 h-12 rounded-lg flex items-center justify-center text-2xl"
-                      style={{
-                        backgroundColor: `color-mix(in srgb, ${kpi.color} 15%, white)`,
-                      }}
+                      className="w-11 h-11 shrink-0 rounded-lg flex items-center justify-center text-xl"
+                      style={{ backgroundColor: `color-mix(in srgb, ${kpi.color} 15%, white)` }}
                     >
                       {kpi.icon}
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">{kpi.label}</p>
-                      <p
-                        className="text-3xl font-bold"
-                        style={{ color: kpi.color }}
-                      >
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-muted-foreground truncate">{kpi.label}</p>
+                      <p className="text-2xl font-bold leading-tight" style={{ color: kpi.color }}>
                         {summary?.[kpi.key] ?? "—"}
-                        {kpi.suffix && <span className="text-lg">{kpi.suffix}</span>}
+                        {kpi.suffix && <span className="text-base">{kpi.suffix}</span>}
                       </p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
             ))}
-          </ResponsiveGrid>
 
-          {/* Charts Section */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Leads by Source */}
-            <Card>
+            {/* Leads by Source — chart tile */}
+            <Card className="md:col-span-2 lg:col-span-2 h-full">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <span>📊</span> Leads by Source
@@ -132,9 +242,7 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent>
                 {bySource.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-8">
-                    No data yet
-                  </p>
+                  <p className="text-sm text-muted-foreground text-center py-8">No data yet</p>
                 ) : (
                   <div className="space-y-4">
                     {bySource.map((row) => {
@@ -143,9 +251,7 @@ export default function DashboardPage() {
                       return (
                         <div key={row.source}>
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-semibold">
-                              {formatLabel(row.source)}
-                            </span>
+                            <span className="text-sm font-semibold">{formatLabel(row.source)}</span>
                             <Badge variant="primary">{row.count}</Badge>
                           </div>
                           <div className="w-full h-2 bg-border rounded-full overflow-hidden">
@@ -162,8 +268,8 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
 
-            {/* Leads by Stage */}
-            <Card>
+            {/* Lead Funnel — chart tile */}
+            <Card className="md:col-span-2 lg:col-span-2 h-full">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <span>🎯</span> Lead Funnel
@@ -171,9 +277,7 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent>
                 {byStage.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-8">
-                    No data yet
-                  </p>
+                  <p className="text-sm text-muted-foreground text-center py-8">No data yet</p>
                 ) : (
                   <div className="space-y-4">
                     {byStage.map((row) => {
@@ -182,9 +286,7 @@ export default function DashboardPage() {
                       return (
                         <div key={row.stage}>
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-semibold">
-                              {formatLabel(row.stage)}
-                            </span>
+                            <span className="text-sm font-semibold">{formatLabel(row.stage)}</span>
                             <Badge variant="secondary">{row.count}</Badge>
                           </div>
                           <div className="w-full h-2 bg-border rounded-full overflow-hidden">
@@ -200,149 +302,50 @@ export default function DashboardPage() {
                 )}
               </CardContent>
             </Card>
-          </div>
 
-          {/* Leaderboard */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <span>🏆</span> Team Leaderboard
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {leaderboard.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">
-                  No team data yet
-                </p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="text-left font-semibold py-3 px-4">#</th>
-                        <th className="text-left font-semibold py-3 px-4">Agent</th>
-                        <th className="text-left font-semibold py-3 px-4">Total Leads</th>
-                        <th className="text-left font-semibold py-3 px-4">Won</th>
-                        <th className="text-left font-semibold py-3 px-4">Conversion</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {leaderboard.map((row, i) => (
-                        <tr key={row.agent} className="border-b border-border hover:bg-muted/50">
-                          <td className="py-3 px-4 font-bold">#{i + 1}</td>
-                          <td className="py-3 px-4 font-semibold">{row.agent}</td>
-                          <td className="py-3 px-4">{row.leads}</td>
-                          <td className="py-3 px-4">
-                            <Badge variant="success">{row.won}</Badge>
-                          </td>
-                          <td className="py-3 px-4">
-                            {row.leads ? Math.round((row.won / row.leads) * 100) : 0}%
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* AI Sales Co-Pilot Panel */}
-          <Card className="bg-gradient-to-br from-green-50 to-white border-green-200">
-            <CardHeader>
-              <div className="flex items-center justify-between gap-4">
+            {/* Leaderboard — full-width tile */}
+            <Card className="md:col-span-2 lg:col-span-4">
+              <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <span>🤖</span> AI Sales Co-Pilot — Insights & Alerts
+                  <span>🏆</span> Team Leaderboard
                 </CardTitle>
-                <Badge variant="success">Active Agent</Badge>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {loadingInsights ? (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-green-200 animate-pulse" />
-                    <div className="flex-1 space-y-2">
-                      <div className="h-3 bg-green-200 rounded w-1/3 animate-pulse" />
-                      <div className="h-2 bg-green-100 rounded w-2/3 animate-pulse" />
-                    </div>
+              </CardHeader>
+              <CardContent>
+                {leaderboard.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">No team data yet</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="text-left font-semibold py-3 px-4">#</th>
+                          <th className="text-left font-semibold py-3 px-4">Agent</th>
+                          <th className="text-left font-semibold py-3 px-4">Total Leads</th>
+                          <th className="text-left font-semibold py-3 px-4">Won</th>
+                          <th className="text-left font-semibold py-3 px-4">Conversion</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {leaderboard.map((row, i) => (
+                          <tr key={row.agent} className="border-b border-border hover:bg-muted/50">
+                            <td className="py-3 px-4 font-bold">#{i + 1}</td>
+                            <td className="py-3 px-4 font-semibold">{row.agent}</td>
+                            <td className="py-3 px-4">{row.leads}</td>
+                            <td className="py-3 px-4">
+                              <Badge variant="success">{row.won}</Badge>
+                            </td>
+                            <td className="py-3 px-4">
+                              {row.leads ? Math.round((row.won / row.leads) * 100) : 0}%
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                  <p className="text-sm text-muted-foreground text-center italic">
-                    🤖 Agent is analyzing lead profiles, budgets, and response times...
-                  </p>
-                </div>
-              ) : insights.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-6">
-                  No insights generated yet. Add high-value leads or chat history to begin.
-                </p>
-              ) : (
-                <ResponsiveGrid columns={2} gap="md">
-                  {insights.map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="p-4 rounded-lg border bg-white space-y-3 hover:shadow-md transition-shadow"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-2xl">
-                          {item.type === "high_value" ? "💎" : "🔥"}
-                        </span>
-                        <Badge
-                          variant={
-                            item.badge === "High Value"
-                              ? "primary"
-                              : item.badge === "Hot Lead"
-                                ? "warning"
-                                : "secondary"
-                          }
-                        >
-                          {item.badge}
-                        </Badge>
-                      </div>
-
-                      <div>
-                        <h4 className="font-semibold text-sm mb-1">{item.title}</h4>
-                        <p className="text-xs text-muted-foreground line-clamp-2">
-                          {item.description}
-                        </p>
-                      </div>
-
-                      {item.action_type !== "none" && (
-                        <div className="border-t pt-3 flex justify-end">
-                          {item.action_type === "whatsapp" ? (
-                            <Button
-                              asChild
-                              variant="primary"
-                              size="sm"
-                              className="text-xs"
-                            >
-                              <a
-                                href={`https://wa.me/${item.action_target?.replace(/\D/g, "")}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                💬 {item.action_text || "Chat WhatsApp"}
-                              </a>
-                            </Button>
-                          ) : (
-                            <Button
-                              asChild
-                              variant="outline"
-                              size="sm"
-                              className="text-xs"
-                            >
-                              <a href="/leads">
-                                👤 {item.action_text || "View Lead"}
-                              </a>
-                            </Button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </ResponsiveGrid>
-              )}
-            </CardContent>
-          </Card>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </PageContainer>
     </AppShell>
