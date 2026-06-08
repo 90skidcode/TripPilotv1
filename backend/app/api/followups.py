@@ -55,7 +55,7 @@ def create_followup(
 
     followup = Followup(
         lead_id=lead_id,
-        org_id=current_user.org_id,
+        org_id=lead.org_id,
         scheduled_date=payload.scheduled_date,
         notes=payload.notes,
         created_by=current_user.id,
