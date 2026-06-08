@@ -53,9 +53,13 @@ def create_followup(
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
+    org_id = lead.org_id or current_user.org_id
+    if not org_id:
+        raise HTTPException(status_code=400, detail="Organization ID is missing. Please ensure your user account and lead are assigned to an organization.")
+
     followup = Followup(
         lead_id=lead_id,
-        org_id=lead.org_id,
+        org_id=org_id,
         scheduled_date=payload.scheduled_date,
         notes=payload.notes,
         created_by=current_user.id,
@@ -65,7 +69,7 @@ def create_followup(
     db.refresh(followup)
 
     log_activity(
-        db, org_id=lead.org_id, lead_id=lead_id, customer_id=lead.customer_id,
+        db, org_id=org_id, lead_id=lead_id, customer_id=lead.customer_id,
         actor_id=current_user.id, type="followup_scheduled", title="Follow-up scheduled",
         description=payload.notes or None, ref_type="followup", ref_id=followup.id,
         meta={"scheduled_date": payload.scheduled_date.isoformat() if payload.scheduled_date else None},

@@ -72,7 +72,7 @@ export default function Sidebar({ collapsed, onToggle }: { collapsed: boolean; o
   const pathname = usePathname();
   const router = useRouter();
   const { hasPermission, logout } = useAuth();
-  const [openMenus, setOpenMenus] = useState<string[]>(["Master Leads", "Tools"]);
+  const [openMenus, setOpenMenus] = useState<string[]>(["Master Leads"]);
 
   function toggleMenu(label: string) {
     setOpenMenus((prev) =>
