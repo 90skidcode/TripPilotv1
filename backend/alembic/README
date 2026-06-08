@@ -1,0 +1,23 @@
+Alembic migrations for TripPilot CRM.
+
+The DB URL and target metadata are loaded from the app (see env.py):
+  URL      -> app.core.config.settings.DATABASE_URL
+  metadata -> app.core.database.Base.metadata (via `import app.models`)
+
+Common commands (run from the backend/ directory):
+
+  # create a new migration after changing a model
+  alembic revision --autogenerate -m "describe change"
+
+  # apply migrations
+  alembic upgrade head
+
+  # roll back one migration
+  alembic downgrade -1
+
+  # show current DB revision / history
+  alembic current
+  alembic history
+
+In production (Render) `alembic upgrade head` runs automatically before the
+app starts (see backend/Dockerfile).

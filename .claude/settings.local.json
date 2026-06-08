@@ -81,7 +81,10 @@
       "Bash(docker --version)",
       "Bash(docker-compose --version)",
       "Bash(docker-compose logs:*)",
-      "Bash(docker rm:*)"
+      "Bash(docker rm:*)",
+      "Bash(rm -f /tmp/alembic_baseline.db)",
+      "Bash(DATABASE_URL=\"sqlite:////tmp/alembic_baseline.db\" alembic revision --autogenerate -m \"baseline schema\")",
+      "Bash(DATABASE_URL=\"sqlite:///./alembic_baseline.db\" alembic revision --autogenerate -m \"baseline schema\")"
     ]
   }
 }

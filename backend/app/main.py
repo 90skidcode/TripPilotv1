@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from sqlalchemy.orm import Session
 import traceback
 
-from app.core.database import engine, Base, SessionLocal
+from app.core.database import SessionLocal
 from app.core.security import hash_password
 from fastapi.staticfiles import StaticFiles
 from app.api import auth, leads, customers, itinerary, vouchers, invoices, inventory, dashboard, upload, followups, user_groups, superadmin, pricing, webhooks, chats, b2b_partners, lead_costing
@@ -139,7 +139,10 @@ def seed_admin(db: Session):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
+    # Schema is managed by Alembic (`alembic upgrade head` runs at container
+    # start — see backend/Dockerfile). We intentionally do NOT call
+    # Base.metadata.create_all here so migrations remain the single source of
+    # truth and missing-migration bugs surface instead of being silently masked.
     db = SessionLocal()
     try:
         seed_pricing_plans(db)
