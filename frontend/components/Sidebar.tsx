@@ -3,35 +3,52 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import {
+  LayoutDashboard,
+  BarChart3,
+  Users,
+  Users2,
+  Handshake,
+  MessageCircle,
+  Paintbrush,
+  Camera,
+  Hotel,
+  Wrench,
+  Settings,
+  ChevronRight,
+  ChevronLeft,
+  ChevronDown,
+  LogOut,
+} from "lucide-react";
 
 const NAV = [
-  { icon: "📊", label: "Dashboard", href: "/dashboard", screen: "dashboard" },
-  { icon: "📈", label: "Usage", href: "/usage", screen: null },
-  { icon: "👤", label: "Customer Master", href: "/customers", screen: "leads" },
-  { icon: "👥", label: "Master Leads", href: "/leads", screen: "leads" },
-  { icon: "🤝", label: "B2B Partners", href: "/b2b-partners", screen: "leads" },
-  { icon: "💬", label: "WhatsApp", href: "/whatsapp", screen: null },
-  { icon: "🎨", label: "WA Studio", href: "/whatsapp-studio", screen: null },
-  { icon: "📸", label: "Instagram", href: "/instagram", screen: null },
+  { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard", screen: "dashboard" },
+  { icon: BarChart3, label: "Usage", href: "/usage", screen: null },
+  { icon: Users, label: "Customer Master", href: "/customers", screen: "leads" },
+  { icon: Users2, label: "Master Leads", href: "/leads", screen: "leads" },
+  { icon: Handshake, label: "B2B Partners", href: "/b2b-partners", screen: "leads" },
+  { icon: MessageCircle, label: "WhatsApp", href: "/whatsapp", screen: null },
+  { icon: Paintbrush, label: "WA Studio", href: "/whatsapp-studio", screen: null },
+  { icon: Camera, label: "Instagram", href: "/instagram", screen: null },
   {
-    icon: "🏨", label: "Inventory", href: "/inventory", screen: "inventory",
+    icon: Hotel, label: "Inventory", href: "/inventory", screen: "inventory",
     sub: [
       { label: "Hotel Inventory", href: "/inventory?tab=hotels", screen: "inventory" },
       { label: "Activity Inventory", href: "/inventory?tab=activities", screen: "inventory" },
     ],
   },
   {
-    icon: "🛠️", label: "Tools", href: "/tools", screen: null,
+    icon: Wrench, label: "Tools", href: "/tools", screen: null,
     sub: [
       { label: "Itinerary Builder", href: "/itinerary", screen: "itinerary" },
       { label: "Hotel Voucher", href: "/vouchers", screen: "vouchers" },
       { label: "Generate Bill", href: "/invoice", screen: null },
     ],
   },
-  { icon: "⚙️", label: "Settings", href: "/settings", screen: null },
+  { icon: Settings, label: "Settings", href: "/settings", screen: null },
 ];
 
-function stageLabel(stage: string) {
+export function stageLabel(stage: string) {
   const map: Record<string, { label: string; cls: string }> = {
     fresh: { label: "Fresh Lead", cls: "badge-teal" },
     qualified_hot: { label: "Qualified Hot", cls: "badge-red" },
@@ -45,15 +62,13 @@ function stageLabel(stage: string) {
   return map[stage] || { label: stage, cls: "badge-gray" };
 }
 
-function sourceLabel(source: string) {
+export function sourceLabel(source: string) {
   const icons: Record<string, string> = {
     whatsapp: "💬", instagram: "📸", website: "🌐",
     referral: "🤝", advertisement: "📢", manual: "✍️", email: "📧",
   };
   return icons[source] || "📌";
 }
-
-export { stageLabel, sourceLabel };
 
 export default function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const pathname = usePathname();
@@ -78,16 +93,16 @@ export default function Sidebar({ collapsed, onToggle }: { collapsed: boolean; o
   }
 
   return (
-    <aside className={`flex flex-col bg-[#313a46] text-[#ced4da] transition-all duration-300 relative z-20 ${collapsed ? "w-20" : "w-[260px]"}`}>
+    <aside className={`flex flex-col border-r border-border bg-background transition-all duration-200 relative z-20 ${collapsed ? "w-16" : "w-64"}`}>
       {/* Brand Header */}
-      <div className="flex items-center h-[70px] px-6 border-b border-white/10">
-        <div className="flex items-center justify-center w-8 h-8 rounded bg-primary text-white font-bold shrink-0 text-xl shadow-sm">P</div>
-        {!collapsed && <span className="ml-3 font-bold text-xl tracking-wide text-white whitespace-nowrap overflow-hidden uppercase">TripPilot</span>}
+      <div className="flex items-center h-16 px-4 border-b border-border">
+        <div className="flex items-center justify-center w-8 h-8 rounded bg-primary text-primary-foreground font-bold shrink-0 text-xl shadow-sm">P</div>
+        {!collapsed && <span className="ml-3 font-bold text-lg tracking-tight text-foreground whitespace-nowrap overflow-hidden">TripPilot</span>}
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1 custom-scrollbar">
-        {!collapsed && <div className="px-3 mb-2 text-xs font-semibold text-[#8391a2] uppercase tracking-wider">Navigation</div>}
+      <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-1 custom-scrollbar">
+        {!collapsed && <div className="px-3 mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Navigation</div>}
         {NAV.map((item) => {
           if (!canView(item)) return null;
 
@@ -98,19 +113,24 @@ export default function Sidebar({ collapsed, onToggle }: { collapsed: boolean; o
           return (
             <div key={item.label} className="mb-1">
               <div
-                className={`flex items-center px-3 py-2.5 rounded transition-all group cursor-pointer ${isActive ? "text-white" : "hover:text-white"}`}
+                className={`flex items-center px-3 py-2 rounded-md transition-colors group cursor-pointer ${
+                  isActive 
+                    ? "bg-accent text-accent-foreground font-medium" 
+                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                } ${collapsed ? "justify-center px-0" : ""}`}
                 onClick={() => {
                   if (item.sub && visibleSubs.length > 0) toggleMenu(item.label);
                   else if (!item.sub) router.push(item.href);
                 }}
+                title={collapsed ? item.label : undefined}
                 id={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
               >
-                <span className={`text-lg shrink-0 flex items-center justify-center w-6 transition-colors ${isActive ? "text-white" : "text-[#8391a2] group-hover:text-[#ced4da]"}`}>{item.icon}</span>
+                <item.icon className="w-5 h-5 shrink-0" />
                 {!collapsed && (
                   <>
-                    <span className="ml-3 text-sm font-medium whitespace-nowrap overflow-hidden flex-1">{item.label}</span>
+                    <span className="ml-3 text-sm whitespace-nowrap overflow-hidden flex-1">{item.label}</span>
                     {visibleSubs.length > 0 && (
-                      <span className="text-[10px] opacity-70 ml-auto transition-transform duration-200" style={{ transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
+                      <ChevronRight className={`w-4 h-4 ml-auto opacity-70 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />
                     )}
                   </>
                 )}
@@ -123,7 +143,11 @@ export default function Sidebar({ collapsed, onToggle }: { collapsed: boolean; o
                       <Link
                         key={sub.href}
                         href={sub.href}
-                        className={`block py-2 text-[13.5px] transition-colors ${isSubActive ? "text-white font-semibold" : "text-[#8391a2] hover:text-white"}`}
+                        className={`block py-1.5 px-3 text-sm transition-colors rounded-md ${
+                          isSubActive 
+                            ? "text-foreground font-medium bg-muted/50" 
+                            : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                        }`}
                       >
                         {sub.label}
                       </Link>
@@ -135,21 +159,26 @@ export default function Sidebar({ collapsed, onToggle }: { collapsed: boolean; o
           );
         })}
 
-        <div className="mt-8 pt-4 border-t border-white/10">
-          <div className="flex items-center px-3 py-2.5 rounded cursor-pointer text-[#8391a2] hover:text-white transition-colors" onClick={handleLogout} id="nav-logout">
-            <span className="text-lg shrink-0 flex items-center justify-center w-6">🚪</span>
+        <div className="mt-6 pt-4 border-t border-border">
+          <div 
+            className={`flex items-center px-3 py-2 rounded-md cursor-pointer text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors ${collapsed ? "justify-center px-0" : ""}`} 
+            onClick={handleLogout} 
+            title={collapsed ? "Logout" : undefined}
+            id="nav-logout"
+          >
+            <LogOut className="w-5 h-5 shrink-0" />
             {!collapsed && <span className="ml-3 text-sm font-medium whitespace-nowrap overflow-hidden">Logout</span>}
           </div>
         </div>
       </nav>
 
       <button 
-        className="absolute -right-3 top-24 flex items-center justify-center w-6 h-6 bg-primary text-white rounded-full shadow-md z-30 hover:bg-[#616be8] transition-colors"
+        className="absolute -right-3 top-20 flex items-center justify-center w-6 h-6 bg-background border border-border text-foreground rounded-full shadow-sm z-30 hover:bg-accent transition-colors"
         onClick={onToggle} 
         id="sidebar-toggle-btn" 
-        title={collapsed ? "Expand" : "Collapse"}
+        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
       >
-        {collapsed ? "→" : "←"}
+        {collapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
       </button>
     </aside>
   );
