@@ -2,6 +2,7 @@
 TripPilot AI Service — powered by Google Gemini
 All AI calls go through this module.
 """
+import asyncio
 import json
 import re
 import httpx
@@ -138,85 +139,127 @@ def _extract_json(text: str) -> dict | list:
         return json.loads(repair_truncated_json(text_clean))
 
 
-# ─── Dynamic Unsplash Placeholder Sanitizer ───────────────────────────────────
+# ─── Real Image Resolution via Google Programmable Search ─────────────────────
 
-def sanitize_itinerary_images(data: dict) -> dict:
-    """Recursively replaces slow/broken loremflickr.com placeholder URLs with reliable Unsplash links."""
+# Generic, neutral fallbacks used ONLY when search is unconfigured/fails/empty.
+# These are deliberately non-place-specific so they never mislabel a location.
+_FALLBACK_COVER = "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=1200&q=80"
+_FALLBACK_HOTEL = "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=80"
+_FALLBACK_PLACE = "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=800&q=80"
+
+# In-memory cache so the same query (e.g. a popular landmark) is fetched once.
+_IMAGE_CACHE: dict[str, str] = {}
+
+
+async def fetch_image_url(query: str) -> str | None:
+    """Resolve a free-text search phrase to a REAL image URL via Google
+    Programmable Search (Custom Search JSON API, searchType=image).
+
+    Returns None if unconfigured, no results, or on error. Works for any place
+    on Earth — there are no hardcoded destination mappings. Cached in-memory.
+    """
+    if not query or not query.strip():
+        return None
+    key = query.strip().lower()
+    if key in _IMAGE_CACHE:
+        return _IMAGE_CACHE[key]
+
+    api_key = settings.GOOGLE_SEARCH_API_KEY
+    cx = settings.GOOGLE_SEARCH_CX
+    if not api_key or not cx:
+        return None  # not configured → caller uses a generic fallback
+
+    params = {
+        "key": api_key,
+        "cx": cx,
+        "q": query,
+        "searchType": "image",
+        "num": 1,
+        "safe": "active",
+        "imgSize": "xlarge",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get("https://www.googleapis.com/customsearch/v1", params=params)
+        if resp.status_code != 200:
+            print(f"Google image search failed ({resp.status_code}) for '{query}': {resp.text[:200]}")
+            return None
+        items = resp.json().get("items") or []
+        if not items:
+            return None
+        link = items[0].get("link")
+        if link:
+            _IMAGE_CACHE[key] = link
+        return link
+    except Exception as e:
+        print(f"Google image search error for '{query}': {e}")
+        return None
+
+
+async def resolve_itinerary_images(data: dict, force: bool = True) -> dict:
+    """Replace placeholder/empty image URLs with REAL photos fetched by name.
+
+    For the cover, each hotel and each sightseeing place we build a precise
+    search phrase (preferring an AI-supplied `image_query`, else name + city +
+    destination) and fetch a matching photo concurrently.
+
+    force=True  → overwrite every image (used on fresh generation; the AI's
+                  own image_url values are unreliable/hallucinated).
+    force=False → keep existing real http(s) URLs, only fill in empty/placeholder
+                  ones (used on chat-edit so we don't re-query unchanged items).
+    """
     if not isinstance(data, dict):
         return data
-    
-    def get_fallback_unsplash(url: str, seed: str = "") -> str:
-        if not url or "loremflickr.com" not in url:
-            return url
-        
-        lower = url.lower()
-        
-        # 1. Destination mappings
-        if "bali" in lower:
-            if any(k in lower for k in ["beach", "sunset", "jimbaran", "seminyak"]):
-                return "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80"
-            if any(k in lower for k in ["rice", "tegalalang", "ubud", "forest", "swing"]):
-                return "https://images.unsplash.com/photo-1524413840807-0c3cb6fa808d?auto=format&fit=crop&w=800&q=80"
-            return "https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&w=1200&q=80"
-        
-        if "singapore" in lower:
-            return "https://images.unsplash.com/photo-1525625293386-3f8f99389edd?auto=format&fit=crop&w=1200&q=80"
-        if "malaysia" in lower or "kuala" in lower:
-            return "https://images.unsplash.com/photo-1563227812-0ea4c22e6cc8?auto=format&fit=crop&w=1200&q=80"
-        if any(k in lower for k in ["manali", "mountain", "snow", "himalaya"]):
-            return "https://images.unsplash.com/photo-1548574505-5e239809ee19?auto=format&fit=crop&w=1200&q=80"
-        if "goa" in lower:
-            return "https://images.unsplash.com/photo-1506477331477-33d5d8b3dc85?auto=format&fit=crop&w=1200&q=80"
-        if "kashmir" in lower:
-            return "https://images.unsplash.com/photo-1566228015668-4c45dbc4e2f5?auto=format&fit=crop&w=1200&q=80"
-        if "maldives" in lower:
-            return "https://images.unsplash.com/photo-1439066615861-d1af74d74000?auto=format&fit=crop&w=1200&q=80"
-        if any(k in lower for k in ["paris", "europe", "london"]):
-            return "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=1200&q=80"
-        
-        # 2. Hotel mappings
-        if any(k in lower for k in ["hotel", "resort", "stay", "villa"]):
-            hotel_images = [
-                "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=80",
-                "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?auto=format&fit=crop&w=800&q=80",
-                "https://images.unsplash.com/photo-1540541338287-41700207dee6?auto=format&fit=crop&w=800&q=80",
-                "https://images.unsplash.com/photo-1571896349842-33c89424de2d?auto=format&fit=crop&w=800&q=80"
-            ]
-            hash_val = sum(ord(c) for c in (seed or url))
-            return hotel_images[hash_val % len(hotel_images)]
-        
-        # 3. Sightseeing mappings
-        places_images = [
-            "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=800&q=80",
-            "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?auto=format&fit=crop&w=800&q=80",
-            "https://images.unsplash.com/photo-1533105079780-92b9be482077?auto=format&fit=crop&w=800&q=80",
-            "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=800&q=80",
-            "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=800&q=80",
-            "https://images.unsplash.com/photo-1502784444187-359ac186c5bb?auto=format&fit=crop&w=800&q=80",
-            "https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?auto=format&fit=crop&w=800&q=80",
-            "https://images.unsplash.com/photo-1475924156734-496f6cac6ec1?auto=format&fit=crop&w=800&q=80"
-        ]
-        hash_val = sum(ord(c) for c in (seed or url))
-        return places_images[hash_val % len(places_images)]
 
-    # Cover image URL
-    if "cover_image_url" in data:
-        data["cover_image_url"] = get_fallback_unsplash(data["cover_image_url"], data.get("title", ""))
-    
-    # Stay options hotel images
-    if "stay_options" in data and isinstance(data["stay_options"], list):
-        for s in data["stay_options"]:
-            if isinstance(s, dict) and "image_url" in s:
-                s["image_url"] = get_fallback_unsplash(s["image_url"], s.get("hotel_name", ""))
-    
-    # Day places images
-    if "days" in data and isinstance(data["days"], list):
-        for day in data["days"]:
-            if isinstance(day, dict) and "places" in day and isinstance(day["places"], list):
-                for p in day["places"]:
-                    if isinstance(p, dict) and "image_url" in p:
-                        p["image_url"] = get_fallback_unsplash(p["image_url"], p.get("name", ""))
-                        
+    destination = (data.get("destination") or "").strip()
+
+    def needs(current: str) -> bool:
+        if force:
+            return True
+        if not current or not isinstance(current, str):
+            return True
+        return (not current.startswith("http")) or ("loremflickr" in current)
+
+    # Each target: (container_dict, key, search_query, fallback_url)
+    targets: list[tuple[dict, str, str, str]] = []
+
+    # Cover
+    if needs(data.get("cover_image_url")):
+        cover_q = (data.get("cover_image_query")
+                   or (f"{destination} iconic landmark scenery" if destination else (data.get("cover_title") or data.get("title") or "")))
+        targets.append((data, "cover_image_url", cover_q, _FALLBACK_COVER))
+
+    # Hotels
+    for s in (data.get("stay_options") or []):
+        if isinstance(s, dict) and needs(s.get("image_url")):
+            q = s.get("image_query") or " ".join(
+                x for x in [s.get("hotel_name"), (s.get("city") or destination), "hotel"] if x
+            )
+            targets.append((s, "image_url", q, _FALLBACK_HOTEL))
+
+    # Sightseeing places
+    for day in (data.get("days") or []):
+        if isinstance(day, dict):
+            city = day.get("city") or destination
+            for p in (day.get("places") or []):
+                if isinstance(p, dict) and needs(p.get("image_url")):
+                    q = p.get("image_query") or " ".join(
+                        x for x in [p.get("name"), city] if x
+                    )
+                    targets.append((p, "image_url", q, _FALLBACK_PLACE))
+
+    if not targets:
+        return data
+
+    results = await asyncio.gather(
+        *[fetch_image_url(q) for (_, _, q, _f) in targets],
+        return_exceptions=True,
+    )
+
+    for (container, field, _q, fallback), res in zip(targets, results):
+        url = res if isinstance(res, str) and res else fallback
+        container[field] = url
+
     return data
 
 
@@ -352,7 +395,7 @@ Return a valid JSON object with these exact keys:
 
 {{
   "title": "Trip Title",
-  "cover_image_url": "Image URL",
+  "cover_image_query": "Precise photo search phrase for the destination's most iconic view",
   "cover_title": "Cover Title",
   "cover_subheading": "Cover Subheading",
   "num_travellers": null,
@@ -390,7 +433,7 @@ Return a valid JSON object with these exact keys:
     {{
       "option": "OPTION 1",
       "hotel_name": "Hotel Name",
-      "image_url": "Hotel Image URL",
+      "image_query": "Hotel Name City exterior",
       "google_rating": "4.5",
       "directions_url": "Google Maps Link",
       "city": "City Name",
@@ -409,7 +452,7 @@ Return a valid JSON object with these exact keys:
         {{
           "name": "Sightseeing Place Name",
           "description": "Engaging description of sightseeing place.",
-          "image_url": "Place Image URL"
+          "image_query": "Precise photo search phrase incl. place name + city/region"
         }}
       ],
       "activities": [
@@ -427,16 +470,17 @@ Return a valid JSON object with these exact keys:
 }}
 
 INSTRUCTIONS:
-1. `cover_image_url`: You MUST generate a high-quality relevant placeholder image URL using Loremflickr, matching the destination. For example, if destination is Manali, use 'https://loremflickr.com/1200/800/manali,mountain'. If destination is Paris, use 'https://loremflickr.com/1200/800/paris,tower'.
-2. For each hotel's `image_url` under `stay_options`: You MUST generate a high-quality relevant placeholder hotel image URL using Loremflickr. For example, use 'https://loremflickr.com/800/600/hotel,resort'.
-3. For each sightseeing place's `image_url` under `places`: You MUST generate a high-quality placeholder image URL using Loremflickr matching the specific place name and destination keywords. For example, if the place is Hadimba Devi Temple, use 'https://loremflickr.com/800/600/hadimbatemple,manali'. If the place is Solang Valley, use 'https://loremflickr.com/800/600/solangvalley,manali'.
-4. `places`: Inside each day, you MUST populate at least 2 or 3 sightseeing places under the `places` list. Each place must have a `name`, `description`, and `image_url`! Do NOT leave this empty. This is crucial for the visual experience layout!
-5. `activities`: Keep this as a simple list of minor extra activities or notes for the day (e.g. transfer details, check-in, free evening).
-6. `directions_url`: Always generate a valid Google Maps search URL for the hotel, like 'https://maps.google.com/?q=Hotel+Name+City'.
-7. `google_rating`: Assign a realistic star rating like '4.2' or '4.5' based on the hotel's class.
-8. `meal_plan`: Use standard travel meal plan terms (e.g. 'Breakfast Included', 'Breakfast & Dinner', 'Room Only').
+1. DO NOT output any image URLs. Instead, output `image_query` fields — short, precise photo SEARCH PHRASES. Our system resolves each query to a real photo. Never invent or guess image URLs.
+2. `cover_image_query`: the destination's most iconic, recognisable view (e.g. "Manali snow mountains Himachal Pradesh", "Eiffel Tower Paris at sunset").
+3. For each hotel: `image_query` = hotel name + city (e.g. "The Himalayan hotel Manali exterior").
+4. For each sightseeing place: `image_query` MUST uniquely identify THAT exact place — include the place name plus its city/region so the photo is correct (e.g. "Hadimba Devi Temple Manali", "Solang Valley Manali paragliding", "Mall Road Manali market"). A vague query like just "temple" is NOT acceptable.
+5. `places`: Inside each day, you MUST populate at least 2 or 3 sightseeing places, each with `name`, `description`, and a precise `image_query`. Do NOT leave places empty.
+6. `activities`: Keep this as a simple list of minor extra activities or notes for the day (e.g. transfer details, check-in, free evening).
+7. `directions_url`: Always generate a valid Google Maps search URL for the hotel, like 'https://maps.google.com/?q=Hotel+Name+City'.
+8. `google_rating`: Assign a realistic star rating like '4.2' or '4.5' based on the hotel's class.
+9. `meal_plan`: Use standard travel meal plan terms (e.g. 'Breakfast Included', 'Breakfast & Dinner', 'Room Only').
 
-9. CONCISENESS: All daily summaries, sightseeing descriptions, and cover descriptions MUST be extremely brief (max 15-20 words). Keep daily activities lists to a maximum of 3 short items. This is critical to prevent response truncation!
+10. CONCISENESS: All daily summaries, sightseeing descriptions, and cover descriptions MUST be extremely brief (max 15-20 words). Keep daily activities lists to a maximum of 3 short items. This is critical to prevent response truncation!
 
 Trip description:
 \"\"\"{raw_text}\"\"\"
@@ -450,7 +494,8 @@ Respond ONLY with a JSON object. No explanation."""
         if "days" in data and isinstance(data["days"], list):
             data["total_days"] = data.get("total_days") or len(data["days"])
             data["total_nights"] = data.get("total_nights") or max(0, len(data["days"]) - 1)
-        return sanitize_itinerary_images(data)
+        # Resolve every place/hotel/cover to a REAL photo by its search query.
+        return await resolve_itinerary_images(data, force=True)
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -517,7 +562,8 @@ Respond ONLY with the updated JSON object."""
     try:
         text = await _call_gemini(prompt, temperature=0.3)
         data = _extract_json(text)
-        return sanitize_itinerary_images(data)
+        # Keep already-resolved photos; only fetch images for newly added items.
+        return await resolve_itinerary_images(data, force=False)
     except Exception as e:
         print(f"Error editing itinerary with chat: {e}")
         return current_itinerary  # Return unchanged on failure

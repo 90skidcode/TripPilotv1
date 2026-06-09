@@ -9,6 +9,11 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
 
+    # Google Programmable Search (Custom Search JSON API) — resolves place/hotel
+    # names to real image URLs. GOOGLE_SEARCH_CX is the Search Engine ID.
+    GOOGLE_SEARCH_API_KEY: str = "AIzaSyD5KEFq_ok_aJxtVTBOUvA0aF5_G6RqLe8"
+    GOOGLE_SEARCH_CX: str = "b2f5437798cc340fb"
+
     # Meta Webhooks & API Integration Credentials (System fallbacks)
     META_ACCESS_TOKEN: str = ""
     META_VERIFY_TOKEN: str = ""

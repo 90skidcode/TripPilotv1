@@ -247,7 +247,7 @@ export default function ItineraryPDFPage({ params }: { params: Promise<{ id: str
                 <div key={i} style={{ border: `1px solid #e2e8f0`, borderRadius: 16, padding: "16px", display: "flex", gap: 16, alignItems: "stretch", background: "white" }}>
                   <div style={{ width: 140, borderRadius: 12, overflow: "hidden", background: "#f1f5f9", position: "relative", flexShrink: 0 }}>
                     {s.image_url ? (
-                      <img src={getFallbackImage(s.image_url, s.hotel_name)} alt="Hotel" style={{ width: "100%", height: "100%", objectFit: "cover", position: "absolute", inset: 0 }} />
+                      <img src={getFallbackImage(s.image_url, s.hotel_name)} alt="Hotel" style={{ width: "100%", height: "100%", objectFit: "cover", position: "absolute", inset: 0 }} onError={(e) => { const t = e.currentTarget; const fb = "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=80"; if (t.src !== fb) t.src = fb; }} />
                     ) : (
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#94a3b8", fontSize: 28 }}>🏨</div>
                     )}
@@ -324,7 +324,7 @@ export default function ItineraryPDFPage({ params }: { params: Promise<{ id: str
                         <div key={pi} style={{ border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden", pageBreakInside: "avoid", background: "white" }}>
                           {p.image_url && (
                             <div style={{ height: 180, background: "#f8fafc", position: "relative" }}>
-                              <img src={getFallbackImage(p.image_url, p.name)} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                              <img src={getFallbackImage(p.image_url, p.name)} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={(e) => { const t = e.currentTarget; const fb = "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=800&q=80"; if (t.src !== fb) t.src = fb; }} />
                               <div style={{ position: "absolute", top: 12, left: 12, background: "white", padding: "3px 8px", borderRadius: 12, fontSize: 10, fontWeight: 700, color: "#334155", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
                                 📍 Sightseeing
                               </div>
