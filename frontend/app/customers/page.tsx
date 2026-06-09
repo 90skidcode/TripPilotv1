@@ -30,6 +30,12 @@ import {
   Handshake,
   ChevronLeft,
   ChevronRight,
+  FileText,
+  Hotel,
+  Plane,
+  Receipt,
+  Clock,
+  ExternalLink,
 } from "lucide-react";
 
 const TH = "text-left font-semibold text-xs uppercase tracking-wide text-muted-foreground px-4 py-3";
@@ -58,6 +64,8 @@ export default function CustomersPage() {
   const [detailCustomer, setDetailCustomer] = useState<any>(null);
   const [detailLeads, setDetailLeads] = useState<any[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [workspace, setWorkspace] = useState<any>(null);
+  const [detailTab, setDetailTab] = useState<"overview" | "itineraries" | "vouchers" | "flights" | "partners" | "invoices" | "timeline">("overview");
 
   // Form state
   const [formName, setFormName] = useState("");
@@ -102,11 +110,17 @@ export default function CustomersPage() {
   async function openDetailPanel(c: any) {
     setDetailCustomer(c);
     setDetailLeads([]);
+    setWorkspace(null);
+    setDetailTab("overview");
     setDetailLoading(true);
     setShowPanel("detail");
     try {
-      const data = await leadsApi.list({ customer_id: c.id, per_page: 50 });
-      setDetailLeads(data.items || []);
+      const [leadsData, wsData] = await Promise.all([
+        leadsApi.list({ customer_id: c.id, per_page: 50 }),
+        customersApi.workspace(c.id),
+      ]);
+      setDetailLeads(leadsData.items || []);
+      setWorkspace(wsData);
     } catch { /* ignore */ } finally {
       setDetailLoading(false);
     }
@@ -363,7 +377,7 @@ export default function CustomersPage() {
         )}
 
         {/* Detail Side Panel */}
-        {showPanel === "detail" && detailCustomer && (
+        {showPanel === "detail" && detailCustomer && workspace && (
           <div className="side-panel-overlay" onClick={(e) => e.target === e.currentTarget && setShowPanel(null)}>
             <div className="side-panel">
               <div className="side-panel-header">
@@ -371,73 +385,211 @@ export default function CustomersPage() {
                   <Avatar name={detailCustomer.name} className="h-10 w-10" />
                   <div>
                     <h2 className="side-panel-title">{detailCustomer.name}</h2>
-                    <p className="text-xs text-muted-foreground mt-0.5">Customer details &amp; lead history</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Customer workspace</p>
                   </div>
                 </div>
                 <button className="btn btn-ghost btn-icon" onClick={() => setShowPanel(null)} aria-label="Close">
                   <X className="h-5 w-5" />
                 </button>
               </div>
-              <div className="side-panel-content" style={{ padding: 24 }}>
-                {/* Contact info */}
-                <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-3">
-                  Contact Information
-                </h3>
-                <div className="grid grid-cols-2 gap-4 mb-8">
-                  <InfoItem icon={Phone} label="Phone" value={detailCustomer.phone} />
-                  <InfoItem icon={Mail} label="Email" value={detailCustomer.email || "—"} />
-                  <InfoItem icon={MessageCircle} label="WhatsApp" value={detailCustomer.whatsapp_number || "—"} />
-                  <InfoItem
-                    icon={Calendar}
-                    label="Since"
-                    value={detailCustomer.created_at ? new Date(detailCustomer.created_at).toLocaleDateString("en-IN") : "—"}
-                  />
-                </div>
 
-                {/* Lead history */}
-                <h3 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-3">
-                  <Users className="h-3.5 w-3.5" /> Lead History ({detailLeads.length})
-                </h3>
-                {detailLoading ? (
-                  <p className="text-sm text-muted-foreground">Loading leads…</p>
-                ) : detailLeads.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                    No leads found for this customer
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-2.5">
-                    {detailLeads.map((lead: any) => (
-                      <Link
-                        key={lead.id}
-                        href={`/leads/${lead.id}`}
-                        className="block rounded-lg border border-border bg-muted/30 p-3.5 hover:border-primary/50 hover:bg-muted/60 transition-colors"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="inline-flex items-center gap-1.5 font-semibold text-sm">
-                            <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-                            {lead.destination || "General Inquiry"}
-                          </span>
-                          <Badge
-                            className={cn(
-                              "text-[10px]",
-                              STAGE_STYLES[lead.stage] || "bg-teal-50 text-teal-700 border-teal-200"
-                            )}
+              {/* Tabs */}
+              <div className="border-b border-border px-6 pt-3 overflow-x-auto">
+                <div className="flex gap-1">
+                  {[
+                    { id: "overview", label: "Overview", count: workspace.counts?.leads },
+                    { id: "itineraries", label: "Itineraries", count: workspace.counts?.itineraries },
+                    { id: "vouchers", label: "Vouchers", count: workspace.counts?.vouchers },
+                    { id: "flights", label: "Flights", count: workspace.counts?.flights },
+                    { id: "partners", label: "Partners", count: workspace.counts?.partners },
+                    { id: "invoices", label: "Invoices", count: workspace.counts?.invoices },
+                    { id: "timeline", label: "Timeline", count: workspace.counts?.activities },
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setDetailTab(tab.id as any)}
+                      className={cn(
+                        "px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap",
+                        detailTab === tab.id
+                          ? "border-primary text-foreground"
+                          : "border-transparent text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      {tab.label} <span className="text-xs ml-1">({tab.count || 0})</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="side-panel-content" style={{ padding: 24 }}>
+                {detailLoading && (
+                  <p className="text-sm text-muted-foreground text-center py-6">Loading workspace…</p>
+                )}
+
+                {!detailLoading && detailTab === "overview" && (
+                  <>
+                    <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-3">
+                      Contact Information
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4 mb-8">
+                      <InfoItem icon={Phone} label="Phone" value={detailCustomer.phone} />
+                      <InfoItem icon={Mail} label="Email" value={detailCustomer.email || "—"} />
+                      <InfoItem icon={MessageCircle} label="WhatsApp" value={detailCustomer.whatsapp_number || "—"} />
+                      <InfoItem
+                        icon={Calendar}
+                        label="Since"
+                        value={detailCustomer.created_at ? new Date(detailCustomer.created_at).toLocaleDateString("en-IN") : "—"}
+                      />
+                    </div>
+
+                    <h3 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-3">
+                      <Users className="h-3.5 w-3.5" /> Leads ({detailLeads.length})
+                    </h3>
+                    {detailLeads.length === 0 ? (
+                      <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                        No leads for this customer
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        {detailLeads.map((lead: any) => (
+                          <Link
+                            key={lead.id}
+                            href={`/leads/${lead.id}`}
+                            className="block rounded-lg border border-border bg-muted/30 p-3 hover:border-primary/50 hover:bg-muted/60 transition-colors"
                           >
-                            {lead.stage?.replace("_", " ")}
-                          </Badge>
-                        </div>
-                        <div className="flex items-center justify-between mt-1.5 text-xs text-muted-foreground">
-                          <span>Source: {lead.source || "—"} • Budget: {lead.budget || "—"}</span>
-                          <span>{lead.created_at ? new Date(lead.created_at).toLocaleDateString("en-IN") : ""}</span>
-                        </div>
-                        {lead.b2b_partner && (
-                          <div className="mt-1.5 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <Handshake className="h-3.5 w-3.5" /> B2B: {lead.b2b_partner.company_name}
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-semibold text-sm">{lead.destination || "Inquiry"}</span>
+                              <Badge className="text-[10px]">{lead.stage?.replace("_", " ")}</Badge>
+                            </div>
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {!detailLoading && detailTab === "itineraries" && (
+                  <>
+                    {workspace.itineraries?.length === 0 ? (
+                      <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                        No itineraries
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {workspace.itineraries?.map((i: any) => (
+                          <div key={i.id} className="rounded-lg border border-border bg-muted/30 p-3">
+                            <p className="font-semibold text-sm">{i.title}</p>
+                            <p className="text-xs text-muted-foreground">{i.destination || "—"} • {i.total_days || 0} days</p>
                           </div>
-                        )}
-                      </Link>
-                    ))}
-                  </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {!detailLoading && detailTab === "vouchers" && (
+                  <>
+                    {workspace.vouchers?.length === 0 ? (
+                      <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                        No vouchers
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {workspace.vouchers?.map((v: any) => (
+                          <div key={v.id} className="rounded-lg border border-border bg-muted/30 p-3">
+                            <p className="font-semibold text-sm">{v.hotel_name}</p>
+                            <p className="text-xs text-muted-foreground">{v.room_type || "—"} • {v.check_in ? new Date(v.check_in).toLocaleDateString("en-IN") : "—"}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {!detailLoading && detailTab === "flights" && (
+                  <>
+                    {workspace.flights?.length === 0 ? (
+                      <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                        No flights
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {workspace.flights?.map((f: any) => (
+                          <div key={f.id} className="rounded-lg border border-border bg-muted/30 p-3">
+                            <p className="font-semibold text-sm">{f.airline} {f.flight_number || ""}</p>
+                            <p className="text-xs text-muted-foreground">{f.origin} → {f.destination}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {!detailLoading && detailTab === "partners" && (
+                  <>
+                    {workspace.partners?.length === 0 ? (
+                      <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                        No partners
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {workspace.partners?.map((p: any) => (
+                          <div key={p.id} className="rounded-lg border border-border bg-muted/30 p-3">
+                            <p className="font-semibold text-sm">{p.company_name}</p>
+                            <p className="text-xs text-muted-foreground">{p.role || "—"} • ₹{p.cost?.toLocaleString("en-IN") || "—"}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {!detailLoading && detailTab === "invoices" && (
+                  <>
+                    {workspace.invoices?.length === 0 ? (
+                      <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                        No invoices
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {workspace.invoices?.map((inv: any) => (
+                          <div key={inv.id} className="rounded-lg border border-border bg-muted/30 p-3">
+                            <p className="font-semibold text-sm">{inv.invoice_number}</p>
+                            <p className="text-xs text-muted-foreground">₹{inv.grand_total?.toLocaleString("en-IN") || "—"} • {inv.status || "—"}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {!detailLoading && detailTab === "timeline" && (
+                  <>
+                    {workspace.activities?.length === 0 ? (
+                      <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                        No activity
+                      </div>
+                    ) : (
+                      <ol className="relative space-y-4">
+                        {workspace.activities?.map((a: any, idx: number) => (
+                          <li key={a.id} className="relative flex gap-3">
+                            {idx < (workspace.activities?.length || 0) - 1 && (
+                              <span className="absolute left-[15px] top-8 bottom-[-16px] w-px bg-border" />
+                            )}
+                            <span className="relative z-10 flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground text-xs">
+                              {idx + 1}
+                            </span>
+                            <div className="min-w-0 flex-1 pb-1">
+                              <p className="font-semibold text-sm">{a.title}</p>
+                              {a.description && <p className="text-xs text-muted-foreground mt-0.5">{a.description}</p>}
+                              {a.actor_name && <p className="text-xs text-muted-foreground">by {a.actor_name}</p>}
+                              <p className="text-xs text-muted-foreground mt-1">{a.created_at ? new Date(a.created_at).toLocaleString("en-IN") : "—"}</p>
+                            </div>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+                  </>
                 )}
               </div>
             </div>

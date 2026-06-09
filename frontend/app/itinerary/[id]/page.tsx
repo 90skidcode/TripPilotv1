@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, use, useRef, useCallback } from "react";
 import AppShell from "@/components/AppShell";
 import { itineraryApi, authApi } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -180,12 +180,22 @@ function DayPreviewCard({ day, index, onChange, onRemove, onMoveUp, onMoveDown, 
               <div style={{ padding: "16px", background: "#fff" }}>
                 <InlineText value={p.name || ""} onChange={(v) => updatePlace(i, "name", v)} placeholder="Place Name (e.g. Shanti Stupa)" style={{ fontWeight: 800, fontSize: 18, color: "#0f172a", marginBottom: 6, display: "block" }} disabled={!canWrite} />
                 <InlineText value={p.description || ""} onChange={(v) => updatePlace(i, "description", v)} placeholder="Short description of what to do here..." style={{ fontSize: 14, color: "#475569", display: "block", lineHeight: 1.5, marginBottom: 12 }} disabled={!canWrite} />
-                
-                {/* Manual Image URL Input */}
-                <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#f8fafc", padding: "6px 12px", borderRadius: 8, border: "1px solid #e2e8f0" }}>
-                  <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>Image URL:</span>
-                  <input className="input" value={p.image_url || ""} onChange={(e) => updatePlace(i, "image_url", e.target.value)} placeholder="Paste image URL here..." style={{ fontSize: 12, flex: 1, border: "none", background: "transparent", padding: 0 }} disabled={!canWrite} />
-                </div>
+
+                {/* Directions link */}
+                {p.directions_url && (
+                  <a href={p.directions_url} target="_blank" rel="noreferrer" style={{ fontSize: 12, fontWeight: 600, color: BRAND, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4, background: BRAND + "10", padding: "6px 12px", borderRadius: 8, marginBottom: 12 }}>
+                    🗺️ Get Directions
+                  </a>
+                )}
+
+                {/* Manual Image/Directions Edit (hidden by default, only in edit) */}
+                {canWrite && (
+                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div style={{ fontSize: 11, color: "#64748b", fontWeight: 600 }}>Edit:</div>
+                    <input className="input" value={p.image_url || ""} onChange={(e) => updatePlace(i, "image_url", e.target.value)} placeholder="Image URL (optional)..." style={{ fontSize: 11 }} />
+                    <input className="input" value={p.directions_url || ""} onChange={(e) => updatePlace(i, "directions_url", e.target.value)} placeholder="Google Maps URL (e.g. https://maps.google.com/?q=...)" style={{ fontSize: 11 }} />
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -318,12 +328,28 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
   const [chatLoading, setChatLoading] = useState(false);
   const [leftTab, setLeftTab] = useState<"overview" | "flights" | "stay" | "pricing" | "policies" | "advisor">("overview");
 
+  const debounceRef = useRef<any>({});
+
   useEffect(() => { itineraryApi.get(Number(id)).then(setItin).catch(console.error); }, [id]);
 
   if (!itin) return <AppShell title="Loading…"><div style={{ padding: 80, textAlign: "center" }}>⏳ Loading…</div></AppShell>;
 
   function u(k: string, v: any) { setItin((p: any) => ({ ...p, [k]: v })); }
-  function uFlight(leg: string, k: string, v: string) { u("flights", { ...itin.flights, [leg]: { ...(itin.flights?.[leg] || {}), [k]: v } }); }
+
+  function uFlight(leg: string, k: string, v: string) {
+    // Update local display immediately (keeping focus)
+    setItin((p: any) => ({
+      ...p,
+      flights: {
+        ...p.flights,
+        [leg]: { ...(p.flights?.[leg] || {}), [k]: v }
+      }
+    }));
+
+    // Debounce the actual save (if needed in future)
+    clearTimeout(debounceRef.current[`${leg}-${k}`]);
+  }
+
   function uMeal(m: string, v: number) { u("meals_summary", { ...itin.meals_summary, [m]: v }); }
 
   // Days helpers
@@ -340,7 +366,13 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
 
   // Hotels
   function addHotel() { u("stay_options", [...(itin.stay_options || []), { option: `OPTION ${(itin.stay_options?.length || 0) + 1}`, hotel_name: "", city: "", nights: 1, room_category: "Deluxe", meal_plan: "" }]); }
-  function uHotel(i: number, k: string, v: any) { const o = [...(itin.stay_options || [])]; o[i] = { ...o[i], [k]: v }; u("stay_options", o); }
+  function uHotel(i: number, k: string, v: any) {
+    setItin((p: any) => {
+      const o = [...(p.stay_options || [])];
+      o[i] = { ...o[i], [k]: v };
+      return { ...p, stay_options: o };
+    });
+  }
   function removeHotel(i: number) { u("stay_options", (itin.stay_options || []).filter((_: any, idx: number) => idx !== i)); }
 
   async function handleSave() {
@@ -602,7 +634,18 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
         <button className="btn btn-ghost btn-sm" onClick={() => router.push("/itinerary")}>← Back</button>
         <InlineText value={itin.title || ""} onChange={(v) => canWrite && u("title", v)} placeholder="Itinerary Title" style={{ fontWeight: 700, fontSize: 20, flex: 1, maxWidth: 500, opacity: canWrite ? 1 : 0.6 }} />
         <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
-          <button className="btn btn-outline btn-sm" onClick={() => router.push(`/itinerary/${itin.id}/pdf`)}>📄 PDF Preview</button>
+          <button
+            className="btn btn-outline btn-sm"
+            onClick={() => {
+              const shareUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/itinerary/${itin.id}/pdf`;
+              navigator.clipboard.writeText(shareUrl);
+              alert(`Share link copied! You can send this to your customer:\n\n${shareUrl}`);
+            }}
+            title="Copy shareable link"
+          >
+            🔗 Share
+          </button>
+          <button className="btn btn-outline btn-sm" onClick={() => router.push(`/itinerary/${itin.id}/pdf`)}>📄 PDF</button>
           {canWrite && (
             <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving}>
               {saving ? "Saving…" : saved ? "✅ Saved!" : "💾 Save"}

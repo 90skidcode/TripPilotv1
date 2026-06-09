@@ -60,6 +60,7 @@ export const customersApi = {
   create: (data: any) => api.post<any>("/customers", data),
   update: (id: number, data: any) => api.put<any>(`/customers/${id}`, data),
   delete: (id: number) => api.delete(`/customers/${id}`),
+  workspace: (id: number) => api.get<any>(`/customers/${id}/workspace`),
 };
 
 // ── B2B Partners ──
