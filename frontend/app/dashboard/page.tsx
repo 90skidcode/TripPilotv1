@@ -5,7 +5,7 @@ import AppShell from "@/components/AppShell";
 import { PageHeader, PageContainer } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Spinner } from "@/components/ui/spinner";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { dashboardApi } from "@/lib/api";
 
@@ -70,13 +70,120 @@ export default function DashboardPage() {
     return (
       <AppShell title="Dashboard">
         <PageContainer>
-          <PageHeader title="Dashboard" />
-          <div className="flex items-center justify-center min-h-96">
-            <div className="text-center">
-              <Spinner size="lg" className="mb-4" />
-              <p className="text-base font-semibold text-muted-foreground">
-                ⏳ Loading analytics…
-              </p>
+          <div className="space-y-6">
+            <PageHeader title="Dashboard" description="Real-time sales metrics and AI insights" />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 auto-rows-min gap-4 grid-flow-row-dense">
+              {/* Featured KPI */}
+              <Card className="md:col-span-2 lg:col-span-2 overflow-hidden">
+                <CardContent className="h-full flex flex-col justify-between gap-6 py-7">
+                  <div className="flex items-start justify-between">
+                    <Skeleton className="w-14 h-14 rounded-xl" />
+                    <Skeleton className="h-5 w-12 rounded-full" />
+                  </div>
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-12 w-32" />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* AI Co-Pilot */}
+              <Card className="md:col-span-2 lg:col-span-2 lg:row-span-2">
+                <CardHeader>
+                  <div className="flex items-center justify-between gap-4">
+                    <Skeleton className="h-6 w-40" />
+                    <Skeleton className="h-5 w-24 rounded-full" />
+                  </div>
+                  <Skeleton className="h-4 w-56 mt-1" />
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {["sk-a", "sk-b", "sk-c"].map((id) => (
+                    <div key={id} className="p-4 rounded-lg border space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Skeleton className="w-8 h-8 rounded" />
+                        <Skeleton className="h-5 w-20 rounded-full" />
+                      </div>
+                      <Skeleton className="h-4 w-3/4" />
+                      <Skeleton className="h-3 w-full" />
+                      <Skeleton className="h-3 w-2/3" />
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              {/* Compact KPI tiles (6) */}
+              {["kpi-1", "kpi-2", "kpi-3", "kpi-4", "kpi-5", "kpi-6"].map((id) => (
+                <Card key={id}>
+                  <CardContent className="py-5">
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="w-11 h-11 rounded-lg shrink-0" />
+                      <div className="space-y-2 flex-1">
+                        <Skeleton className="h-3 w-20" />
+                        <Skeleton className="h-7 w-14" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+
+              {/* Leads by Source */}
+              <Card className="md:col-span-2 lg:col-span-2">
+                <CardHeader>
+                  <Skeleton className="h-6 w-40" />
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {["src-1", "src-2", "src-3", "src-4"].map((id) => (
+                    <div key={id} className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Skeleton className="h-4 w-24" />
+                        <Skeleton className="h-5 w-10 rounded-full" />
+                      </div>
+                      <Skeleton className="h-2 w-full rounded-full" />
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              {/* Lead Funnel */}
+              <Card className="md:col-span-2 lg:col-span-2">
+                <CardHeader>
+                  <Skeleton className="h-6 w-32" />
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {["fn-1", "fn-2", "fn-3", "fn-4"].map((id) => (
+                    <div key={id} className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Skeleton className="h-4 w-28" />
+                        <Skeleton className="h-5 w-10 rounded-full" />
+                      </div>
+                      <Skeleton className="h-2 w-full rounded-full" />
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              {/* Leaderboard */}
+              <Card className="md:col-span-2 lg:col-span-4">
+                <CardHeader>
+                  <Skeleton className="h-6 w-44" />
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="flex gap-4 pb-3 border-b">
+                      {["lb-h-rank", "lb-h-agent", "lb-h-leads", "lb-h-won", "lb-h-conv"].map((id) => (
+                        <Skeleton key={id} className="h-4 w-20" />
+                      ))}
+                    </div>
+                    {["lb-r1", "lb-r2", "lb-r3", "lb-r4"].map((rowId) => (
+                      <div key={rowId} className="flex gap-4 py-1">
+                        {["rank", "agent", "leads", "won", "conv"].map((col) => (
+                          <Skeleton key={`${rowId}-${col}`} className="h-4 w-20" />
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           </div>
         </PageContainer>
