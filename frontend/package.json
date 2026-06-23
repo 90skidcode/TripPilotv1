@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev -p 3001 -H localhost",
     "build": "next build",
+    "analyze": "cross-env ANALYZE=true next build",
     "start": "next start",
     "lint": "eslint"
   },
@@ -36,6 +37,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@next/bundle-analyzer": "^16.2.9",
     "@tailwindcss/postcss": "^4.3.0",
     "@types/node": "^20",
     "@types/react": "^19",
@@ -43,6 +45,7 @@
     "autoprefixer": "^10.5.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "cross-env": "^10.1.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "postcss": "^8.5.15",

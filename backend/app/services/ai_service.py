@@ -38,7 +38,7 @@ async def _call_gemini(prompt: str, temperature: float = 0.3) -> str:
     last_err = None
     for attempt in range(3):
         try:
-            async with httpx.AsyncClient(timeout=60) as client:
+            async with httpx.AsyncClient(timeout=15) as client:
                 resp = await client.post(url, headers=headers, json=body)
 
             # 5xx → transient, retry. 4xx → surface the API error body (no retry).

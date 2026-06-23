@@ -61,30 +61,30 @@ async def get_ai_insights(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("dashboard", "read")),
 ):
-    # Fetch recent leads for the organization
-    leads = (
-        db.query(Lead)
-        .filter(Lead.org_id == current_user.org_id)
-        .order_by(Lead.created_at.desc())
-        .limit(30)
-        .all()
-    )
+    try:
+        leads = (
+            db.query(Lead)
+            .filter(Lead.org_id == current_user.org_id)
+            .order_by(Lead.created_at.desc())
+            .limit(30)
+            .all()
+        )
 
-    # Convert SQLAlchemy model instances to dicts
-    leads_list = []
-    for l in leads:
-        leads_list.append({
-            "id": l.id,
-            "name": l.name,
-            "phone": l.phone,
-            "source": l.source.value if l.source else "manual",
-            "stage": l.stage.value if l.stage else "fresh",
-            "destination": l.destination,
-            "trip_type": l.trip_type,
-            "budget": l.budget,
-            "notes": l.notes
-        })
+        leads_list = []
+        for l in leads:
+            leads_list.append({
+                "id": l.id,
+                "name": l.name,
+                "phone": l.phone,
+                "source": l.source.value if l.source else "manual",
+                "stage": l.stage.value if l.stage else "fresh",
+                "destination": l.destination,
+                "trip_type": l.trip_type,
+                "budget": l.budget,
+                "notes": l.notes
+            })
 
-    # Call AI service to generate dashboard insights
-    insights = await generate_dashboard_insights(leads_list)
-    return insights
+        return await generate_dashboard_insights(leads_list)
+    except Exception as e:
+        print(f"[ai-insights] Error: {e}")
+        return {"insights": []}
