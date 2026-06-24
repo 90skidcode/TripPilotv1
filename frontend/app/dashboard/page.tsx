@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { dashboardApi } from "@/lib/api";
+import { dashboardApi, followupsApi, leadsApi } from "@/lib/api";
 
 const formatLabel = (str: string) => {
   if (!str) return "";
@@ -37,6 +37,8 @@ export default function DashboardPage() {
   const [byStage, setByStage] = useState<any[]>([]);
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [insights, setInsights] = useState<any[]>([]);
+  const [todayFollowups, setTodayFollowups] = useState<any[]>([]);
+  const [todayLeadsMap, setTodayLeadsMap] = useState<Record<number, any>>({});
   const [loading, setLoading] = useState(true);
   const [loadingInsights, setLoadingInsights] = useState(true);
 
@@ -46,12 +48,18 @@ export default function DashboardPage() {
       dashboardApi.bySource(),
       dashboardApi.byStage(),
       dashboardApi.leaderboard(),
+      followupsApi.getToday(),
+      leadsApi.getTodayReminders(),
     ])
-      .then(([s, src, stg, lb]) => {
+      .then(([s, src, stg, lb, followups, reminderLeads]) => {
         setSummary(s);
         setBySource(src);
         setByStage(stg);
         setLeaderboard(lb);
+        setTodayFollowups(followups || []);
+        const leadMap: Record<number, any> = {};
+        (reminderLeads || []).forEach((lead: any) => { leadMap[lead.id] = lead; });
+        setTodayLeadsMap(leadMap);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -177,6 +185,29 @@ export default function DashboardPage() {
                     {["lb-r1", "lb-r2", "lb-r3", "lb-r4"].map((rowId) => (
                       <div key={rowId} className="flex gap-4 py-1">
                         {["rank", "agent", "leads", "won", "conv"].map((col) => (
+                          <Skeleton key={`${rowId}-${col}`} className="h-4 w-20" />
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Today's Reminders skeleton */}
+              <Card className="md:col-span-2 lg:col-span-4">
+                <CardHeader>
+                  <Skeleton className="h-6 w-48" />
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="flex gap-4 pb-3 border-b">
+                      {["tr-h-time", "tr-h-cust", "tr-h-dest", "tr-h-notes", "tr-h-act"].map((id) => (
+                        <Skeleton key={id} className="h-4 w-20" />
+                      ))}
+                    </div>
+                    {["tr-r1", "tr-r2", "tr-r3"].map((rowId) => (
+                      <div key={rowId} className="flex gap-4 py-1">
+                        {["time", "cust", "dest", "notes", "act"].map((col) => (
                           <Skeleton key={`${rowId}-${col}`} className="h-4 w-20" />
                         ))}
                       </div>
@@ -446,6 +477,95 @@ export default function DashboardPage() {
                             </td>
                           </tr>
                         ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Today's Reminders — full-width tile */}
+            <Card className="md:col-span-2 lg:col-span-4">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <span>📞</span> Today&apos;s Reminders
+                  </CardTitle>
+                  <Badge variant="warning">{todayFollowups.length}</Badge>
+                </div>
+                <CardDescription>Pending follow-ups scheduled for today</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {todayFollowups.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">
+                    No reminders for today 🎉
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="text-left font-semibold py-3 px-4 whitespace-nowrap">Time</th>
+                          <th className="text-left font-semibold py-3 px-4">Customer</th>
+                          <th className="text-left font-semibold py-3 px-4">Phone</th>
+                          <th className="text-left font-semibold py-3 px-4">Destination</th>
+                          <th className="text-left font-semibold py-3 px-4">Notes</th>
+                          <th className="text-left font-semibold py-3 px-4">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {todayFollowups.map((followup) => {
+                          const lead = todayLeadsMap[followup.lead_id];
+                          const customer = lead?.customer;
+                          const phone = customer?.whatsapp_number || customer?.phone;
+                          const scheduledTime = new Date(followup.scheduled_date).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          });
+                          return (
+                            <tr key={followup.id} className="border-b border-border hover:bg-muted/50">
+                              <td className="py-3 px-4 font-semibold whitespace-nowrap text-primary">
+                                {scheduledTime}
+                              </td>
+                              <td className="py-3 px-4 font-semibold">
+                                {customer?.name ?? "—"}
+                              </td>
+                              <td className="py-3 px-4 text-muted-foreground">
+                                {phone ?? "—"}
+                              </td>
+                              <td className="py-3 px-4">
+                                {lead?.destination ? (
+                                  <Badge variant="secondary">{lead.destination}</Badge>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
+                              </td>
+                              <td className="py-3 px-4 text-muted-foreground max-w-xs truncate">
+                                {followup.notes ?? "—"}
+                              </td>
+                              <td className="py-3 px-4">
+                                <div className="flex items-center gap-2">
+                                  {phone && (
+                                    <Button asChild variant="primary" size="sm" className="text-xs h-7">
+                                      <a
+                                        href={`https://wa.me/${phone.replace(/\D/g, "")}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                      >
+                                        💬 WhatsApp
+                                      </a>
+                                    </Button>
+                                  )}
+                                  {lead && (
+                                    <Button asChild variant="outline" size="sm" className="text-xs h-7">
+                                      <a href={`/leads/${lead.id}`}>View Lead</a>
+                                    </Button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
