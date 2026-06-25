@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
-import { authApi } from "@/lib/api";
+import { authApi, orgApi } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import { cn } from "@/lib/cn";
 
@@ -28,6 +28,10 @@ export default function SettingsPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [updatingPassword, setUpdatingPassword] = useState(false);
 
+  const [clearConfirm, setClearConfirm] = useState("");
+  const [clearing, setClearing] = useState(false);
+  const [showClearModal, setShowClearModal] = useState(false);
+
   const [agencyName, setAgencyName] = useState("TripPilot Travel Solutions");
   const [agencyAddress, setAgencyAddress] = useState("404 Silicon Tower, Sector 62, Noida, UP, 201301");
   const [agencyGst, setAgencyGst] = useState("09AAACP4040N1ZX");
@@ -38,7 +42,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     loadProfile();
-    if (typeof window !== "undefined") {
+    if (globalThis.window !== undefined) {
       const storedName = localStorage.getItem("agency_name");
       const storedAddr = localStorage.getItem("agency_address");
       const storedGst = localStorage.getItem("agency_gst");
@@ -71,8 +75,7 @@ export default function SettingsPage() {
     }
   }
 
-  async function handleUpdateProfile(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleUpdateProfile() {
     if (!name || !email) {
       showToast({ type: "error", message: "Name and Email are required fields." });
       return;
@@ -86,8 +89,7 @@ export default function SettingsPage() {
     }
   }
 
-  async function handleUpdatePassword(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleUpdatePassword() {
     if (password.length < 6) {
       showToast({ type: "error", message: "Password must be at least 6 characters long." });
       return;
@@ -109,9 +111,23 @@ export default function SettingsPage() {
     }
   }
 
-  function handleSaveAgencyDefaults(e: React.FormEvent) {
-    e.preventDefault();
-    if (typeof window !== "undefined") {
+  async function handleClearData() {
+    if (clearConfirm !== "DELETE") return;
+    setClearing(true);
+    try {
+      await orgApi.clearData();
+      showToast({ type: "success", message: "All transactional records cleared successfully." });
+      setShowClearModal(false);
+      setClearConfirm("");
+    } catch (err: any) {
+      showToast({ type: "error", message: err.message || "Failed to clear data." });
+    } finally {
+      setClearing(false);
+    }
+  }
+
+  function handleSaveAgencyDefaults() {
+    if (globalThis.window !== undefined) {
       localStorage.setItem("agency_name", agencyName);
       localStorage.setItem("agency_address", agencyAddress);
       localStorage.setItem("agency_gst", agencyGst);
@@ -152,7 +168,7 @@ export default function SettingsPage() {
   return (
     <AppShell title="Settings">
       <PageContainer>
-        <div className="max-w-2xl mx-auto space-y-6">
+        <div className="mx-auto space-y-6">
         <PageHeader
           title="Account & Agency Settings"
           description="Manage user profile credentials, update security permissions, and configure defaults."
@@ -181,7 +197,7 @@ export default function SettingsPage() {
           <CardContent className="pt-6">
             {/* Profile Tab */}
             {activeTab === "profile" && (
-              <form onSubmit={handleUpdateProfile} className="space-y-6">
+              <form onSubmit={(e) => { e.preventDefault(); handleUpdateProfile(); }} className="space-y-6">
                 <Section title="Profile Details">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
@@ -242,7 +258,7 @@ export default function SettingsPage() {
 
             {/* Security Tab */}
             {activeTab === "security" && (
-              <form onSubmit={handleUpdatePassword} className="space-y-6">
+              <form onSubmit={(e) => { e.preventDefault(); handleUpdatePassword(); }} className="space-y-6">
                 <Section
                   title="Reset Account Password"
                   description="Keep your travel agency portals locked down securely by refreshing password metrics regularly."
@@ -289,7 +305,7 @@ export default function SettingsPage() {
 
             {/* Agency Tab */}
             {activeTab === "agency" && (
-              <form onSubmit={handleSaveAgencyDefaults} className="space-y-6">
+              <form onSubmit={(e) => { e.preventDefault(); handleSaveAgencyDefaults(); }} className="space-y-6">
                 <Section
                   title="Agency Defaults & Template Constants"
                   description="Variables configured here will automatically populate headers inside newly generated Hotel Vouchers and Customer Billing Invoices."
@@ -390,7 +406,62 @@ export default function SettingsPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Danger Zone */}
+        <Card className="border-red-200">
+          <CardHeader>
+            <CardTitle className="text-red-600 text-base">Danger Zone</CardTitle>
+            <CardDescription>Irreversible actions that affect your organisation's data.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <p className="font-semibold text-sm text-gray-800">Clear All Records</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Permanently deletes all leads, itineraries, vouchers, invoices, flight tickets, messages,
+                  customers, B2B partners, and inventory. Only users and organisation settings are kept.
+                </p>
+              </div>
+              <Button variant="destructive" onClick={() => { setClearConfirm(""); setShowClearModal(true); }}>
+                Clear All Records
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Confirmation Modal */}
+      {showClearModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 mx-4">
+            <h2 className="text-lg font-bold text-red-600 mb-1">Clear All Records?</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              This will permanently delete all <strong>leads, itineraries, hotel vouchers, invoices, flight tickets,
+              and messages</strong> for your organisation. This cannot be undone.
+            </p>
+            <p className="text-sm font-semibold text-gray-700 mb-2">
+              Type <span className="font-mono bg-red-50 text-red-700 px-1 rounded">DELETE</span> to confirm:
+            </p>
+            <Input
+              value={clearConfirm}
+              onChange={(e) => setClearConfirm(e.target.value)}
+              placeholder="DELETE"
+              className="mb-4 font-mono"
+              autoFocus
+            />
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setShowClearModal(false)}>Cancel</Button>
+              <Button
+                variant="destructive"
+                disabled={clearConfirm !== "DELETE" || clearing}
+                onClick={handleClearData}
+              >
+                {clearing ? "Clearing…" : "Yes, Clear All Records"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </PageContainer>
     </AppShell>
   );

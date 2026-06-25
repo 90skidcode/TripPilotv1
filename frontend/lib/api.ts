@@ -45,6 +45,10 @@ export const authApi = {
   register: (data: any) => api.post<any>("/auth/register", data),
 };
 
+export const orgApi = {
+  clearData: () => api.delete("/org/clear-data"),
+};
+
 // ── User Groups ──
 export const userGroupsApi = {
   list: () => api.get<any[]>("/user-groups"),

@@ -8,7 +8,7 @@ import traceback
 from app.core.database import SessionLocal
 from app.core.security import hash_password
 from fastapi.staticfiles import StaticFiles
-from app.api import auth, leads, customers, itinerary, vouchers, invoices, inventory, dashboard, upload, followups, user_groups, superadmin, pricing, webhooks, chats, b2b_partners, lead_costing, flights, lead_partners, lead_payments
+from app.api import auth, leads, customers, itinerary, vouchers, invoices, inventory, dashboard, upload, followups, user_groups, superadmin, pricing, webhooks, chats, b2b_partners, lead_costing, flights, lead_partners, lead_payments, org_data
 from app.models import organization, user, lead, customer as customer_model, itinerary as itinerary_model, followup, inventory as inventory_model, user_group, message as message_model
 from app.models import b2b_partner as b2b_partner_model, lead_costing as lead_costing_model
 from app.models.pricing_plan import PricingPlan
@@ -207,6 +207,7 @@ app.include_router(b2b_partners.router, prefix="/b2b-partners", tags=["B2B Partn
 app.include_router(lead_costing.router, prefix="/leads",        tags=["Lead Costing"])
 app.include_router(lead_partners.router, prefix="/leads",       tags=["Lead Partners"])
 app.include_router(lead_payments.router, prefix="/leads",       tags=["Lead Payments"])
+app.include_router(org_data.router,                             tags=["Org Data"])
 
 # ── Static Files ──
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
