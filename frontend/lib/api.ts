@@ -138,6 +138,8 @@ export const followupsApi = {
   getPending: () => api.get<any[]>("/followups/pending"),
   // Get today's follow-ups
   getToday: () => api.get<any[]>("/followups/today"),
+  // Get notifications (overdue + today, with customer name)
+  getNotifications: () => api.get<any>("/notifications"),
 };
 
 // ── Itinerary ──

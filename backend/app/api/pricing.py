@@ -1,12 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from datetime import datetime
+from sqlalchemy import func
+from datetime import datetime, timezone
 from pydantic import BaseModel
 
 from app.core.database import get_db
 from app.core.security import get_current_user, require_superadmin
 from app.models.user import User
 from app.models.pricing_plan import PricingPlan, Subscription, UsageTracking
+from app.models.lead import Lead
+from app.models.itinerary import Itinerary
+from app.models.tools import HotelVoucher, Invoice
 
 router = APIRouter()
 
@@ -202,64 +206,52 @@ def get_usage(
     current_user: User = Depends(get_current_user),
 ):
     """Get current usage for the user's organization."""
-    # Get current subscription
+    org_id = current_user.org_id
+
     subscription = db.query(Subscription).filter(
-        Subscription.org_id == current_user.org_id,
-        Subscription.status == "active"
+        Subscription.org_id == org_id,
+        Subscription.status.in_(["active", "trial"]),
     ).first()
 
     if not subscription:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No active subscription found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active subscription found")
 
-    # Get plan details
     plan = db.query(PricingPlan).filter(PricingPlan.id == subscription.plan_id).first()
-
     if not plan:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Plan not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
 
-    # Get current month usage
-    current_month = datetime.utcnow().strftime("%Y-%m")
-    usage = db.query(UsageTracking).filter(
-        UsageTracking.org_id == current_user.org_id,
-        UsageTracking.month == current_month
-    ).first()
+    # Count actual records — source of truth, always accurate regardless of deletes/imports
+    leads_used = db.query(func.count(Lead.id)).filter(Lead.org_id == org_id).scalar() or 0
+    itineraries_used = db.query(func.count(Itinerary.id)).filter(Itinerary.org_id == org_id).scalar() or 0
+    vouchers_used = db.query(func.count(HotelVoucher.id)).filter(HotelVoucher.org_id == org_id).scalar() or 0
+    bills_used = db.query(func.count(Invoice.id)).filter(Invoice.org_id == org_id).scalar() or 0
+    team_members_used = db.query(func.count(User.id)).filter(User.org_id == org_id, User.is_active == True).scalar() or 0  # noqa: E712
 
-    if not usage:
-        # Create usage record if it doesn't exist
-        usage = UsageTracking(
-            org_id=current_user.org_id,
-            month=current_month
-        )
-        db.add(usage)
-        db.commit()
-        db.refresh(usage)
+    # Determine effective status: show "trial" when trial_ends_at is in the future
+    now = datetime.now(timezone.utc)
+    if subscription.trial_ends_at and subscription.trial_ends_at > now:
+        effective_status = "trial"
+    else:
+        effective_status = subscription.status
 
-    # Calculate days left in trial
     days_left_in_trial = None
     if subscription.trial_ends_at:
-        days_left = (subscription.trial_ends_at - datetime.utcnow()).days
-        days_left_in_trial = max(0, days_left)
+        days_left_in_trial = max(0, (subscription.trial_ends_at - now).days)
 
     return {
-        "itineraries_used": usage.itineraries_used,
+        "itineraries_used": itineraries_used,
         "itineraries_limit": plan.itineraries_limit,
-        "leads_used": usage.leads_used,
+        "leads_used": leads_used,
         "leads_limit": plan.leads_limit,
-        "vouchers_used": usage.vouchers_used,
+        "vouchers_used": vouchers_used,
         "vouchers_limit": plan.vouchers_limit,
-        "bills_used": usage.bills_used,
+        "bills_used": bills_used,
         "bills_limit": plan.bills_limit,
-        "team_members_used": usage.team_members_used,
+        "team_members_used": team_members_used,
         "team_members_limit": plan.team_members_limit,
         "plan_name": plan.name,
         "monthly_price": plan.monthly_price,
-        "subscription_status": subscription.status,
+        "subscription_status": effective_status,
         "renewal_date": subscription.renewal_date.isoformat() if subscription.renewal_date else None,
         "trial_ends_at": subscription.trial_ends_at.isoformat() if subscription.trial_ends_at else None,
         "days_left_in_trial": days_left_in_trial,
@@ -274,7 +266,7 @@ def increment_usage(
     """
     Increment usage counter. Returns True if successful, False if limit exceeded.
     """
-    current_month = datetime.utcnow().strftime("%Y-%m")
+    current_month = datetime.now(timezone.utc).strftime("%Y-%m")
 
     # Get usage record
     usage = db.query(UsageTracking).filter(
@@ -307,7 +299,7 @@ def increment_usage(
         return False
 
     # Check trial expiry
-    if subscription.trial_ends_at and datetime.utcnow() > subscription.trial_ends_at:
+    if subscription.trial_ends_at and datetime.now(timezone.utc) > subscription.trial_ends_at:
         subscription.status = "expired"
         db.commit()
         return False

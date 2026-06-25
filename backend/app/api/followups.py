@@ -2,12 +2,13 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, date, timedelta
 
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.followup import Followup, FollowupStatus
 from app.models.lead import Lead
+from app.models.customer import Customer
 from app.models.user import User
 from app.services.activity import log_activity
 
@@ -157,6 +158,42 @@ def update_followup(
     db.commit()
     db.refresh(followup)
     return followup
+
+
+@router.get("/notifications")
+def get_notifications(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    now = datetime.now()
+    today_end = datetime(now.year, now.month, now.day, 23, 59, 59)
+
+    rows = (
+        db.query(Followup, Lead, Customer)
+        .join(Lead, Followup.lead_id == Lead.id)
+        .join(Customer, Lead.customer_id == Customer.id)
+        .filter(Followup.org_id == current_user.org_id)
+        .filter(Followup.status == FollowupStatus.pending)
+        .filter(Followup.scheduled_date <= today_end)
+        .order_by(Followup.scheduled_date.asc())
+        .limit(30)
+        .all()
+    )
+
+    result = []
+    for followup, lead, customer in rows:
+        is_overdue = followup.scheduled_date < datetime(now.year, now.month, now.day, 0, 0, 0)
+        result.append({
+            "id": followup.id,
+            "lead_id": lead.id,
+            "customer_name": customer.name,
+            "destination": lead.destination,
+            "notes": followup.notes,
+            "scheduled_date": followup.scheduled_date.isoformat(),
+            "kind": "overdue" if is_overdue else "today",
+        })
+
+    return {"items": result, "total": len(result)}
 
 
 # Delete follow-up
