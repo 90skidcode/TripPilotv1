@@ -1,5 +1,5 @@
 import enum
-from sqlalchemy import Column, Integer, String, Float, Text, Boolean, DateTime, ForeignKey, Enum, func
+from sqlalchemy import Column, Integer, String, Float, Text, Boolean, DateTime, ForeignKey, Enum, JSON, func
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -27,6 +27,7 @@ class B2BPartner(Base):
     city = Column(String(200), nullable=True)
     country = Column(String(200), nullable=True, default="India")
     category = Column(Enum(B2BCategory), default=B2BCategory.dmc)
+    countries = Column(JSON, nullable=True, default=list)
     commission_pct = Column(Float, nullable=True)
     notes = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True)

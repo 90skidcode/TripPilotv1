@@ -2,11 +2,10 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
 from datetime import datetime
 
 from app.core.database import get_db
-from app.core.security import get_current_user, require_permission
+from app.core.security import require_permission
 from app.models.b2b_partner import B2BPartner, B2BCategory
 from app.models.user import User
 
@@ -21,6 +20,7 @@ class B2BPartnerCreate(BaseModel):
     gst_number: Optional[str] = None
     city: Optional[str] = None
     country: Optional[str] = "India"
+    countries: Optional[List[str]] = []
     category: Optional[B2BCategory] = B2BCategory.dmc
     commission_pct: Optional[float] = None
     notes: Optional[str] = None
@@ -35,6 +35,7 @@ class B2BPartnerUpdate(BaseModel):
     gst_number: Optional[str] = None
     city: Optional[str] = None
     country: Optional[str] = None
+    countries: Optional[List[str]] = None
     category: Optional[B2BCategory] = None
     commission_pct: Optional[float] = None
     notes: Optional[str] = None
@@ -50,6 +51,7 @@ class B2BPartnerOut(BaseModel):
     gst_number: Optional[str] = None
     city: Optional[str] = None
     country: Optional[str] = None
+    countries: Optional[List[str]] = []
     category: Optional[str] = None
     commission_pct: Optional[float] = None
     notes: Optional[str] = None
@@ -74,26 +76,40 @@ def list_b2b_partners(
     per_page: int = Query(20, ge=1, le=100),
     search: Optional[str] = None,
     category: Optional[B2BCategory] = None,
+    country: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("leads", "read")),
 ):
-    """List all B2B partners with pagination and search."""
     q = db.query(B2BPartner).filter(B2BPartner.org_id == current_user.org_id)
-
-    if search:
-        q = q.filter(or_(
-            B2BPartner.company_name.ilike(f"%{search}%"),
-            B2BPartner.contact_person.ilike(f"%{search}%"),
-            B2BPartner.phone.ilike(f"%{search}%"),
-            B2BPartner.email.ilike(f"%{search}%"),
-            B2BPartner.city.ilike(f"%{search}%"),
-        ))
 
     if category:
         q = q.filter(B2BPartner.category == category)
 
-    total = q.count()
-    partners = q.order_by(B2BPartner.created_at.desc()).offset((page - 1) * per_page).limit(per_page).all()
+    # Fetch all, then apply search + country filters in Python so that the
+    # JSON `countries` array is included in the search (no DB-specific JSON ops).
+    all_partners = q.order_by(B2BPartner.created_at.desc()).all()
+
+    if search:
+        needle = search.lower()
+        def _matches_search(p: B2BPartner) -> bool:
+            fields = [p.company_name, p.contact_person, p.phone, p.email, p.city, p.country]
+            if any(f and needle in f.lower() for f in fields):
+                return True
+            if p.countries and any(needle in c.lower() for c in p.countries):
+                return True
+            return False
+        all_partners = [p for p in all_partners if _matches_search(p)]
+
+    if country:
+        needle_c = country.lower()
+        all_partners = [
+            p for p in all_partners
+            if (p.countries and any(needle_c in c.lower() for c in p.countries))
+            or (p.country and needle_c in p.country.lower())
+        ]
+
+    total = len(all_partners)
+    partners = all_partners[(page - 1) * per_page: page * per_page]
 
     items = []
     for p in partners:
@@ -106,6 +122,7 @@ def list_b2b_partners(
             "gst_number": p.gst_number,
             "city": p.city,
             "country": p.country,
+            "countries": p.countries or [],
             "category": p.category.value if p.category else None,
             "commission_pct": p.commission_pct,
             "notes": p.notes,

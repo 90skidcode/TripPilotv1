@@ -40,6 +40,7 @@ import {
   CreditCard,
   CheckCircle2,
   AlertCircle,
+  Filter,
 } from "lucide-react";
 
 const STAGE_STYLES: Record<string, { label: string; className: string }> = {
@@ -116,7 +117,8 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   const [tab, setTab] = useState<"overview" | "itineraries" | "vouchers" | "flights" | "b2b" | "invoices" | "payments" | "timeline">("overview");
   const [partnerOptions, setPartnerOptions] = useState<any[]>([]);
   const [showConnectPartner, setShowConnectPartner] = useState(false);
-  const [partnerForm, setPartnerForm] = useState({ b2b_partner_id: "", role: "", cost: "", notes: "" });
+  const [partnerForm, setPartnerForm] = useState({ b2b_partner_id: "", role: "", country: "", cost: "", notes: "" });
+  const [partnerCountryFilter, setPartnerCountryFilter] = useState("");
   const [connecting, setConnecting] = useState(false);
   const [showAddFollowup, setShowAddFollowup] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
@@ -145,7 +147,8 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   }
 
   async function openConnectPartner() {
-    setPartnerForm({ b2b_partner_id: "", role: "", cost: "", notes: "" });
+    setPartnerForm({ b2b_partner_id: "", role: "", country: "", cost: "", notes: "" });
+    setPartnerCountryFilter(lead?.destination || "");
     setShowConnectPartner(true);
     if (partnerOptions.length === 0) {
       try {
@@ -164,6 +167,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
       await leadsApi.connectPartner(leadId, {
         b2b_partner_id: Number(partnerForm.b2b_partner_id),
         role: partnerForm.role || undefined,
+        country: partnerForm.country || undefined,
         cost: partnerForm.cost ? Number(partnerForm.cost) : undefined,
         notes: partnerForm.notes || undefined,
       });
@@ -418,6 +422,16 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
                   <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <InfoRow icon={MapPin} label="Destination" value={lead.destination} />
                     <InfoRow icon={Plane} label="Trip Type" value={lead.trip_type} />
+                    <InfoRow icon={Calendar} label="Travel Date" value={fmtDate(lead.travel_date)} />
+                    <InfoRow
+                      icon={Clock}
+                      label="Duration"
+                      value={
+                        lead.num_nights || lead.num_days
+                          ? `${lead.num_nights ? `${lead.num_nights}N` : ""}${lead.num_days ? ` ${lead.num_days}D` : ""}`.trim()
+                          : null
+                      }
+                    />
                     <InfoRow icon={Wallet} label="Budget" value={lead.budget} />
                   </CardContent>
                 </Card>
@@ -687,10 +701,16 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
                           <span className="font-semibold text-sm">{p.company_name || `Partner #${p.b2b_partner_id}`}</span>
                           {p.category && <Badge variant="info" className="uppercase text-[10px]">{p.category}</Badge>}
                           {p.role && <Badge className="text-[10px] bg-indigo-50 text-indigo-700 border-indigo-200">{p.role}</Badge>}
+                          {p.country && (
+                            <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 text-primary px-2 py-0.5 text-[10px] font-semibold">
+                              <MapPin className="h-2.5 w-2.5" />{p.country}
+                            </span>
+                          )}
                         </div>
                         <p className="text-xs text-muted-foreground mt-0.5">
                           {p.cost != null ? `Cost: ₹${p.cost.toLocaleString("en-IN")}` : "No cost set"}
                           {p.notes ? ` • ${p.notes}` : ""}
+                          {p.countries?.length > 0 && !p.country ? ` • Operates in: ${p.countries.join(", ")}` : ""}
                         </p>
                       </div>
                       {canWrite && (
@@ -976,58 +996,130 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
         />
       )}
 
-      {showConnectPartner && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onClick={(e) => e.target === e.currentTarget && setShowConnectPartner(false)}
-        >
-          <div className="w-full max-w-md rounded-lg border border-border bg-background shadow-lg">
-            <div className="flex items-center justify-between border-b border-border p-4">
-              <h2 className="text-base font-semibold">Connect B2B Partner</h2>
-              <button onClick={() => setShowConnectPartner(false)} aria-label="Close" className="text-lg leading-none text-muted-foreground hover:text-foreground">
-                ✕
-              </button>
-            </div>
-            <div className="space-y-4 p-4">
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Partner *</label>
-                <select
-                  value={partnerForm.b2b_partner_id}
-                  onChange={(e) => setPartnerForm((f) => ({ ...f, b2b_partner_id: e.target.value }))}
-                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus-ring"
-                >
-                  <option value="">Select a partner…</option>
-                  {partnerOptions.map((p: any) => (
-                    <option key={p.id} value={p.id}>
-                      {p.company_name}{p.category ? ` (${p.category})` : ""}
-                    </option>
-                  ))}
-                </select>
+      {showConnectPartner && (() => {
+        const selectedPartner = partnerOptions.find((p: any) => String(p.id) === partnerForm.b2b_partner_id);
+        const selectedCountries: string[] = selectedPartner?.countries || [];
+        const filteredPartners = partnerCountryFilter
+          ? partnerOptions.filter((p: any) =>
+              !p.countries?.length ||
+              p.countries.some((c: string) => c.toLowerCase().includes(partnerCountryFilter.toLowerCase()))
+            )
+          : partnerOptions;
+
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+            onClick={(e) => e.target === e.currentTarget && setShowConnectPartner(false)}
+          >
+            <div className="w-full max-w-md rounded-lg border border-border bg-background shadow-lg">
+              <div className="flex items-center justify-between border-b border-border p-4">
+                <h2 className="text-base font-semibold">Connect B2B Partner</h2>
+                <button onClick={() => setShowConnectPartner(false)} aria-label="Close" className="text-lg leading-none text-muted-foreground hover:text-foreground">✕</button>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Role</label>
-                  <Input value={partnerForm.role} onChange={(e) => setPartnerForm((f) => ({ ...f, role: e.target.value }))} placeholder="e.g. DMC" />
+
+              <div className="space-y-4 p-4">
+                {/* Country filter */}
+                <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
+                  <Filter className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <input
+                    className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                    placeholder="Filter partners by country (e.g. Maldives)…"
+                    value={partnerCountryFilter}
+                    onChange={(e) => setPartnerCountryFilter(e.target.value)}
+                  />
+                  {partnerCountryFilter && (
+                    <button onClick={() => setPartnerCountryFilter("")} className="text-muted-foreground hover:text-foreground">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
+
+                {/* Partner select */}
                 <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Cost (₹)</label>
-                  <Input type="number" value={partnerForm.cost} onChange={(e) => setPartnerForm((f) => ({ ...f, cost: e.target.value }))} placeholder="0" />
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Partner *</label>
+                  <select
+                    value={partnerForm.b2b_partner_id}
+                    onChange={(e) => setPartnerForm((f) => ({ ...f, b2b_partner_id: e.target.value, country: "" }))}
+                    className="w-full h-10 rounded-md border border-input bg-white px-3 text-sm focus-ring"
+                  >
+                    <option value="">Select a partner…</option>
+                    {filteredPartners.map((p: any) => (
+                      <option key={p.id} value={p.id}>
+                        {p.company_name}{p.category ? ` (${p.category})` : ""}
+                        {p.countries?.length ? ` — ${p.countries.join(", ")}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  {filteredPartners.length === 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">No partners match this country filter.</p>
+                  )}
+                </div>
+
+                {/* Country handled for this lead */}
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                    Country handled for this lead
+                  </label>
+                  {selectedCountries.length > 0 ? (
+                    <select
+                      value={partnerForm.country}
+                      onChange={(e) => setPartnerForm((f) => ({ ...f, country: e.target.value }))}
+                      className="w-full h-10 rounded-md border border-input bg-white px-3 text-sm focus-ring"
+                    >
+                      <option value="">Select country…</option>
+                      {selectedCountries.map((c: string) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                      <option value="__other__">Other (type below)</option>
+                    </select>
+                  ) : null}
+                  {(selectedCountries.length === 0 || partnerForm.country === "__other__") && (
+                    <Input
+                      className="mt-1.5 h-9"
+                      value={partnerForm.country === "__other__" ? "" : partnerForm.country}
+                      onChange={(e) => setPartnerForm((f) => ({ ...f, country: e.target.value }))}
+                      placeholder="e.g. Maldives"
+                    />
+                  )}
+                  {selectedCountries.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {selectedCountries.map((c: string) => (
+                        <span key={c} className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 text-primary px-2 py-0.5 text-[10px] font-semibold">
+                          <MapPin className="h-2.5 w-2.5" />{c}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Role + Cost */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Role</label>
+                    <Input value={partnerForm.role} onChange={(e) => setPartnerForm((f) => ({ ...f, role: e.target.value }))} placeholder="e.g. DMC" className="h-9" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Cost (₹)</label>
+                    <Input type="number" value={partnerForm.cost} onChange={(e) => setPartnerForm((f) => ({ ...f, cost: e.target.value }))} placeholder="0" className="h-9" />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Notes</label>
+                  <Input value={partnerForm.notes} onChange={(e) => setPartnerForm((f) => ({ ...f, notes: e.target.value }))} placeholder="Optional" className="h-9" />
                 </div>
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Notes</label>
-                <Input value={partnerForm.notes} onChange={(e) => setPartnerForm((f) => ({ ...f, notes: e.target.value }))} placeholder="Optional" />
+
+              <div className="flex justify-end gap-3 border-t border-border p-4">
+                <Button variant="ghost" onClick={() => setShowConnectPartner(false)}>Cancel</Button>
+                <Button variant="primary" onClick={handleConnectPartner} disabled={connecting || !partnerForm.b2b_partner_id}>
+                  {connecting ? "Connecting…" : "Connect"}
+                </Button>
               </div>
-            </div>
-            <div className="flex justify-end gap-3 border-t border-border p-4">
-              <Button variant="ghost" onClick={() => setShowConnectPartner(false)}>Cancel</Button>
-              <Button variant="primary" onClick={handleConnectPartner} disabled={connecting || !partnerForm.b2b_partner_id}>
-                {connecting ? "Connecting…" : "Connect"}
-              </Button>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </AppShell>
   );
 }

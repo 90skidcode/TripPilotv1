@@ -14,7 +14,8 @@ class LeadPartner(Base):
     lead_id = Column(Integer, ForeignKey("leads.id", ondelete="CASCADE"), nullable=False, index=True)
     b2b_partner_id = Column(Integer, ForeignKey("b2b_partners.id"), nullable=False, index=True)
 
-    role = Column(String(100), nullable=True)   # e.g. DMC, Hotel, Transport, Visa
+    role = Column(String(100), nullable=True)
+    country = Column(String(200), nullable=True)
     cost = Column(Float, nullable=True)
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

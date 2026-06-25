@@ -39,6 +39,8 @@ class Lead(Base):
     num_adults = Column(Integer, nullable=True)
     num_children = Column(Integer, nullable=True)
     num_infants = Column(Integer, nullable=True)
+    num_nights = Column(Integer, nullable=True)
+    num_days = Column(Integer, nullable=True)
     budget = Column(String(100), nullable=True)
     notes = Column(Text, nullable=True)
     assigned_to = Column(Integer, ForeignKey("users.id"), nullable=True)

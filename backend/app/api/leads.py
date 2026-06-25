@@ -29,6 +29,8 @@ class LeadCreate(BaseModel):
     destination: Optional[str] = None
     trip_type: Optional[str] = None
     travel_date: Optional[datetime] = None
+    num_nights: Optional[int] = None
+    num_days: Optional[int] = None
     num_adults: Optional[int] = None
     num_children: Optional[int] = None
     num_infants: Optional[int] = None
@@ -45,6 +47,8 @@ class LeadUpdate(BaseModel):
     destination: Optional[str] = None
     trip_type: Optional[str] = None
     travel_date: Optional[datetime] = None
+    num_nights: Optional[int] = None
+    num_days: Optional[int] = None
     num_adults: Optional[int] = None
     num_children: Optional[int] = None
     num_infants: Optional[int] = None
@@ -82,6 +86,8 @@ class LeadOut(BaseModel):
     destination: Optional[str]
     trip_type: Optional[str]
     travel_date: Optional[datetime]
+    num_nights: Optional[int] = None
+    num_days: Optional[int] = None
     num_adults: Optional[int]
     num_children: Optional[int]
     num_infants: Optional[int]

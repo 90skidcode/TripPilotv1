@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useDebounce } from "@/hooks/useDebounce";
+import SidePanel from "@/components/SidePanel";
 import AppShell from "@/components/AppShell";
 import { PageHeader, PageContainer } from "@/components/layout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,9 +12,9 @@ import { b2bPartnersApi } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import { useAuth } from "@/context/AuthContext";
 import { SkeletonTable } from "@/components/SkeletonLoader";
-import { 
-  Globe, Hotel, Target, Car, FileText, Plane, Package, 
-  Edit, Trash2, Handshake, ChevronLeft, ChevronRight, X
+import {
+  Globe, Hotel, Target, Car, FileText, Plane, Package,
+  Edit, Trash2, Handshake, ChevronLeft, ChevronRight, X, MapPin,
 } from "lucide-react";
 
 const CATEGORIES = [
@@ -30,6 +32,58 @@ const CATEGORY_ICONS: Record<string, React.ElementType> = {
   visa: FileText, flights: Plane, other: Package,
 };
 
+const INPUT_CLS = "flex h-9 w-full rounded-md border border-input bg-white px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50";
+
+// ── Multi-country tag input ──────────────────────────────────────────────────
+function CountriesInput({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
+  const [inputVal, setInputVal] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function addCountry(raw: string) {
+    const trimmed = raw.trim();
+    if (!trimmed || value.map(c => c.toLowerCase()).includes(trimmed.toLowerCase())) {
+      setInputVal("");
+      return;
+    }
+    onChange([...value, trimmed]);
+    setInputVal("");
+  }
+
+  function handleKey(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addCountry(inputVal);
+    } else if (e.key === "Backspace" && !inputVal && value.length > 0) {
+      onChange(value.slice(0, -1));
+    }
+  }
+
+  return (
+    <div
+      className="min-h-[38px] w-full rounded-md border border-input bg-white px-2 py-1.5 text-sm focus-within:ring-1 focus-within:ring-ring cursor-text flex flex-wrap gap-1.5"
+      onClick={() => inputRef.current?.focus()}
+    >
+      {value.map((c) => (
+        <span key={c} className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary px-2 py-0.5 text-xs font-medium">
+          <MapPin className="w-3 h-3" />{c}
+          <button type="button" onClick={() => onChange(value.filter(x => x !== c))} className="ml-0.5 hover:text-destructive">
+            <X className="w-3 h-3" />
+          </button>
+        </span>
+      ))}
+      <input
+        ref={inputRef}
+        value={inputVal}
+        onChange={(e) => setInputVal(e.target.value)}
+        onKeyDown={handleKey}
+        onBlur={() => inputVal.trim() && addCountry(inputVal)}
+        placeholder={value.length === 0 ? "Type country, press Enter…" : "Add more…"}
+        className="flex-1 min-w-[120px] outline-none bg-transparent placeholder:text-muted-foreground text-sm"
+      />
+    </div>
+  );
+}
+
 export default function B2BPartnersPage() {
   const { showToast } = useToast();
   const { hasPermission } = useAuth();
@@ -41,24 +95,23 @@ export default function B2BPartnersPage() {
   const [pages, setPages] = useState(1);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search);
 
-  // Side panel
   const [showPanel, setShowPanel] = useState<"add" | "edit" | null>(null);
   const [editing, setEditing] = useState<any>(null);
   const [saving, setSaving] = useState(false);
 
-  // Form
   const [form, setForm] = useState({
     company_name: "", contact_person: "", phone: "", email: "",
-    gst_number: "", city: "", country: "India", category: "dmc",
-    commission_pct: "", notes: "", is_active: true,
+    gst_number: "", city: "", country: "India", countries: [] as string[],
+    category: "dmc", commission_pct: "", notes: "", is_active: true,
   });
 
   const fetchPartners = useCallback(async () => {
     setLoading(true);
     try {
       const params: any = { page, per_page: 20 };
-      if (search) params.search = search;
+      if (debouncedSearch) params.search = debouncedSearch;
       const data = await b2bPartnersApi.list(params);
       setPartners(data.items || []);
       setTotal(data.total || 0);
@@ -68,15 +121,15 @@ export default function B2BPartnersPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search]);
+  }, [page, debouncedSearch]);
 
   useEffect(() => { fetchPartners(); }, [fetchPartners]);
 
   function resetForm() {
     setForm({
       company_name: "", contact_person: "", phone: "", email: "",
-      gst_number: "", city: "", country: "India", category: "dmc",
-      commission_pct: "", notes: "", is_active: true,
+      gst_number: "", city: "", country: "India", countries: [],
+      category: "dmc", commission_pct: "", notes: "", is_active: true,
     });
   }
 
@@ -86,7 +139,9 @@ export default function B2BPartnersPage() {
     setForm({
       company_name: p.company_name || "", contact_person: p.contact_person || "",
       phone: p.phone || "", email: p.email || "", gst_number: p.gst_number || "",
-      city: p.city || "", country: p.country || "India", category: p.category || "dmc",
+      city: p.city || "", country: p.country || "India",
+      countries: Array.isArray(p.countries) ? p.countries : [],
+      category: p.category || "dmc",
       commission_pct: p.commission_pct != null ? String(p.commission_pct) : "",
       notes: p.notes || "", is_active: p.is_active !== false,
     });
@@ -95,7 +150,7 @@ export default function B2BPartnersPage() {
   }
 
   async function handleSave() {
-    if (!form.company_name) {
+    if (!form.company_name.trim()) {
       showToast({ type: "error", message: "Company name is required." });
       return;
     }
@@ -180,26 +235,27 @@ export default function B2BPartnersPage() {
                 <table className="w-full text-sm text-left">
                   <thead className="text-xs text-muted-foreground uppercase bg-muted/50">
                     <tr>
-                      <th className="px-4 py-3 w-[220px]">Company</th>
-                      <th className="px-4 py-3 w-[160px]">Contact Person</th>
-                      <th className="px-4 py-3 w-[140px]">Phone</th>
-                      <th className="px-4 py-3 w-[110px]">Category</th>
-                      <th className="px-4 py-3 w-[120px]">City</th>
+                      <th className="px-4 py-3 w-[200px]">Company</th>
+                      <th className="px-4 py-3 w-[140px]">Contact</th>
+                      <th className="px-4 py-3 w-[130px]">Phone</th>
+                      <th className="px-4 py-3 w-[90px]">Category</th>
+                      <th className="px-4 py-3">Countries</th>
                       <th className="px-4 py-3 w-[100px] text-center">Commission</th>
                       <th className="px-4 py-3 w-[80px] text-center">Status</th>
-                      <th className="px-4 py-3 w-[100px] text-right">Actions</th>
+                      <th className="px-4 py-3 w-[90px] text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {partners.map((p) => {
                       const IconComponent = CATEGORY_ICONS[p.category] || Package;
                       return (
-                        <tr key={p.id} className={`border-b border-border hover:bg-muted/30 transition-colors ${!p.is_active ? 'opacity-50' : ''}`}>
+                        <tr key={p.id} className={`border-b border-border hover:bg-muted/30 transition-colors ${!p.is_active ? "opacity-50" : ""}`}>
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
                               <IconComponent className="w-4 h-4 text-muted-foreground shrink-0" />
                               <span className="font-semibold">{p.company_name}</span>
                             </div>
+                            {p.city && <p className="text-xs text-muted-foreground mt-0.5 ml-6">{p.city}</p>}
                           </td>
                           <td className="px-4 py-3">{p.contact_person || "—"}</td>
                           <td className="px-4 py-3 whitespace-nowrap">{p.phone || "—"}</td>
@@ -208,8 +264,20 @@ export default function B2BPartnersPage() {
                               {p.category || "—"}
                             </span>
                           </td>
-                          <td className="px-4 py-3">{p.city || "—"}</td>
-                          <td className="px-4 py-3 text-center num">
+                          <td className="px-4 py-3">
+                            {p.countries && p.countries.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {p.countries.map((c: string) => (
+                                  <span key={c} className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 text-primary px-2 py-0.5 text-[10px] font-semibold">
+                                    <MapPin className="w-2.5 h-2.5" />{c}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">{p.country || "—"}</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-center">
                             {p.commission_pct != null ? `${p.commission_pct}%` : "—"}
                           </td>
                           <td className="px-4 py-3 text-center">
@@ -244,9 +312,7 @@ export default function B2BPartnersPage() {
                 <Button variant="ghost" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
                   <ChevronLeft className="w-4 h-4 mr-1" /> Prev
                 </Button>
-                <span className="flex items-center text-sm text-muted-foreground px-2">
-                  Page {page} of {pages}
-                </span>
+                <span className="text-sm text-muted-foreground px-2">Page {page} of {pages}</span>
                 <Button variant="ghost" size="sm" disabled={page >= pages} onClick={() => setPage(page + 1)}>
                   Next <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
@@ -257,95 +323,104 @@ export default function B2BPartnersPage() {
 
         {/* Add / Edit Side Panel */}
         {showPanel && (
-          <div className="fixed inset-0 bg-black/40 z-50 flex justify-end transition-opacity" onClick={(e) => e.target === e.currentTarget && setShowPanel(null)}>
-            <div className="w-full max-w-lg bg-card h-full flex flex-col shadow-[-4px_0_24px_rgba(0,0,0,0.1)] animate-in slide-in-from-right duration-300">
-              <div className="flex items-center justify-between px-6 py-5 border-b border-border">
-                <h2 className="text-lg font-semibold text-foreground">{showPanel === "edit" ? "Edit Partner" : "Add B2B Partner"}</h2>
-                <button className="p-2 -mr-2 text-muted-foreground hover:bg-accent hover:text-foreground rounded-md transition-colors" onClick={() => setShowPanel(null)}>
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              
-              <div className="flex-1 overflow-y-auto p-6">
-                <div className="grid gap-4 md:gap-5">
+          <SidePanel
+            title={showPanel === "edit" ? "Edit Partner" : "Add B2B Partner"}
+            subtitle={showPanel === "edit" ? "Update partner details" : "Add a new DMC, hotel or ground operator"}
+            onClose={() => setShowPanel(null)}
+            onSave={handleSave}
+            saveLabel={showPanel === "edit" ? "Update Partner" : "Add Partner"}
+            saving={saving}
+          >
+              <div className="p-6 space-y-4">
+                {/* Company Name */}
+                <div>
+                  <label className="block mb-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Company Name *</label>
+                  <Input value={form.company_name} onChange={(e) => setField("company_name", e.target.value)} placeholder="e.g. SkyTravel DMC" id="b2b-company" className="h-9" />
+                </div>
+
+                {/* Contact + Phone */}
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block mb-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Company Name *</label>
-                    <Input value={form.company_name} onChange={(e) => setField("company_name", e.target.value)} placeholder="e.g. SkyTravel DMC" id="b2b-company" className="h-9" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 md:gap-4">
-                    <div>
-                      <label className="block mb-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Contact Person</label>
-                      <Input value={form.contact_person} onChange={(e) => setField("contact_person", e.target.value)} placeholder="Name" id="b2b-contact" className="h-9" />
-                    </div>
-                    <div>
-                      <label className="block mb-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Phone</label>
-                      <Input value={form.phone} onChange={(e) => setField("phone", e.target.value)} placeholder="+91 ..." id="b2b-phone" className="h-9" />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 md:gap-4">
-                    <div>
-                      <label className="block mb-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Email</label>
-                      <Input value={form.email} onChange={(e) => setField("email", e.target.value)} placeholder="email@company.com" id="b2b-email" className="h-9" />
-                    </div>
-                    <div>
-                      <label className="block mb-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">GST Number</label>
-                      <Input value={form.gst_number} onChange={(e) => setField("gst_number", e.target.value)} placeholder="GST" id="b2b-gst" className="h-9" />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 md:gap-4">
-                    <div>
-                      <label className="block mb-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Category</label>
-                      <select
-                        value={form.category}
-                        onChange={(e) => setField("category", e.target.value)}
-                        id="b2b-category"
-                        className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block mb-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Commission %</label>
-                      <Input type="number" step="0.5" value={form.commission_pct} onChange={(e) => setField("commission_pct", e.target.value)} placeholder="e.g. 10" id="b2b-commission" className="h-9" />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 md:gap-4">
-                    <div>
-                      <label className="block mb-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">City</label>
-                      <Input value={form.city} onChange={(e) => setField("city", e.target.value)} placeholder="e.g. Dubai" id="b2b-city" className="h-9" />
-                    </div>
-                    <div>
-                      <label className="block mb-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Country</label>
-                      <Input value={form.country} onChange={(e) => setField("country", e.target.value)} placeholder="India" id="b2b-country" className="h-9" />
-                    </div>
+                    <label className="block mb-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Contact Person</label>
+                    <Input value={form.contact_person} onChange={(e) => setField("contact_person", e.target.value)} placeholder="Name" id="b2b-contact" className="h-9" />
                   </div>
                   <div>
-                    <label className="block mb-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Notes</label>
-                    <textarea
-                      value={form.notes}
-                      onChange={(e) => setField("notes", e.target.value)}
-                      placeholder="Internal notes about this partner..."
-                      rows={3}
-                      className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-y"
-                      id="b2b-notes"
-                    />
+                    <label className="block mb-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Phone</label>
+                    <Input value={form.phone} onChange={(e) => setField("phone", e.target.value)} placeholder="+91 ..." id="b2b-phone" className="h-9" />
                   </div>
-                  {showPanel === "edit" && (
-                    <div className="flex items-center gap-2 mt-2">
-                      <input type="checkbox" checked={form.is_active} onChange={(e) => setField("is_active", e.target.checked)} id="b2b-active" className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary" />
-                      <label htmlFor="b2b-active" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Active Partner</label>
-                    </div>
-                  )}
                 </div>
-                <div className="flex items-center justify-end gap-3 mt-8">
-                  <Button variant="ghost" onClick={() => setShowPanel(null)}>Cancel</Button>
-                  <Button variant="primary" onClick={handleSave} disabled={saving}>
-                    {saving ? "Saving..." : showPanel === "edit" ? "Update Partner" : "Add Partner"}
-                  </Button>
+
+                {/* Email + GST */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block mb-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Email</label>
+                    <Input value={form.email} onChange={(e) => setField("email", e.target.value)} placeholder="email@company.com" id="b2b-email" className="h-9" />
+                  </div>
+                  <div>
+                    <label className="block mb-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">GST Number</label>
+                    <Input value={form.gst_number} onChange={(e) => setField("gst_number", e.target.value)} placeholder="GST" id="b2b-gst" className="h-9" />
+                  </div>
                 </div>
+
+                {/* Category + Commission */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block mb-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Category</label>
+                    <select value={form.category} onChange={(e) => setField("category", e.target.value)} id="b2b-category" className={INPUT_CLS}>
+                      {CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block mb-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Commission %</label>
+                    <Input type="number" step="0.5" value={form.commission_pct} onChange={(e) => setField("commission_pct", e.target.value)} placeholder="e.g. 10" id="b2b-commission" className="h-9" />
+                  </div>
+                </div>
+
+                {/* City + Base Country */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block mb-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">City</label>
+                    <Input value={form.city} onChange={(e) => setField("city", e.target.value)} placeholder="e.g. Dubai" id="b2b-city" className="h-9" />
+                  </div>
+                  <div>
+                    <label className="block mb-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Base Country</label>
+                    <Input value={form.country} onChange={(e) => setField("country", e.target.value)} placeholder="India" id="b2b-country" className="h-9" />
+                  </div>
+                </div>
+
+                {/* Countries operated in */}
+                <div>
+                  <label className="block mb-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Countries Operated In
+                  </label>
+                  <CountriesInput
+                    value={form.countries}
+                    onChange={(v) => setField("countries", v)}
+                  />
+                  <p className="mt-1 text-[11px] text-muted-foreground">Type a country name and press Enter to add. Used to filter partners when connecting to a lead.</p>
+                </div>
+
+                {/* Notes */}
+                <div>
+                  <label className="block mb-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Notes</label>
+                  <textarea
+                    value={form.notes}
+                    onChange={(e) => setField("notes", e.target.value)}
+                    placeholder="Internal notes about this partner..."
+                    rows={3}
+                    className="flex min-h-[80px] w-full rounded-md border border-input bg-white px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y"
+                    id="b2b-notes"
+                  />
+                </div>
+
+                {showPanel === "edit" && (
+                  <div className="flex items-center gap-2 pt-1">
+                    <input type="checkbox" checked={form.is_active} onChange={(e) => setField("is_active", e.target.checked)} id="b2b-active" className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary" />
+                    <label htmlFor="b2b-active" className="text-sm font-medium">Active Partner</label>
+                  </div>
+                )}
               </div>
-            </div>
-          </div>
+          </SidePanel>
         )}
       </PageContainer>
     </AppShell>

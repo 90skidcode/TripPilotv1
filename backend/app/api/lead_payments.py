@@ -45,12 +45,14 @@ def list_payments(
     lead = db.query(Lead).filter(Lead.id == lead_id, Lead.org_id == current_user.org_id).first()
     if not lead:
         raise HTTPException(404, "Lead not found")
+    from app.models.lead_costing import LeadCosting
+    costing = db.query(LeadCosting).filter(LeadCosting.lead_id == lead_id).first()
     payments = db.query(LeadPayment).filter(LeadPayment.lead_id == lead_id).order_by(LeadPayment.payment_date.desc()).all()
     total_paid = sum(p.amount for p in payments)
     return {
         "payments": [_serialize(p) for p in payments],
         "total_paid": total_paid,
-        "customer_price": lead.costing.customer_price if lead.costing else 0,
+        "customer_price": costing.customer_price if costing else 0,
     }
 
 

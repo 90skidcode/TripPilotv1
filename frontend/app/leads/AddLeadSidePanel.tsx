@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { leadsApi, authApi, customersApi, b2bPartnersApi } from "@/lib/api";
 import { useToast } from "@/components/Toast";
+import SidePanel from "@/components/SidePanel";
 import AddCustomerModal from "./AddCustomerModal";
 
 const SOURCES = ["whatsapp", "instagram", "website", "referral", "advertisement", "manual", "email"];
@@ -28,6 +29,9 @@ export default function AddLeadSidePanel({ lead, initialUseAi, onClose, onSaved 
     stage: lead?.stage || "fresh",
     destination: lead?.destination || "",
     trip_type: lead?.trip_type || "",
+    travel_date: lead?.travel_date ? new Date(lead.travel_date).toISOString().split("T")[0] : "",
+    num_nights: lead?.num_nights || "",
+    num_days: lead?.num_days || "",
     budget: lead?.budget || "",
     num_adults: lead?.num_adults || "",
     num_children: lead?.num_children || "",
@@ -151,6 +155,9 @@ export default function AddLeadSidePanel({ lead, initialUseAi, onClose, onSaved 
           stage: form.stage,
           destination: form.destination || null,
           trip_type: form.trip_type || null,
+          travel_date: form.travel_date || null,
+          num_nights: form.num_nights ? Number(form.num_nights) : null,
+          num_days: form.num_days ? Number(form.num_days) : null,
           budget: form.budget || null,
           num_adults: form.num_adults ? Number(form.num_adults) : null,
           num_children: form.num_children ? Number(form.num_children) : null,
@@ -186,16 +193,17 @@ export default function AddLeadSidePanel({ lead, initialUseAi, onClose, onSaved 
 
   return (
     <>
-      <div className="side-panel-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-        <div className="side-panel">
-          <div className="side-panel-header">
-            <h2 className="side-panel-title">{isEdit ? "Edit Lead" : "Add New Lead"}</h2>
-            <button className="btn btn-ghost btn-icon" onClick={onClose} id="panel-close-btn">✕</button>
-          </div>
-
-          <div className="side-panel-content">
-            <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", padding: "0 24px" }}>
-              <div style={{ flex: 1, overflowY: "auto", paddingTop: 12 }}>
+      <SidePanel
+        title={isEdit ? "Edit Lead" : "Add New Lead"}
+        subtitle={isEdit ? "Update lead details" : "Fill in the details to create a new lead"}
+        onClose={onClose}
+        onSave={handleSubmit}
+        saveLabel={isEdit ? "Update Lead" : "Save Lead"}
+        saving={loading}
+      >
+        <div style={{ padding: "0 24px" }}>
+          <form id="lead-form" onSubmit={handleSubmit}>
+            <div style={{ paddingTop: 12 }}>
                 {/* AI Toggle */}
                 {!isEdit && (
                   <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px", background: "linear-gradient(135deg, #f3e8ff 0%, #ede9fe 100%)", borderRadius: "8px", marginBottom: 20, border: "1px solid #e9d5ff" }}>
@@ -343,6 +351,18 @@ export default function AddLeadSidePanel({ lead, initialUseAi, onClose, onSaved 
                           <label className="input-label">Trip Type</label>
                           <input id="lead-trip-type" className="input" placeholder="e.g. Honeymoon, Family" value={form.trip_type} onChange={(e) => update("trip_type", e.target.value)} />
                         </div>
+                        <div className="input-group" style={{ gridColumn: "1 / -1" }}>
+                          <label className="input-label">Travel Date</label>
+                          <input id="lead-travel-date" className="input" type="date" value={form.travel_date} onChange={(e) => update("travel_date", e.target.value)} />
+                        </div>
+                        <div className="input-group">
+                          <label className="input-label">Nights</label>
+                          <input id="lead-num-nights" className="input" type="number" min={0} placeholder="e.g. 5" value={form.num_nights} onChange={(e) => update("num_nights", e.target.value)} />
+                        </div>
+                        <div className="input-group">
+                          <label className="input-label">Days</label>
+                          <input id="lead-num-days" className="input" type="number" min={0} placeholder="e.g. 6" value={form.num_days} onChange={(e) => update("num_days", e.target.value)} />
+                        </div>
                         <div className="input-group">
                           <label className="input-label">Budget</label>
                           <input id="lead-budget" className="input" placeholder="e.g. ₹1,00,000" value={form.budget} onChange={(e) => update("budget", e.target.value)} />
@@ -410,20 +430,10 @@ export default function AddLeadSidePanel({ lead, initialUseAi, onClose, onSaved 
                     {error}
                   </div>
                 )}
-              </div>
-
-              <div style={{ borderTop: "1px solid var(--border)", padding: "16px 0", display: "flex", justifyContent: "flex-end", gap: 12 }}>
-                <button type="button" className="btn btn-outline" onClick={onClose} id="panel-cancel-btn">
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary" disabled={loading} id="panel-save-btn">
-                  {loading ? "Saving…" : isEdit ? "Update Lead" : "Save Lead"}
-                </button>
-              </div>
-            </form>
-          </div>
+            </div>
+          </form>
         </div>
-      </div>
+      </SidePanel>
 
       {showAddCustomer && (
         <AddCustomerModal

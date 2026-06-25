@@ -30,7 +30,14 @@ interface Props {
 export default function FilterDrawer({ filters, onApply, onClose }: Props) {
   const [local, setLocal] = useState({ ...filters });
   const [mounted, setMounted] = useState(false);
+  const [closing, setClosing] = useState(false);
   useEffect(() => { setMounted(true); }, []);
+
+  function close() {
+    if (closing) return;
+    setClosing(true);
+    setTimeout(onClose, 270);
+  }
 
   function toggle(key: string, value: string) {
     setLocal((f: any) => ({ ...f, [key]: f[key] === value ? undefined : value }));
@@ -42,12 +49,13 @@ export default function FilterDrawer({ filters, onApply, onClose }: Props) {
     <>
       {/* Overlay */}
       <div
-        onClick={onClose}
+        onClick={close}
         style={{
           position: "fixed",
           inset: 0,
           backgroundColor: "rgba(0,0,0,0.45)",
           zIndex: 9998,
+          animation: closing ? "overlayFadeOut 0.27s ease-in forwards" : "overlayFadeIn 0.25s ease-out forwards",
         }}
       />
 
@@ -64,13 +72,14 @@ export default function FilterDrawer({ filters, onApply, onClose }: Props) {
           flexDirection: "column",
           boxShadow: "-4px 0 24px rgba(0,0,0,0.15)",
           zIndex: 9999,
+          animation: closing ? "slideOutRight 0.27s ease-in forwards" : "slideInRight 0.25s ease-out forwards",
         }}
       >
         {/* Header */}
         <div style={{ padding: "20px 24px", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
           <h3 style={{ fontWeight: 700, fontSize: 16, margin: 0 }}>Filters</h3>
           <button
-            onClick={onClose}
+            onClick={close}
             style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#6b7280", lineHeight: 1 }}
           >
             ✕
@@ -154,16 +163,16 @@ export default function FilterDrawer({ filters, onApply, onClose }: Props) {
         </div>
 
         {/* Footer */}
-        <div style={{ padding: "16px 24px", borderTop: "1px solid #e5e7eb", display: "flex", flexDirection: "column", gap: 8, flexShrink: 0 }}>
+        <div style={{ padding: "16px 24px", borderTop: "1px solid #e5e7eb", display: "flex", justifyContent: "flex-end", gap: 10, flexShrink: 0 }}>
           <button
             onClick={() => setLocal({})}
-            style={{ width: "100%", padding: "10px", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600, color: "#374151" }}
+            style={{ padding: "9px 16px", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600, color: "#374151" }}
           >
             Clear All
           </button>
           <button
             onClick={() => onApply(local)}
-            style={{ width: "100%", padding: "10px", borderRadius: 8, border: "none", background: "#3b82f6", cursor: "pointer", fontSize: 14, fontWeight: 600, color: "#fff" }}
+            style={{ padding: "9px 16px", borderRadius: 8, border: "none", background: "#3b82f6", cursor: "pointer", fontSize: 14, fontWeight: 600, color: "#fff" }}
           >
             Apply Filters
           </button>

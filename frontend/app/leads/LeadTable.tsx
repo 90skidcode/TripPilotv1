@@ -216,8 +216,22 @@ export default function LeadTable({
                   </span>
                 </td>
 
-                {/* Destination */}
-                <td className="px-4 py-3 text-foreground">{lead.destination || "—"}</td>
+                {/* Destination + travel info */}
+                <td className="px-4 py-3">
+                  <div className="text-foreground font-medium">{lead.destination || "—"}</div>
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                    {(lead.num_nights || lead.num_days) && (
+                      <span className="text-xs text-muted-foreground font-semibold">
+                        {lead.num_nights ? `${lead.num_nights}N` : ""}{lead.num_days ? `${lead.num_days}D` : ""}
+                      </span>
+                    )}
+                    {lead.travel_date && (
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(lead.travel_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                      </span>
+                    )}
+                  </div>
+                </td>
 
                 {/* Stage */}
                 <td className="px-4 py-3 whitespace-nowrap">

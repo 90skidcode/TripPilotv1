@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import { PageHeader, PageContainer } from "@/components/layout";
@@ -29,6 +30,7 @@ export default function LeadsPage() {
   const [pages, setPages] = useState(1);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search);
   const [filters, setFilters] = useState<any>({});
   const [tab, setTab] = useState<string>("all");
   const [showAdd, setShowAdd] = useState(false);
@@ -39,6 +41,8 @@ export default function LeadsPage() {
 
   const fetchLeads = useCallback(async () => {
     setLoading(true);
+    setLeads([]);
+    setTotal(0);
     try {
       if (tab === "today-reminders") {
         const data = await leadsApi.getTodayReminders();
@@ -47,7 +51,7 @@ export default function LeadsPage() {
         setPages(1);
       } else {
         const params: any = { page, per_page: 20, ...filters };
-        if (search) params.search = search;
+        if (debouncedSearch) params.search = debouncedSearch;
         if (tab === "unassigned") {
           params.unassigned = true;
         } else if (tab !== "all") {
@@ -63,7 +67,7 @@ export default function LeadsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, filters, tab]);
+  }, [page, debouncedSearch, filters, tab]);
 
   useEffect(() => {
     fetchLeads();
@@ -127,6 +131,10 @@ export default function LeadsPage() {
               key={t.id}
               id={`leads-tab-${t.id}`}
               onClick={() => {
+                if (t.id !== tab) {
+                  setLeads([]);
+                  setTotal(0);
+                }
                 setTab(t.id as any);
                 setPage(1);
               }}
@@ -140,9 +148,9 @@ export default function LeadsPage() {
               {t.icon && <t.icon className="h-4 w-4" />}
               {t.label}
               {t.count !== null && (
-                <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 text-xs font-semibold text-muted-foreground">
-                  {t.count}
-                </span>
+                loading
+                  ? <span className="ml-1 inline-block w-6 h-4 rounded-full bg-muted animate-pulse" />
+                  : <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 text-xs font-semibold text-muted-foreground">{t.count}</span>
               )}
             </button>
           ))}
@@ -246,7 +254,7 @@ export default function LeadsPage() {
             />
 
             {/* Pagination */}
-            {pages > 1 && (
+            {!loading && pages > 1 && (
               <>
                 <Separator />
                 <div className="p-6 flex items-center justify-between bg-muted/50">

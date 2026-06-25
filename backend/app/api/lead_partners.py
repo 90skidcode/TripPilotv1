@@ -21,12 +21,14 @@ LINK_NOT_FOUND = "Partner link not found"
 class PartnerLinkCreate(BaseModel):
     b2b_partner_id: int
     role: Optional[str] = None
+    country: Optional[str] = None
     cost: Optional[float] = None
     notes: Optional[str] = None
 
 
 class PartnerLinkUpdate(BaseModel):
     role: Optional[str] = None
+    country: Optional[str] = None
     cost: Optional[float] = None
     notes: Optional[str] = None
 
@@ -37,6 +39,8 @@ class PartnerLinkOut(BaseModel):
     company_name: Optional[str] = None
     category: Optional[str] = None
     role: Optional[str] = None
+    country: Optional[str] = None
+    countries: Optional[List[str]] = []
     cost: Optional[float] = None
     notes: Optional[str] = None
     created_at: datetime
@@ -60,6 +64,8 @@ def _serialize(link: LeadPartner) -> dict:
         "company_name": partner.company_name if partner else None,
         "category": category.value if hasattr(category, "value") else category,
         "role": link.role,
+        "country": link.country,
+        "countries": partner.countries or [] if partner else [],
         "cost": link.cost,
         "notes": link.notes,
         "created_at": link.created_at,
@@ -101,6 +107,7 @@ def connect_lead_partner(
         lead_id=lead_id,
         b2b_partner_id=payload.b2b_partner_id,
         role=payload.role,
+        country=payload.country,
         cost=payload.cost,
         notes=payload.notes,
     )
