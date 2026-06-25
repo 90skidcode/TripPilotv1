@@ -183,8 +183,7 @@ function InventoryContent() {
     }
   }
 
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSave() {
     if (!canWrite) return;
     setSaving(true);
     try {
@@ -529,7 +528,7 @@ function InventoryContent() {
           saveLabel={editingItem ? "Update" : "Save"}
           saving={saving}
         >
-            <form onSubmit={handleSave}>
+            <form onSubmit={(e) => { e.preventDefault(); handleSave(); }}>
               <div style={{ padding: 24 }}>
                 {activeTab === "hotels" ? (
                   <div style={{ display: "grid", gap: 16 }}>
