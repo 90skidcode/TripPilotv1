@@ -412,7 +412,7 @@ export default function AddLeadSidePanel({ lead, initialUseAi, onClose, onSaved 
                 )}
               </div>
 
-              <div style={{ borderTop: "1px solid var(--border)", padding: "16px 0", display: "flex", gap: 12 }}>
+              <div style={{ borderTop: "1px solid var(--border)", padding: "16px 0", display: "flex", justifyContent: "flex-end", gap: 12 }}>
                 <button type="button" className="btn btn-outline" onClick={onClose} id="panel-cancel-btn">
                   Cancel
                 </button>

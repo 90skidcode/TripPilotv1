@@ -613,36 +613,55 @@ def import_leads_csv(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("leads", "write")),
 ):
+    valid_sources = {s.value for s in LeadSource}
+    valid_stages = {s.value for s in LeadStage}
+
     content = file.file.read().decode("utf-8")
     reader = csv.DictReader(io.StringIO(content))
     created = 0
     for row in reader:
-        customer_name = row.get("name") or row.get("Lead Name") or row.get("Customer Name") or "Unknown"
-        customer_phone = row.get("phone") or row.get("Phone") or "0000000000"
-        customer_email = row.get("email") or row.get("Email")
+        customer_name = row.get("name") or "Unknown"
+        customer_phone = row.get("phone") or "0000000000"
+        customer_email = row.get("email") or None
+        whatsapp_number = row.get("whatsapp_number") or None
 
-        # Check if customer exists
         customer = db.query(Customer).filter(
             Customer.phone == customer_phone,
             Customer.org_id == current_user.org_id
         ).first()
 
-        # Create customer if not exists
         if not customer:
             customer = Customer(
                 org_id=current_user.org_id,
                 name=customer_name,
                 phone=customer_phone,
-                email=customer_email,
+                email=customer_email or None,
+                whatsapp_number=whatsapp_number,
             )
             db.add(customer)
             db.flush()
 
+        raw_source = (row.get("source") or "").strip().lower()
+        raw_stage = (row.get("stage") or "").strip().lower()
+
+        def safe_int(val):
+            try:
+                return int(val) if val and str(val).strip() else None
+            except (ValueError, TypeError):
+                return None
+
         lead = Lead(
             org_id=current_user.org_id,
             customer_id=customer.id,
-            source=LeadSource.manual,
-            stage=LeadStage.fresh,
+            source=LeadSource(raw_source) if raw_source in valid_sources else LeadSource.manual,
+            stage=LeadStage(raw_stage) if raw_stage in valid_stages else LeadStage.fresh,
+            destination=row.get("destination") or None,
+            trip_type=row.get("trip_type") or None,
+            budget=row.get("budget") or None,
+            num_adults=safe_int(row.get("num_adults")),
+            num_children=safe_int(row.get("num_children")),
+            num_infants=safe_int(row.get("num_infants")),
+            notes=row.get("notes") or None,
             created_by=current_user.id,
         )
         db.add(lead)

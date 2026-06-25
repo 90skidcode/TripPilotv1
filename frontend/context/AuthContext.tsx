@@ -88,12 +88,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const token = getToken();
-    if (token) {
-      refreshUser();
-    } else {
-      setUser(null);
+    if (!token) {
       setLoading(false);
+      return;
     }
+    // Populate from cache immediately so the UI renders without waiting for /auth/me
+    const cached = localStorage.getItem("trippilot_user");
+    if (cached) {
+      try {
+        setUser(JSON.parse(cached));
+        setLoading(false);
+      } catch {}
+    }
+    // Validate token in background; logs out if expired
+    refreshUser();
   }, []);
 
   const value: AuthContextType = {

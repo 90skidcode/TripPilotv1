@@ -6,7 +6,12 @@ export default function HomePage() {
   const router = useRouter();
   useEffect(() => {
     const token = localStorage.getItem("trippilot_token");
-    router.replace(token ? "/dashboard" : "/login");
+    const target = token ? "/dashboard" : "/login";
+    try {
+      router.replace(target);
+    } catch {
+      window.location.replace(target);
+    }
   }, [router]);
   return null;
 }

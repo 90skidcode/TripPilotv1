@@ -12,7 +12,11 @@ export default function AppShell({ children, title }: { children: React.ReactNod
 
   useEffect(() => {
     if (!loading && !user) {
-      router.replace("/login");
+      try {
+        router.replace("/login");
+      } catch {
+        window.location.replace("/login");
+      }
     }
   }, [user, loading, router]);
 

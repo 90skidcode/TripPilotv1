@@ -88,6 +88,44 @@ def get_lead_followups(
     return followups
 
 
+# Get all pending follow-ups for current user
+@router.get("/followups/pending", response_model=List[FollowupOut])
+def get_pending_followups(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    followups = (
+        db.query(Followup)
+        .filter(Followup.created_by == current_user.id)
+        .filter(Followup.status == FollowupStatus.pending)
+        .order_by(Followup.scheduled_date)
+        .all()
+    )
+    return followups
+
+
+# Get follow-ups scheduled for today
+from datetime import date, timedelta
+@router.get("/followups/today", response_model=List[FollowupOut])
+def get_today_followups(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    today = date.today()
+    tomorrow = today + timedelta(days=1)
+
+    followups = (
+        db.query(Followup)
+        .filter(Followup.created_by == current_user.id)
+        .filter(Followup.status == FollowupStatus.pending)
+        .filter(Followup.scheduled_date >= datetime(today.year, today.month, today.day, 0, 0, 0))
+        .filter(Followup.scheduled_date < datetime(tomorrow.year, tomorrow.month, tomorrow.day, 0, 0, 0))
+        .order_by(Followup.scheduled_date)
+        .all()
+    )
+    return followups
+
+
 # Get single follow-up
 @router.get("/followups/{followup_id}", response_model=FollowupOut)
 def get_followup(
@@ -134,41 +172,3 @@ def delete_followup(
 
     db.delete(followup)
     db.commit()
-
-
-# Get all pending follow-ups for current user
-@router.get("/followups/pending", response_model=List[FollowupOut])
-def get_pending_followups(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    followups = (
-        db.query(Followup)
-        .filter(Followup.created_by == current_user.id)
-        .filter(Followup.status == FollowupStatus.pending)
-        .order_by(Followup.scheduled_date)
-        .all()
-    )
-    return followups
-
-
-# Get follow-ups scheduled for today
-from datetime import date, timedelta
-@router.get("/followups/today", response_model=List[FollowupOut])
-def get_today_followups(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    today = date.today()
-    tomorrow = today + timedelta(days=1)
-
-    followups = (
-        db.query(Followup)
-        .filter(Followup.created_by == current_user.id)
-        .filter(Followup.status == FollowupStatus.pending)
-        .filter(Followup.scheduled_date >= datetime(today.year, today.month, today.day, 0, 0, 0))
-        .filter(Followup.scheduled_date < datetime(tomorrow.year, tomorrow.month, tomorrow.day, 0, 0, 0))
-        .order_by(Followup.scheduled_date)
-        .all()
-    )
-    return followups

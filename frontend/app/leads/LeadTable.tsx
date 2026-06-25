@@ -147,10 +147,12 @@ export default function LeadTable({
 
                 {/* Lead (avatar + name + email) */}
                 <td className="px-4 py-3">
-                  <button
-                    type="button"
+                  <div
+                    role="button"
+                    tabIndex={0}
                     onClick={() => onViewDetails(lead.id)}
-                    className="flex items-center gap-3 text-left"
+                    onKeyDown={(e) => e.key === "Enter" && onViewDetails(lead.id)}
+                    className="flex items-center gap-3 text-left cursor-pointer"
                   >
                     <Avatar name={customer?.name} />
                     <div className="min-w-0">
@@ -184,7 +186,7 @@ export default function LeadTable({
                         )}
                       </div>
                     </div>
-                  </button>
+                  </div>
                 </td>
 
                 {/* Phone */}

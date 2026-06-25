@@ -18,6 +18,7 @@ import {
   ChevronLeft,
   ChevronDown,
   LogOut,
+  Plane,
 } from "lucide-react";
 
 const NAV = [
@@ -40,7 +41,15 @@ const NAV = [
     sub: [
       { label: "Itinerary Builder", href: "/itinerary", screen: "itinerary" },
       { label: "Hotel Voucher", href: "/vouchers", screen: "vouchers" },
+      { label: "Flight Tickets", href: "/flights", screen: "vouchers" },
       { label: "Generate Bill", href: "/invoice", screen: null },
+    ],
+  },
+  {
+    icon: Hotel, label: "Inventory", href: "/inventory", screen: "inventory",
+    sub: [
+      { label: "Hotel Inventory", href: "/inventory?tab=hotels", screen: "inventory" },
+      { label: "Activity Inventory", href: "/inventory?tab=activities", screen: "inventory" },
     ],
   },
   { icon: Settings, label: "Settings", href: "/settings", screen: null },
@@ -72,7 +81,13 @@ export default function Sidebar({ collapsed, onToggle }: { collapsed: boolean; o
   const pathname = usePathname();
   const router = useRouter();
   const { hasPermission, logout } = useAuth();
-  const [openMenus, setOpenMenus] = useState<string[]>(["Master Leads"]);
+
+  // Auto-open any menu whose sub-item matches the current path
+  const [openMenus, setOpenMenus] = useState<string[]>(() =>
+    NAV.filter((item) =>
+      item.sub?.some((s) => pathname.startsWith(s.href.split("?")[0]))
+    ).map((item) => item.label)
+  );
 
   function toggleMenu(label: string) {
     setOpenMenus((prev) =>
@@ -87,7 +102,11 @@ export default function Sidebar({ collapsed, onToggle }: { collapsed: boolean; o
 
   function handleLogout() {
     logout();
-    router.push("/login");
+    try {
+      router.replace("/login");
+    } catch {
+      window.location.replace("/login");
+    }
   }
 
   return (
@@ -104,7 +123,9 @@ export default function Sidebar({ collapsed, onToggle }: { collapsed: boolean; o
         {NAV.map((item) => {
           if (!canView(item)) return null;
 
-          const isActive = pathname.startsWith(item.href) && item.href !== "/";
+          const isActive = item.sub
+            ? item.sub.some((s) => pathname.startsWith(s.href.split("?")[0]))
+            : pathname.startsWith(item.href) && item.href !== "/";
           const isOpen = openMenus.includes(item.label);
           const visibleSubs = item.sub?.filter(canView) || [];
 

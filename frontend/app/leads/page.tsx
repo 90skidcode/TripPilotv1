@@ -14,6 +14,7 @@ import { useAuth } from "@/context/AuthContext";
 import AddLeadSidePanel from "./AddLeadSidePanel";
 import FilterDrawer from "./FilterDrawer";
 import LeadTable from "./LeadTable";
+import CsvImportModal from "./CsvImportModal";
 import { cn } from "@/lib/cn";
 import { Filter, Download, Upload, Plus, Sparkles, Phone } from "lucide-react";
 
@@ -33,6 +34,7 @@ export default function LeadsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [useAiForAdd, setUseAiForAdd] = useState(false);
   const [showFilter, setShowFilter] = useState(false);
+  const [showCsvImport, setShowCsvImport] = useState(false);
   const [editLead, setEditLead] = useState<any>(null);
 
   const fetchLeads = useCallback(async () => {
@@ -181,52 +183,14 @@ export default function LeadsPage() {
           </Button>
 
           {canWrite && (
-            <>
-              <label htmlFor="csv-upload" className="cursor-pointer">
-                <Button
-                  id="leads-import-btn"
-                  variant="outline"
-                  size="sm"
-                  asChild
-                >
-                  <span><Upload className="h-4 w-4" /> Upload CSV</span>
-                </Button>
-              </label>
-              <input
-                id="csv-upload"
-                type="file"
-                accept=".csv"
-                className="hidden"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  try {
-                    const form = new FormData();
-                    form.append("file", file);
-                    const token = localStorage.getItem("trippilot_token");
-                    const res = await fetch(
-                      `${process.env.NEXT_PUBLIC_API_URL}/leads/import/csv`,
-                      {
-                        method: "POST",
-                        headers: { Authorization: `Bearer ${token}` },
-                        body: form,
-                      }
-                    );
-                    if (!res.ok) {
-                      const err = await res.json();
-                      alert(`Error: ${err.message || "Failed to import CSV"}`);
-                      return;
-                    }
-                    const result = await res.json();
-                    alert(`✅ Successfully imported ${result.created} leads`);
-                    fetchLeads();
-                  } catch (error: any) {
-                    alert(`Error: ${error.message || "Failed to import CSV"}`);
-                  }
-                  e.target.value = "";
-                }}
-              />
-            </>
+            <Button
+              id="leads-import-btn"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowCsvImport(true)}
+            >
+              <Upload className="h-4 w-4" /> Upload CSV
+            </Button>
           )}
 
           {canWrite && (
@@ -354,6 +318,16 @@ export default function LeadsPage() {
             setPage(1);
           }}
           onClose={() => setShowFilter(false)}
+        />
+      )}
+
+      {showCsvImport && (
+        <CsvImportModal
+          onClose={() => setShowCsvImport(false)}
+          onImported={() => {
+            setShowCsvImport(false);
+            fetchLeads();
+          }}
         />
       )}
 

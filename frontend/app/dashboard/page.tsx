@@ -43,7 +43,7 @@ export default function DashboardPage() {
   const [loadingInsights, setLoadingInsights] = useState(true);
 
   useEffect(() => {
-    Promise.all([
+    Promise.allSettled([
       dashboardApi.summary(),
       dashboardApi.bySource(),
       dashboardApi.byStage(),
@@ -52,16 +52,17 @@ export default function DashboardPage() {
       leadsApi.getTodayReminders(),
     ])
       .then(([s, src, stg, lb, followups, reminderLeads]) => {
-        setSummary(s);
-        setBySource(src);
-        setByStage(stg);
-        setLeaderboard(lb);
-        setTodayFollowups(followups || []);
-        const leadMap: Record<number, any> = {};
-        (reminderLeads || []).forEach((lead: any) => { leadMap[lead.id] = lead; });
-        setTodayLeadsMap(leadMap);
+        if (s.status === "fulfilled") setSummary(s.value);
+        if (src.status === "fulfilled") setBySource(src.value);
+        if (stg.status === "fulfilled") setByStage(stg.value);
+        if (lb.status === "fulfilled") setLeaderboard(lb.value);
+        if (followups.status === "fulfilled") setTodayFollowups(followups.value || []);
+        if (reminderLeads.status === "fulfilled") {
+          const leadMap: Record<number, any> = {};
+          (reminderLeads.value || []).forEach((lead: any) => { leadMap[lead.id] = lead; });
+          setTodayLeadsMap(leadMap);
+        }
       })
-      .catch(console.error)
       .finally(() => setLoading(false));
 
     dashboardApi.aiInsights()
@@ -465,7 +466,7 @@ export default function DashboardPage() {
                       </thead>
                       <tbody>
                         {leaderboard.map((row, i) => (
-                          <tr key={row.agent} className="border-b border-border hover:bg-muted/50">
+                          <tr key={i} className="border-b border-border hover:bg-muted/50">
                             <td className="py-3 px-4 font-bold">#{i + 1}</td>
                             <td className="py-3 px-4 font-semibold">{row.agent}</td>
                             <td className="py-3 px-4">{row.leads}</td>
