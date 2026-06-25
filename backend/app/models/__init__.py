@@ -13,3 +13,4 @@ from app.models.message import Message
 from app.models.tools import HotelVoucher, Invoice, FlightTicket
 from app.models.activity import LeadActivity
 from app.models.lead_partner import LeadPartner
+from app.models.lead_payment import LeadPayment

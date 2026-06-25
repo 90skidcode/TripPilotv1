@@ -111,6 +111,13 @@ export const leadsApi = {
   },
 };
 
+// ── Lead Payments ──
+export const leadPaymentsApi = {
+  list: (leadId: number) => api.get<any>(`/leads/${leadId}/payments`),
+  create: (leadId: number, data: any) => api.post<any>(`/leads/${leadId}/payments`, data),
+  delete: (leadId: number, paymentId: number) => api.delete(`/leads/${leadId}/payments/${paymentId}`),
+};
+
 // ── Follow-ups ──
 export const followupsApi = {
   // Get all follow-ups for a lead

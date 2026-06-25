@@ -10,12 +10,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar } from "@/components/ui/avatar";
 import { Spinner } from "@/components/ui/spinner";
-import { leadsApi, followupsApi, leadCostingApi, b2bPartnersApi } from "@/lib/api";
+import { leadsApi, followupsApi, leadCostingApi, b2bPartnersApi, leadPaymentsApi } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/cn";
 import AddFollowupModal from "../AddFollowupModal";
 import FollowupList from "../FollowupList";
 import AddLeadSidePanel from "../AddLeadSidePanel";
+import AddPaymentModal from "../AddPaymentModal";
 import {
   ArrowLeft,
   Pencil,
@@ -36,6 +37,9 @@ import {
   ExternalLink,
   Clock,
   Trash2,
+  CreditCard,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 
 const STAGE_STYLES: Record<string, { label: string; className: string }> = {
@@ -109,7 +113,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   const [noteText, setNoteText] = useState("");
   const [savingNote, setSavingNote] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"overview" | "itineraries" | "vouchers" | "flights" | "b2b" | "invoices" | "timeline">("overview");
+  const [tab, setTab] = useState<"overview" | "itineraries" | "vouchers" | "flights" | "b2b" | "invoices" | "payments" | "timeline">("overview");
   const [partnerOptions, setPartnerOptions] = useState<any[]>([]);
   const [showConnectPartner, setShowConnectPartner] = useState(false);
   const [partnerForm, setPartnerForm] = useState({ b2b_partner_id: "", role: "", cost: "", notes: "" });
@@ -118,6 +122,9 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   const [showEdit, setShowEdit] = useState(false);
   const [costing, setCosting] = useState({ b2b_cost: 0, customer_price: 0, notes: "" });
   const [costingSaving, setCostingSaving] = useState(false);
+  const [payments, setPayments] = useState<any[]>([]);
+  const [totalPaid, setTotalPaid] = useState(0);
+  const [showAddPayment, setShowAddPayment] = useState(false);
 
   useEffect(() => {
     fetchLead();
@@ -125,6 +132,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
     fetchCosting();
     fetchWorkspace();
     fetchActivities();
+    fetchPayments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leadId]);
 
@@ -240,6 +248,24 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
     } catch { /* no costing yet */ }
   }
 
+  async function fetchPayments() {
+    try {
+      const data = await leadPaymentsApi.list(leadId);
+      setPayments(data.payments || []);
+      setTotalPaid(data.total_paid || 0);
+    } catch { /* no payments yet */ }
+  }
+
+  async function handleDeletePayment(paymentId: number) {
+    if (!confirm("Delete this payment record?")) return;
+    try {
+      await leadPaymentsApi.delete(leadId, paymentId);
+      fetchPayments();
+    } catch (err) {
+      console.error("Failed to delete payment:", err);
+    }
+  }
+
   async function saveCosting() {
     setCostingSaving(true);
     try {
@@ -265,6 +291,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
     { id: "flights", label: "Flights", count: counts.flights ?? 0 },
     { id: "b2b", label: "B2B Partners", count: counts.partners ?? 0 },
     { id: "invoices", label: "Invoices", count: counts.invoices },
+    { id: "payments", label: "Payments", count: payments.length },
     { id: "timeline", label: "Timeline", count: activities.length },
   ] as const;
 
@@ -724,6 +751,137 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
             </Card>
           )}
 
+          {/* Payments tab */}
+          {tab === "payments" && (() => {
+            const customerPrice = costing.customer_price || 0;
+            const outstanding = Math.max(0, customerPrice - totalPaid);
+            const isPaidFull = customerPrice > 0 && outstanding === 0;
+            const paidPct = customerPrice > 0 ? Math.min(100, (totalPaid / customerPrice) * 100) : 0;
+
+            return (
+              <div className="space-y-4">
+                {/* Summary cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <Card>
+                    <CardContent className="py-4 flex items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-700">
+                        <Wallet className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total Price</p>
+                        <p className="text-lg font-bold text-foreground">₹{customerPrice.toLocaleString("en-IN")}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="py-4 flex items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-green-100 text-green-700">
+                        <CheckCircle2 className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total Paid</p>
+                        <p className="text-lg font-bold text-green-700">₹{totalPaid.toLocaleString("en-IN")}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="py-4 flex items-center gap-3">
+                      <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-full", isPaidFull ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700")}>
+                        <AlertCircle className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Outstanding</p>
+                        <p className={cn("text-lg font-bold", isPaidFull ? "text-green-700" : "text-red-600")}>
+                          {isPaidFull ? "Fully Paid" : `₹${outstanding.toLocaleString("en-IN")}`}
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Progress bar */}
+                {customerPrice > 0 && (
+                  <Card>
+                    <CardContent className="py-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-semibold text-foreground">Payment Progress</span>
+                        <span className="text-sm font-bold text-primary">{paidPct.toFixed(0)}%</span>
+                      </div>
+                      <div className="h-2.5 w-full rounded-full bg-muted overflow-hidden">
+                        <div
+                          className={cn("h-full rounded-full transition-all duration-500", isPaidFull ? "bg-green-500" : "bg-primary")}
+                          style={{ width: `${paidPct}%` }}
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Payment list */}
+                <Card>
+                  <CardHeader className="flex-row items-center justify-between">
+                    <CardTitle className="flex items-center gap-2"><CreditCard className="h-4 w-4" /> Payment Records</CardTitle>
+                    {canWrite && (
+                      <Button variant="primary" size="sm" onClick={() => setShowAddPayment(true)}>
+                        <Plus className="h-4 w-4" /> Add Payment
+                      </Button>
+                    )}
+                  </CardHeader>
+                  <CardContent className={cn(payments.length ? "space-y-2.5" : "p-0")}>
+                    {payments.length === 0 ? (
+                      <EmptyTab
+                        icon={CreditCard}
+                        label="No payments recorded yet."
+                        action={canWrite ? (
+                          <Button variant="primary" size="sm" onClick={() => setShowAddPayment(true)}>
+                            <Plus className="h-4 w-4" /> Record First Payment
+                          </Button>
+                        ) : undefined}
+                      />
+                    ) : (
+                      payments.map((p: any) => (
+                        <div key={p.id} className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3.5">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold", p.payment_type === "full" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700")}>
+                              {p.payment_type === "full" ? "F" : "P"}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-bold text-foreground">₹{Number(p.amount).toLocaleString("en-IN")}</span>
+                                <Badge className={cn("capitalize text-[10px]", p.payment_type === "full" ? "bg-green-50 text-green-700 border-green-200" : "bg-blue-50 text-blue-700 border-blue-200")}>
+                                  {p.payment_type}
+                                </Badge>
+                                <Badge className="bg-muted text-muted-foreground border-border text-[10px] capitalize">
+                                  {p.payment_method?.replace("_", " ")}
+                                </Badge>
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {p.payment_date ? new Date(p.payment_date).toLocaleDateString("en-IN") : "—"}
+                                {p.reference_number ? ` • Ref: ${p.reference_number}` : ""}
+                                {p.notes ? ` • ${p.notes}` : ""}
+                              </p>
+                            </div>
+                          </div>
+                          {canWrite && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDeletePayment(p.id)}
+                              title="Delete payment"
+                              className="hover:bg-destructive/10 hover:text-destructive shrink-0"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            );
+          })()}
+
           {/* Timeline tab */}
           {tab === "timeline" && (
             <Card>
@@ -801,6 +959,19 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
           onSaved={() => {
             setShowEdit(false);
             fetchLead();
+          }}
+        />
+      )}
+
+      {showAddPayment && (
+        <AddPaymentModal
+          leadId={leadId}
+          totalPrice={costing.customer_price || 0}
+          totalPaid={totalPaid}
+          onClose={() => setShowAddPayment(false)}
+          onSaved={() => {
+            setShowAddPayment(false);
+            fetchPayments();
           }}
         />
       )}
