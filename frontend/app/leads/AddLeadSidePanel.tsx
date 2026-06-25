@@ -126,8 +126,7 @@ export default function AddLeadSidePanel({ lead, initialUseAi, onClose, onSaved 
     setCustomers((prev) => [customer, ...prev]);
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSubmit() {
     setLoading(true);
     setError("");
 
@@ -202,7 +201,7 @@ export default function AddLeadSidePanel({ lead, initialUseAi, onClose, onSaved 
         saving={loading}
       >
         <div style={{ padding: "0 24px" }}>
-          <form id="lead-form" onSubmit={handleSubmit}>
+          <form id="lead-form" onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
             <div style={{ paddingTop: 12 }}>
                 {/* AI Toggle */}
                 {!isEdit && (
