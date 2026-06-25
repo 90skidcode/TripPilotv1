@@ -41,6 +41,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Filter,
+  X,
 } from "lucide-react";
 
 const STAGE_STYLES: Record<string, { label: string; className: string }> = {
@@ -167,7 +168,6 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
       await leadsApi.connectPartner(leadId, {
         b2b_partner_id: Number(partnerForm.b2b_partner_id),
         role: partnerForm.role || undefined,
-        country: partnerForm.country || undefined,
         cost: partnerForm.cost ? Number(partnerForm.cost) : undefined,
         notes: partnerForm.notes || undefined,
       });
