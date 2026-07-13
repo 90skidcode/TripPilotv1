@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "projects": [
+    {
+      "name": "frontend",
+      "rootDirectory": "frontend",
+      "framework": "nextjs"
+    },
+    {
+      "name": "backend",
+      "rootDirectory": "backend",
+      "framework": "python"
+    },
+    {
+      "name": "admin",
+      "rootDirectory": "admin",
+      "framework": "nextjs"
+    }
+  ]
+}
