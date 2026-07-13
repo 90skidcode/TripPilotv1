@@ -1,20 +1,31 @@
 {
-  "version": 2,
-  "projects": [
-    {
-      "name": "frontend",
-      "rootDirectory": "frontend",
+  "services": {
+    "frontend": {
+      "root": "frontend",
       "framework": "nextjs"
     },
+    "backend": {
+      "root": "backend"
+    },
+    "admin": {
+      "root": "admin",
+      "framework": "nextjs"
+    }
+  },
+  "rewrites": [
     {
-      "name": "backend",
-      "rootDirectory": "backend",
-      "framework": "python"
+      "source": "/api/backend(/.*)?",
+      "destination": {
+        "type": "service",
+        "service": "backend"
+      }
     },
     {
-      "name": "admin",
-      "rootDirectory": "admin",
-      "framework": "nextjs"
+      "source": "/(.*)",
+      "destination": {
+        "type": "service",
+        "service": "frontend"
+      }
     }
   ]
 }
