@@ -234,14 +234,14 @@ function AdvisorTab({ itin, u, canWrite }: { itin: any; u: (k: string, v: any) =
         </div>
       )}
       {[
-        ["Advisor Name", "advisor_name", "e.g. Vijay"],
-        ["Advisor Phone", "advisor_phone", "e.g. 9500445881"],
-        ["Advisor Email", "advisor_email", "e.g. info@trippilot.com"],
-        ["Agency / Company", "agency_name", "e.g. TripPilot"],
-      ].map(([l, k, ph]) => (
+        ["Advisor Name", "advisor_name"],
+        ["Advisor Phone", "advisor_phone"],
+        ["Advisor Email", "advisor_email"],
+        ["Agency / Company", "agency_name"],
+      ].map(([l, k]) => (
         <div key={k}>
           <div style={fieldLabel}>{l}</div>
-          <input className="input" value={itin[k] || ""} onChange={(e) => u(k, e.target.value)} placeholder={ph} style={{ fontSize: 13 }} disabled={!canWrite} />
+          <input className="input" value={itin[k] || ""} onChange={(e) => u(k, e.target.value)} placeholder="" style={{ fontSize: 13 }} disabled={!canWrite} />
         </div>
       ))}
       <div>
