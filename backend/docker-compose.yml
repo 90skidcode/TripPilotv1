@@ -8,15 +8,15 @@ services:
     env_file:
       - .env
     environment:
+      # API keys (GEMINI_API_KEY, GOOGLE_PLACES_API_KEY, …) come from .env via
+      # env_file above — only compose-specific overrides belong here.
       DATABASE_URL: postgresql://trippilot:trippilot123@db:5432/trippilot
       SECRET_KEY: "trippilot-super-secret-jwt-key-change-in-production"
       ALGORITHM: "HS256"
       ACCESS_TOKEN_EXPIRE_MINUTES: "1440"
-      GEMINI_API_KEY: "AIzaSyC0TXhHwzL9a4IgzRPT3Ni9iwvm4CQE7y8"
-      OPENAI_API_KEY: ""
     depends_on:
       db:
-        condition: service_healthy
+        condition: service_healthy 
     volumes:
       - .:/app
     restart: unless-stopped

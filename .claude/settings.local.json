@@ -84,7 +84,22 @@
       "Bash(docker rm:*)",
       "Bash(rm -f /tmp/alembic_baseline.db)",
       "Bash(DATABASE_URL=\"sqlite:////tmp/alembic_baseline.db\" alembic revision --autogenerate -m \"baseline schema\")",
-      "Bash(DATABASE_URL=\"sqlite:///./alembic_baseline.db\" alembic revision --autogenerate -m \"baseline schema\")"
+      "Bash(DATABASE_URL=\"sqlite:///./alembic_baseline.db\" alembic revision --autogenerate -m \"baseline schema\")",
+      "Bash(curl -s \"https://www.googleapis.com/customsearch/v1?key=AIzaSyD5KEFq_ok_aJxtVTBOUvA0aF5_G6RqLe8&cx=b2f5437798cc340fb&q=The+Himalayan+hotel+Manali+exterior&searchType=image&num=3&safe=active&imgSize=xlarge\")",
+      "Bash(curl -s \"https://www.googleapis.com/customsearch/v1?key=AIzaSyD5KEFq_ok_aJxtVTBOUvA0aF5_G6RqLe8&cx=b2f5437798cc340fb&q=The+Himalayan+hotel+Manali+exterior&searchType=image&num=5&safe=active&imgType=photo\")",
+      "Bash(python3 -c ' *)",
+      "Bash(curl -s \"https://www.googleapis.com/customsearch/v1?key=AIzaSyD5KEFq_ok_aJxtVTBOUvA0aF5_G6RqLe8&cx=b2f5437798cc340fb&q=Eiffel+Tower+Paris&searchType=image&num=3\")",
+      "WebFetch(domain:developers.google.com)",
+      "WebSearch",
+      "Bash(python3 -c \"import ast; ast.parse\\(open\\('app/services/ai_service.py'\\).read\\(\\)\\); ast.parse\\(open\\('app/core/config.py'\\).read\\(\\)\\); print\\('syntax OK'\\)\")",
+      "Bash(curl -s -X POST https://places.googleapis.com/v1/places:searchText -H 'Content-Type: application/json' -H 'X-Goog-Api-Key: AIzaSyD5KEFq_ok_aJxtVTBOUvA0aF5_G6RqLe8' -H 'X-Goog-FieldMask: places.photos' -d '{\"textQuery\": \"The Himalayan hotel Manali\", \"pageSize\": 1}')",
+      "Bash(curl -s -X POST https://places.googleapis.com/v1/places:searchText -H 'Content-Type: application/json' -H 'X-Goog-Api-Key: e3ea98be40c2f767ff057bba164f33893b26c689' -H 'X-Goog-FieldMask: places.photos' -d '{\"textQuery\": \"The Himalayan hotel Manali\", \"pageSize\": 1}')",
+      "Bash(curl -s \"https://maps.googleapis.com/maps/api/geocode/json?address=Manali&key=AIzaSyBwl84bYIyiao-KTzXS1UKQG9OpDsbpjIo\")",
+      "Bash(curl -s -X POST \"https://places.googleapis.com/v1/places:searchText\" -H \"Content-Type: application/json\" -H \"X-Goog-Api-Key: AIzaSyBwl84bYIyiao-KTzXS1UKQG9OpDsbpjIo\" -H \"X-Goog-FieldMask: places.photos\" -d '{\"textQuery\": \"Eiffel Tower Paris\", \"pageSize\": 1}')",
+      "Bash(curl -s -X POST \"https://places.googleapis.com/v1/places:searchText\" -H \"Content-Type: application/json\" -H \"X-Goog-Api-Key: AIzaSyBwl84bYIyiao-KTzXS1UKQG9OpDsbpjIo\" -H \"X-Goog-FieldMask: places.photos,places.displayName\" -d '{\"textQuery\": \"The Himalayan hotel Manali\", \"pageSize\": 1}')",
+      "Bash(lsof -nP -iTCP:8000 -sTCP:LISTEN)",
+      "Bash(lsof -nP -iTCP:3002 -sTCP:LISTEN)",
+      "Bash(docker info *)"
     ]
   }
 }

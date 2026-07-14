@@ -139,7 +139,11 @@ def _extract_json(text: str) -> dict | list:
         return json.loads(repair_truncated_json(text_clean))
 
 
-# ─── Real Image Resolution via Google Programmable Search ─────────────────────
+# ─── Real Image Resolution via Google Places API (New) ────────────────────────
+# Google closed the Custom Search JSON API to new customers (full shutdown
+# Jan 1, 2027), so images are resolved through Places API (New) instead:
+# Text Search matches the hotel/attraction, Place Photos returns a real photo
+# of that exact place from Google Maps.
 
 # Generic, neutral fallbacks used ONLY when search is unconfigured/fails/empty.
 # These are deliberately non-place-specific so they never mislabel a location.
@@ -150,49 +154,86 @@ _FALLBACK_PLACE = "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?
 # In-memory cache so the same query (e.g. a popular landmark) is fetched once.
 _IMAGE_CACHE: dict[str, str] = {}
 
+# Set when the API key/project is misconfigured (e.g. Places API not enabled
+# or billing missing). All further lookups short-circuit until the server
+# restarts, so we log the actionable error once instead of once per hotel/place.
+_SEARCH_CONFIG_ERROR: str | None = None
+
+_PLACES_BASE = "https://places.googleapis.com/v1"
+
 
 async def fetch_image_url(query: str) -> str | None:
-    """Resolve a free-text search phrase to a REAL image URL via Google
-    Programmable Search (Custom Search JSON API, searchType=image).
+    """Resolve a free-text phrase ("The Himalayan hotel Manali", "Solang Valley
+    Manali") to a REAL photo of that exact place via Google Places API (New):
 
-    Returns None if unconfigured, no results, or on error. Works for any place
-    on Earth — there are no hardcoded destination mappings. Cached in-memory.
+      1. POST /places:searchText → best-matching place with its photo references
+      2. GET  /{photo}/media?skipHttpRedirect=true → stable googleusercontent
+         photo URL (hotlinkable, no API key embedded in the stored URL)
+
+    Photos come from Google Maps, so hotels/attractions get pictures of the
+    actual property/site. Returns None if unconfigured, no match, no photos,
+    or on error — the caller then uses a generic fallback. Cached in-memory.
     """
+    global _SEARCH_CONFIG_ERROR
     if not query or not query.strip():
         return None
     key = query.strip().lower()
     if key in _IMAGE_CACHE:
         return _IMAGE_CACHE[key]
 
-    api_key = settings.GOOGLE_SEARCH_API_KEY
-    cx = settings.GOOGLE_SEARCH_CX
-    if not api_key or not cx:
+    api_key = settings.GOOGLE_PLACES_API_KEY or settings.GOOGLE_SEARCH_API_KEY
+    if not api_key:
         return None  # not configured → caller uses a generic fallback
+    if _SEARCH_CONFIG_ERROR:
+        return None  # known-broken config; already logged with fix instructions
 
-    params = {
-        "key": api_key,
-        "cx": cx,
-        "q": query,
-        "searchType": "image",
-        "num": 1,
-        "safe": "active",
-        "imgSize": "xlarge",
-    }
     try:
         async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.get("https://www.googleapis.com/customsearch/v1", params=params)
-        if resp.status_code != 200:
-            print(f"Google image search failed ({resp.status_code}) for '{query}': {resp.text[:200]}")
-            return None
-        items = resp.json().get("items") or []
-        if not items:
-            return None
-        link = items[0].get("link")
-        if link:
-            _IMAGE_CACHE[key] = link
-        return link
+            search = await client.post(
+                f"{_PLACES_BASE}/places:searchText",
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Goog-Api-Key": api_key,
+                    # Field mask kept minimal — it determines the billing SKU.
+                    "X-Goog-FieldMask": "places.photos",
+                },
+                json={"textQuery": query, "pageSize": 1},
+            )
+            if search.status_code != 200:
+                body = search.text[:300]
+                if search.status_code in (401, 403):
+                    _SEARCH_CONFIG_ERROR = body
+                    print(
+                        "Google Places image lookup is DISABLED — all itinerary images "
+                        f"will use generic fallbacks. API said: {body}\n"
+                        "FIX: use a Google Cloud API key (starts with 'AIza') and enable "
+                        "'Places API (New)' + billing for its project at "
+                        "https://console.cloud.google.com/apis/library/places.googleapis.com"
+                    )
+                else:
+                    print(f"Places text search failed ({search.status_code}) for '{query}': {body}")
+                return None
+
+            places = search.json().get("places") or []
+            photos = (places[0].get("photos") or []) if places else []
+            photo_name = photos[0].get("name") if photos else None
+            if not photo_name:
+                return None  # no Maps photos for this place → generic fallback
+
+            media = await client.get(
+                f"{_PLACES_BASE}/{photo_name}/media",
+                params={"maxWidthPx": 1600, "skipHttpRedirect": "true", "key": api_key},
+            )
+            if media.status_code != 200:
+                print(f"Places photo fetch failed ({media.status_code}) for '{query}': {media.text[:200]}")
+                return None
+
+            link = (media.json() or {}).get("photoUri")
+            if link:
+                _IMAGE_CACHE[key] = link
+            return link
     except Exception as e:
-        print(f"Google image search error for '{query}': {e}")
+        print(f"Places image lookup error for '{query}': {e}")
         return None
 
 
