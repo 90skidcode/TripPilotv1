@@ -29,6 +29,13 @@ class UserOut(BaseModel):
     org_id: int
     group_id: int | None
     permissions: dict = {}
+    # Organization settings
+    advisor_name: str | None = None
+    advisor_phone: str | None = None
+    advisor_email: str | None = None
+    agency_name: str | None = None
+    agency_office_address: str | None = None
+    agency_highlights: list | None = None
 
     class Config:
         from_attributes = True
@@ -40,8 +47,8 @@ class Token(BaseModel):
     user: UserOut
 
 
-def _user_with_permissions(user: User) -> dict:
-    """Helper to add permissions dict to user."""
+def _user_with_permissions(user: User, db: Session = None) -> dict:
+    """Helper to add permissions and org settings to user."""
     user_dict = {
         "id": user.id,
         "name": user.name,
@@ -52,6 +59,19 @@ def _user_with_permissions(user: User) -> dict:
         "group_id": user.group_id,
         "permissions": user.group.permissions if user.group else {},
     }
+    # Add organization settings
+    if db:
+        from app.models.organization import Organization
+        org = db.query(Organization).filter(Organization.id == user.org_id).first()
+        if org:
+            user_dict.update({
+                "advisor_name": org.advisor_name,
+                "advisor_phone": org.advisor_phone,
+                "advisor_email": org.advisor_email,
+                "agency_name": org.agency_name,
+                "agency_office_address": org.agency_office_address,
+                "agency_highlights": org.agency_highlights,
+            })
     return user_dict
 
 
@@ -72,7 +92,7 @@ def register(payload: UserCreate, db: Session = Depends(get_db), current_user: U
     db.add(user)
     db.commit()
     db.refresh(user)
-    return _user_with_permissions(user)
+    return _user_with_permissions(user, db)
 
 
 @router.post("/login", response_model=Token)
@@ -87,18 +107,28 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         data={"sub": str(user.id)},
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
     )
-    return {"access_token": token, "token_type": "bearer", "user": _user_with_permissions(user)}
+    return {"access_token": token, "token_type": "bearer", "user": _user_with_permissions(user, db)}
 
 
 @router.get("/me", response_model=UserOut)
-def get_me(current_user: User = Depends(get_current_user)):
-    return _user_with_permissions(current_user)
+def get_me(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return _user_with_permissions(current_user, db)
 
 
 class UserUpdate(BaseModel):
     name: str | None = None
     email: EmailStr | None = None
     password: str | None = None
+    # Organization settings
+    advisor_name: str | None = None
+    advisor_phone: str | None = None
+    advisor_email: str | None = None
+    agency_name: str | None = None
+    agency_office_address: str | None = None
+    agency_highlights: list | None = None
 
 
 @router.get("/users", response_model=list[UserOut])
@@ -108,7 +138,7 @@ def list_users(
 ):
     """List all users in the current organization."""
     users = db.query(User).filter(User.org_id == current_user.org_id).all()
-    return [_user_with_permissions(u) for u in users]
+    return [_user_with_permissions(u, db) for u in users]
 
 
 @router.put("/me", response_model=UserOut)
@@ -117,6 +147,7 @@ def update_me(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # Update user fields
     if payload.name is not None:
         current_user.name = payload.name
     if payload.email is not None:
@@ -128,6 +159,24 @@ def update_me(
         if len(payload.password) < 6:
             raise HTTPException(status_code=400, detail="Password must be at least 6 characters long")
         current_user.hashed_password = hash_password(payload.password)
+
+    # Update organization settings if provided
+    from app.models.organization import Organization
+    org = db.query(Organization).filter(Organization.id == current_user.org_id).first()
+    if org:
+        if payload.advisor_name is not None:
+            org.advisor_name = payload.advisor_name
+        if payload.advisor_phone is not None:
+            org.advisor_phone = payload.advisor_phone
+        if payload.advisor_email is not None:
+            org.advisor_email = payload.advisor_email
+        if payload.agency_name is not None:
+            org.agency_name = payload.agency_name
+        if payload.agency_office_address is not None:
+            org.agency_office_address = payload.agency_office_address
+        if payload.agency_highlights is not None:
+            org.agency_highlights = payload.agency_highlights
+
     db.commit()
     db.refresh(current_user)
-    return _user_with_permissions(current_user)
+    return _user_with_permissions(current_user, db)
