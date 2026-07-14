@@ -173,9 +173,15 @@ function DayPreviewCard({ day, index, onChange, onRemove, onMoveUp, onMoveDown, 
 }) {
   function u(k: string, v: any) { onChange({ ...day, [k]: v }); }
   function updateActivity(i: number, v: string) {
-    const a = [...(day.activities || [])]; a[i] = v; u("activities", a);
+    const a = [...(day.activities || [])];
+    if (typeof a[i] === "string") {
+      a[i] = v;
+    } else {
+      a[i] = { id: a[i]?.id, text: v };
+    }
+    u("activities", a);
   }
-  function addActivity() { u("activities", [...(day.activities || []), ""]); }
+  function addActivity() { u("activities", [...(day.activities || []), { id: `activity_${Date.now()}_${Math.random()}`, text: "" }]); }
   function removeActivity(i: number) { u("activities", (day.activities || []).filter((_: any, idx: number) => idx !== i)); }
   function toggleMeal(m: string) { u("meals", { ...day.meals, [m]: !day.meals?.[m] }); }
 
@@ -183,7 +189,7 @@ function DayPreviewCard({ day, index, onChange, onRemove, onMoveUp, onMoveDown, 
   function updatePlace(i: number, k: string, v: any) {
     const p = [...(day.places || [])]; p[i] = { ...p[i], [k]: v }; u("places", p);
   }
-  function addPlace() { u("places", [...(day.places || []), { name: "", description: "", image_url: "" }]); }
+  function addPlace() { u("places", [...(day.places || []), { id: `place_${Date.now()}_${Math.random()}`, name: "", description: "", image_url: "" }]); }
   function removePlace(i: number) { u("places", (day.places || []).filter((_: any, idx: number) => idx !== i)); }
 
   return (
@@ -212,7 +218,7 @@ function DayPreviewCard({ day, index, onChange, onRemove, onMoveUp, onMoveDown, 
         {/* Places */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 16 }}>
           {(day.places || []).map((p: any, i: number) => (
-            <div key={i} style={{ border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden", background: "white" }}>
+            <div key={p.id || i} style={{ border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden", background: "white" }}>
               {/* Place Image */}
               <div style={{ position: "relative", height: 220, background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
                 {p.image_url ? (
@@ -270,9 +276,11 @@ function DayPreviewCard({ day, index, onChange, onRemove, onMoveUp, onMoveDown, 
 
         {/* Activities */}
         <div style={{ marginBottom: 16 }}>
-          {(day.activities || []).map((act: string, i: number) => (
-            <ActivityRow key={i} value={act} onChange={(v) => updateActivity(i, v)} onRemove={() => removeActivity(i)} canWrite={canWrite} />
-          ))}
+          {(day.activities || []).map((act: any, i: number) => {
+            const actId = typeof act === "string" ? i : act?.id;
+            const actText = typeof act === "string" ? act : act?.text || "";
+            return <ActivityRow key={actId || i} value={actText} onChange={(v) => updateActivity(i, v)} onRemove={() => removeActivity(i)} canWrite={canWrite} />;
+          })}
           {canWrite && <button onClick={addActivity} style={actAddBtn}>＋ Add Minor Activity</button>}
         </div>
 
