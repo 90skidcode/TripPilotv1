@@ -1,155 +1,31 @@
 "use client";
-import { useState, useEffect, use, useRef, useCallback } from "react";
+import { useState, useEffect, use, useRef } from "react";
 import AppShell from "@/components/AppShell";
 import { itineraryApi, authApi } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import InlineText from "./InlineText";
-import { DayPhoto } from "./DayPhoto";
 
 const BRAND = "#0ea5e9";
 
-// ── Fallback image helper mapping loremflickr.com to gorgeous Unsplash ────────
+// ── Simple fallback image helper ────────────────────────────────────────────
 function getFallbackImage(url: string, seed: string = ""): string {
   if (!url) return "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=1200&q=80";
   if (!url.includes("loremflickr.com")) return url;
 
-  const lower = url.toLowerCase();
-
-  // 1. SPECIFIC PLACE NAMES (check first, before generic destination checks)
-  // Manali area
-  if (lower.includes("hadimba")) {
-    return "https://images.unsplash.com/photo-1564507592333-c60657eea523?auto=format&fit=crop&w=800&q=80"; // Temple
-  }
-  if (lower.includes("solang")) {
-    return "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=800&q=80"; // Mountain valley
-  }
-  if (lower.includes("old manali")) {
-    return "https://images.unsplash.com/photo-1542652694d5-b5b0e8b5b7b7?auto=format&fit=crop&w=800&q=80"; // Village charm
-  }
-  if (lower.includes("rohtang")) {
-    return "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=800&q=80"; // Mountain pass
-  }
-
-  // Bali area
-  if (lower.includes("ubud")) {
-    return "https://images.unsplash.com/photo-1524413840807-0c3cb6fa808d?auto=format&fit=crop&w=800&q=80"; // Rice terraces
-  }
-  if (lower.includes("tegalalang")) {
-    return "https://images.unsplash.com/photo-1524413840807-0c3cb6fa808d?auto=format&fit=crop&w=800&q=80"; // Rice fields
-  }
-  if (lower.includes("jimbaran")) {
-    return "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80"; // Beach
-  }
-  if (lower.includes("seminyak")) {
-    return "https://images.unsplash.com/photo-1559827260-dc66d52bef19?auto=format&fit=crop&w=800&q=80"; // Beach resort
-  }
-  if (lower.includes("tanah lot")) {
-    return "https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&w=800&q=80"; // Temple on rock
-  }
-  if (lower.includes("monkey forest")) {
-    return "https://images.unsplash.com/photo-1525418099594-b449edf4fcd1?auto=format&fit=crop&w=800&q=80"; // Jungle/forest
-  }
-
-  // Goa area
-  if (lower.includes("anjuna") || lower.includes("baga") || lower.includes("calangute")) {
-    return "https://images.unsplash.com/photo-1506477331477-33d5d8b3dc85?auto=format&fit=crop&w=800&q=80"; // Beach
-  }
-
-  // Kashmir area
-  if (lower.includes("dal lake") || lower.includes("houseboats")) {
-    return "https://images.unsplash.com/photo-1566228015668-4c45dbc4e2f5?auto=format&fit=crop&w=800&q=80"; // Lake/houseboat
-  }
-  if (lower.includes("gulmarg")) {
-    return "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=800&q=80"; // Mountain meadow
-  }
-
-  // Maldives area
-  if (lower.includes("male") || lower.includes("water villas")) {
-    return "https://images.unsplash.com/photo-1439066615861-d1af74d74000?auto=format&fit=crop&w=800&q=80"; // Ocean/villas
-  }
-
-  // 2. GENERIC DESTINATION CHECKS
-  if (lower.includes("bali")) {
-    return "https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&w=1200&q=80"; // Bali temple
-  }
-  if (lower.includes("singapore")) {
-    return "https://images.unsplash.com/photo-1525625293386-3f8f99389edd?auto=format&fit=crop&w=1200&q=80";
-  }
-  if (lower.includes("malaysia") || lower.includes("kuala")) {
-    return "https://images.unsplash.com/photo-1563227812-0ea4c22e6cc8?auto=format&fit=crop&w=1200&q=80";
-  }
-  if (lower.includes("manali")) {
-    return "https://images.unsplash.com/photo-1548574505-5e239809ee19?auto=format&fit=crop&w=1200&q=80"; // Mountain town
-  }
-  if (lower.includes("mountain") || lower.includes("snow") || lower.includes("himalaya")) {
-    return "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=1200&q=80";
-  }
-  if (lower.includes("goa")) {
-    return "https://images.unsplash.com/photo-1506477331477-33d5d8b3dc85?auto=format&fit=crop&w=1200&q=80";
-  }
-  if (lower.includes("kashmir")) {
-    return "https://images.unsplash.com/photo-1566228015668-4c45dbc4e2f5?auto=format&fit=crop&w=1200&q=80";
-  }
-  if (lower.includes("maldives")) {
-    return "https://images.unsplash.com/photo-1439066615861-d1af74d74000?auto=format&fit=crop&w=1200&q=80";
-  }
-  if (lower.includes("paris") || lower.includes("europe") || lower.includes("london")) {
-    return "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=1200&q=80";
-  }
-
-  // 3. ACTIVITY/FEATURE CHECKS
-  if (lower.includes("temple") || lower.includes("mosque") || lower.includes("church")) {
-    return "https://images.unsplash.com/photo-1564507592333-c60657eea523?auto=format&fit=crop&w=800&q=80"; // Religious site
-  }
-  if (lower.includes("beach") || lower.includes("sea") || lower.includes("ocean")) {
-    return "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80"; // Beach
-  }
-  if (lower.includes("trek") || lower.includes("hiking") || lower.includes("adventure")) {
-    return "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=800&q=80"; // Mountain/hiking
-  }
-  if (lower.includes("market") || lower.includes("bazaar") || lower.includes("shopping")) {
-    return "https://images.unsplash.com/photo-1555939594-58d7cb561404?auto=format&fit=crop&w=800&q=80"; // Market/bazaar
-  }
-  if (lower.includes("waterfall")) {
-    return "https://images.unsplash.com/photo-1533408299832-9a9f13e9c82f?auto=format&fit=crop&w=800&q=80"; // Waterfall
-  }
-
-  // 4. Hotel / Stay checks
-  if (lower.includes("hotel") || lower.includes("resort") || lower.includes("stay") || lower.includes("villa")) {
-    const hotelImages = [
-      "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=80",
-      "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?auto=format&fit=crop&w=800&q=80",
-      "https://images.unsplash.com/photo-1540541338287-41700207dee6?auto=format&fit=crop&w=800&q=80",
-      "https://images.unsplash.com/photo-1571896349842-33c89424de2d?auto=format&fit=crop&w=800&q=80"
-    ];
-    let hash = 0;
-    const str = seed || url;
-    for (let i = 0; i < str.length; i++) {
-      hash = str.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const idx = Math.abs(hash) % hotelImages.length;
-    return hotelImages[idx];
-  }
-
-  // 5. Default sightseeing / Place checks (fallback)
-  const placesImages = [
-    "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1533105079780-92b9be482077?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1502784444187-359ac186c5bb?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1475924156734-496f6cac6ec1?auto=format&fit=crop&w=800&q=80"
+  // Just pick from 2 diverse fallback images based on the seed
+  const fallbacks = [
+    "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=1200&q=80", // Destination/travel
+    "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80", // Beach
   ];
+
   let hash = 0;
   const str = seed || url;
   for (let i = 0; i < str.length; i++) {
     hash = str.charCodeAt(i) + ((hash << 5) - hash);
   }
-  const idx = Math.abs(hash) % placesImages.length;
-  return placesImages[idx];
+  const idx = Math.abs(hash) % fallbacks.length;
+  return fallbacks[idx];
 }
 
 // ── Inline activity row ──────────────────────────────────────────────────────
