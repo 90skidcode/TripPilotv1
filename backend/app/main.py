@@ -150,9 +150,22 @@ def seed_master_data(db: Session):
         ("lead_stages", "not_responding", "Not Responding", 6),
         ("lead_stages", "disqualified", "Disqualified", 7),
         ("lead_stages", "future_prospect", "Future Prospect", 8),
+
+        # Lead Sources
+        ("lead_sources", "website", "Website", 1),
+        ("lead_sources", "phone", "Phone Call", 2),
+        ("lead_sources", "email", "Email", 3),
+        ("lead_sources", "social_media", "Social Media", 4),
+        ("lead_sources", "whatsapp", "WhatsApp", 5),
+        ("lead_sources", "referral", "Referral", 6),
+        ("lead_sources", "walk_in", "Walk-in", 7),
+        ("lead_sources", "event", "Event", 8),
+        ("lead_sources", "other", "Other", 9),
+
         # Payment Types
         ("payment_types", "full", "Full Payment", 1),
         ("payment_types", "partial", "Partial Payment", 2),
+
         # Payment Methods
         ("payment_methods", "cash", "Cash", 1),
         ("payment_methods", "upi", "UPI", 2),

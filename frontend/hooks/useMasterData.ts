@@ -89,3 +89,17 @@ export function getLabelFromKey(
   const item = items.find((i) => i.key === key);
   return item?.label || fallback;
 }
+
+// Convert to Record<key, label> for easy lookup
+export function toLabelMap(items: MasterDataItem[]): Record<string, string> {
+  const map: Record<string, string> = {};
+  items.forEach((item) => {
+    map[item.key] = item.label;
+  });
+  return map;
+}
+
+// Get array of keys for dropdowns
+export function getKeys(items: MasterDataItem[]): string[] {
+  return items.map((item) => item.key);
+}

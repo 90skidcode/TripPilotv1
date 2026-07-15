@@ -4,14 +4,7 @@ import { leadsApi, authApi, customersApi, b2bPartnersApi } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import SidePanel from "@/components/SidePanel";
 import AddCustomerModal from "./AddCustomerModal";
-
-const SOURCES = ["whatsapp", "instagram", "website", "referral", "advertisement", "manual", "email"];
-const STAGES = ["fresh", "qualified_hot", "qualified_warm", "won", "lost", "not_responding", "disqualified", "future_prospect"];
-const STAGE_LABELS: Record<string, string> = {
-  fresh: "Fresh Lead", qualified_hot: "Qualified Hot", qualified_warm: "Qualified Warm",
-  won: "Won", lost: "Lost", not_responding: "Not Responding",
-  disqualified: "Disqualified", future_prospect: "Future Prospect",
-};
+import { useMasterDataByCategory } from "@/hooks/useMasterData";
 
 interface Props {
   lead?: any;
@@ -23,6 +16,9 @@ interface Props {
 export default function AddLeadSidePanel({ lead, initialUseAi, onClose, onSaved }: Props) {
   const { showToast } = useToast();
   const isEdit = !!lead;
+  const { data: stagesData } = useMasterDataByCategory("lead_stages");
+  const { data: sourcesData } = useMasterDataByCategory("lead_sources");
+
   const [form, setForm] = useState({
     customer_id: lead?.customer_id || "",
     source: lead?.source || "manual",
@@ -333,13 +329,13 @@ export default function AddLeadSidePanel({ lead, initialUseAi, onClose, onSaved 
                         <div className="input-group">
                           <label className="input-label">Lead Source <span className="required">*</span></label>
                           <select id="lead-source" className="input" value={form.source} onChange={(e) => update("source", e.target.value)}>
-                            {SOURCES.map((s) => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+                            {sourcesData.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
                           </select>
                         </div>
                         <div className="input-group">
                           <label className="input-label">Lead Stage</label>
                           <select id="lead-stage" className="input" value={form.stage} onChange={(e) => update("stage", e.target.value)}>
-                            {STAGES.map((s) => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
+                            {stagesData.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
                           </select>
                         </div>
                         <div className="input-group">

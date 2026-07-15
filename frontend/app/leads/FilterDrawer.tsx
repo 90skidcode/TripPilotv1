@@ -1,18 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-
-const SOURCES = ["whatsapp", "instagram", "website", "referral", "advertisement", "manual", "email"];
-const STAGES = [
-  { value: "fresh", label: "Fresh Lead" },
-  { value: "qualified_hot", label: "Qualified Hot 🔥" },
-  { value: "qualified_warm", label: "Qualified Warm" },
-  { value: "won", label: "Won ✅" },
-  { value: "lost", label: "Lost" },
-  { value: "not_responding", label: "Not Responding" },
-  { value: "disqualified", label: "Disqualified" },
-  { value: "future_prospect", label: "Future Prospect" },
-];
+import { useMasterDataByCategory } from "@/hooks/useMasterData";
 const DATE_PRESETS = [
   { label: "All Leads", value: "" },
   { label: "Today", value: "today" },
@@ -28,6 +17,8 @@ interface Props {
 }
 
 export default function FilterDrawer({ filters, onApply, onClose }: Props) {
+  const { data: stagesData } = useMasterDataByCategory("lead_stages");
+  const { data: sourcesData } = useMasterDataByCategory("lead_sources");
   const [local, setLocal] = useState({ ...filters });
   const [mounted, setMounted] = useState(false);
   const [closing, setClosing] = useState(false);
@@ -118,23 +109,23 @@ export default function FilterDrawer({ filters, onApply, onClose }: Props) {
           {/* Source */}
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "#6b7280", marginBottom: 10 }}>Platform / Source</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
-            {SOURCES.map((s) => (
+            {sourcesData.map((s) => (
               <button
-                key={s}
-                onClick={() => toggle("source", s)}
+                key={s.key}
+                onClick={() => toggle("source", s.key)}
                 style={{
                   padding: "5px 14px",
                   fontSize: 13,
                   borderRadius: 6,
                   border: "1px solid",
                   cursor: "pointer",
-                  backgroundColor: local.source === s ? "#3b82f6" : "#fff",
-                  borderColor: local.source === s ? "#3b82f6" : "#d1d5db",
-                  color: local.source === s ? "#fff" : "#374151",
-                  fontWeight: local.source === s ? 600 : 400,
+                  backgroundColor: local.source === s.key ? "#3b82f6" : "#fff",
+                  borderColor: local.source === s.key ? "#3b82f6" : "#d1d5db",
+                  color: local.source === s.key ? "#fff" : "#374151",
+                  fontWeight: local.source === s.key ? 600 : 400,
                 }}
               >
-                {s.charAt(0).toUpperCase() + s.slice(1)}
+                {s.label}
               </button>
             ))}
           </div>
@@ -144,16 +135,16 @@ export default function FilterDrawer({ filters, onApply, onClose }: Props) {
           {/* Stage */}
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "#6b7280", marginBottom: 10 }}>Lead Stage</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {STAGES.map((s) => (
+            {stagesData.map((s) => (
               <label
-                key={s.value}
+                key={s.key}
                 style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "8px 4px", borderRadius: 6 }}
               >
                 <input
                   type="radio"
                   name="stage"
-                  checked={local.stage === s.value}
-                  onChange={() => toggle("stage", s.value)}
+                  checked={local.stage === s.key}
+                  onChange={() => toggle("stage", s.key)}
                   style={{ accentColor: "#3b82f6", width: 16, height: 16 }}
                 />
                 <span style={{ fontSize: 14, color: "#374151" }}>{s.label}</span>
