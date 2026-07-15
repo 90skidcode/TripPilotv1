@@ -73,7 +73,7 @@ class PaginatedB2BPartners(BaseModel):
 @router.get("", response_model=PaginatedB2BPartners)
 def list_b2b_partners(
     page: int = Query(1, ge=1),
-    per_page: int = Query(20, ge=1, le=100),
+    per_page: int = Query(20, ge=1, le=500),
     search: Optional[str] = None,
     category: Optional[B2BCategory] = None,
     country: Optional[str] = None,
