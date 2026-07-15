@@ -36,14 +36,14 @@ class MasterDataOut(BaseModel):
     description: str | None
     order: int
     is_active: bool
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True
 
 
-@router.get("/master-data/categories", response_model=List[str])
+@router.get("/categories", response_model=List[str])
 def list_categories(
     db: Session = Depends(get_db),
 ):
@@ -52,7 +52,7 @@ def list_categories(
     return [c[0] for c in categories]
 
 
-@router.get("/master-data", response_model=List[MasterDataOut])
+@router.get("", response_model=List[MasterDataOut])
 def list_master_data(
     category: str | None = None,
     db: Session = Depends(get_db),
@@ -65,7 +65,7 @@ def list_master_data(
     return query.all()
 
 
-@router.get("/master-data/{category}", response_model=List[MasterDataOut])
+@router.get("/{category}", response_model=List[MasterDataOut])
 def get_by_category(
     category: str,
     db: Session = Depends(get_db),
@@ -80,7 +80,7 @@ def get_by_category(
     return data
 
 
-@router.post("/master-data", response_model=MasterDataOut, status_code=201)
+@router.post("", response_model=MasterDataOut, status_code=201)
 def create_master_data(
     payload: MasterDataCreate,
     db: Session = Depends(get_db),
@@ -113,7 +113,7 @@ def create_master_data(
     return data
 
 
-@router.put("/master-data/{data_id}", response_model=MasterDataOut)
+@router.put("/{data_id}", response_model=MasterDataOut)
 def update_master_data(
     data_id: int,
     payload: MasterDataUpdate,
@@ -143,7 +143,7 @@ def update_master_data(
     return data
 
 
-@router.delete("/master-data/{data_id}", status_code=204)
+@router.delete("/{data_id}", status_code=204)
 def delete_master_data(
     data_id: int,
     db: Session = Depends(get_db),
@@ -162,7 +162,7 @@ def delete_master_data(
     db.commit()
 
 
-@router.post("/master-data/seed", status_code=201)
+@router.post("/seed", status_code=201)
 def seed_master_data(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_superadmin),
