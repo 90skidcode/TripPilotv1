@@ -13,6 +13,7 @@ import { customersApi, leadsApi } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import { useAuth } from "@/context/AuthContext";
 import { SkeletonTable } from "@/components/SkeletonLoader";
+import TravelLoader from "@/components/TravelLoader";
 import { cn } from "@/lib/cn";
 import {
   Eye,
@@ -423,7 +424,7 @@ export default function CustomersPage() {
 
               <div className="side-panel-content" style={{ padding: 24 }}>
                 {detailLoading && (
-                  <p className="text-sm text-muted-foreground text-center py-6">Loading workspace…</p>
+                  <TravelLoader text="Fetching customer details" size="md" />
                 )}
 
                 {!detailLoading && detailTab === "overview" && (
