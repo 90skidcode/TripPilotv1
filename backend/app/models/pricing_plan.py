@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.core.database import Base
@@ -36,7 +36,7 @@ class PlanBillingCycle(Base):
 
     id = Column(Integer, primary_key=True)
     plan_id = Column(Integer, ForeignKey("pricing_plans.id"), nullable=False)
-    billing_cycle = Column(Enum(BillingCycle), nullable=False)
+    billing_cycle = Column(String(20), nullable=False)  # values from BillingCycle enum
     monthly_price = Column(Float, nullable=False)  # Base price in INR
     discount_percent = Column(Float, default=0)  # 0-100
     display_price = Column(String(100), nullable=False)  # e.g., "₹999/month" or "₹8,000/year"
@@ -54,7 +54,7 @@ class Subscription(Base):
     org_id = Column(Integer, nullable=False)  # Foreign key to Organization
     plan_id = Column(Integer, ForeignKey("pricing_plans.id"), nullable=False)
     plan_billing_cycle_id = Column(Integer, ForeignKey("plan_billing_cycles.id"), nullable=True)
-    billing_cycle = Column(Enum(BillingCycle), nullable=True)  # monthly, quarterly, half_yearly, yearly
+    billing_cycle = Column(String(20), nullable=True)  # values from BillingCycle enum: monthly, quarterly, half_yearly, yearly
     status = Column(String(20), default="active")  # active, expired, cancelled
     start_date = Column(DateTime, default=datetime.utcnow)
     renewal_date = Column(DateTime, nullable=True)  # Next billing date
