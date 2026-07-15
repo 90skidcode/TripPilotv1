@@ -100,6 +100,7 @@ class UsageOut(BaseModel):
     team_members_used: int
     team_members_limit: int
     plan_name: str
+    monthly_price: float
     subscription_status: str
     renewal_date: str | None
     trial_ends_at: str | None
@@ -453,6 +454,15 @@ def get_usage(
     if not plan:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
 
+    # Get billing cycle pricing if available
+    monthly_price = 0
+    if subscription.plan_billing_cycle_id:
+        billing_cycle = db.query(PlanBillingCycle).filter(
+            PlanBillingCycle.id == subscription.plan_billing_cycle_id
+        ).first()
+        if billing_cycle:
+            monthly_price = billing_cycle.monthly_price
+
     # Check trial expiry and update status if needed
     now = datetime.now(timezone.utc)
     if subscription.trial_ends_at and subscription.trial_ends_at <= now:
@@ -493,7 +503,7 @@ def get_usage(
         "team_members_used": team_members_used,
         "team_members_limit": plan.team_members_limit,
         "plan_name": plan.name,
-        "monthly_price": plan.monthly_price,
+        "monthly_price": monthly_price,
         "subscription_status": effective_status,
         "renewal_date": subscription.renewal_date.isoformat() if subscription.renewal_date else None,
         "trial_ends_at": subscription.trial_ends_at.isoformat() if subscription.trial_ends_at else None,
