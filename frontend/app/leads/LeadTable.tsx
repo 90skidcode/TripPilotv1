@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import {
   Eye,
   Pencil,
@@ -13,12 +14,14 @@ import {
   Mail,
   Tag,
   AlertTriangle,
+  ChevronDown,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SkeletonTable } from "@/components/SkeletonLoader";
 import { cn } from "@/lib/cn";
+import { useMasterDataByCategory } from "@/hooks/useMasterData";
 
 interface Props {
   leads: any[];
@@ -26,6 +29,7 @@ interface Props {
   onEdit: (lead: any) => void;
   onDelete: (id: number) => void;
   onViewDetails: (id: number) => void;
+  onChangeStage?: (leadId: number, newStage: string) => void;
   onAdd?: () => void;
   canWrite?: boolean;
   onSearchCustomer?: (query: string) => void;
@@ -66,10 +70,13 @@ export default function LeadTable({
   onEdit,
   onDelete,
   onViewDetails,
+  onChangeStage,
   onAdd,
   canWrite,
   onSearchCustomer,
 }: Props) {
+  const { data: stagesData } = useMasterDataByCategory("lead_stages");
+  const [openDropdown, setOpenDropdown] = useState<number | null>(null);
   if (loading && leads.length === 0) {
     return (
       <div className="p-4">
@@ -234,8 +241,42 @@ export default function LeadTable({
                 </td>
 
                 {/* Stage */}
-                <td className="px-4 py-3 whitespace-nowrap">
-                  <Badge className={cn("font-medium", stage.className)}>{stage.label}</Badge>
+                <td className="px-4 py-3 whitespace-nowrap relative">
+                  <div className="relative inline-block">
+                    <button
+                      onClick={() => setOpenDropdown(openDropdown === lead.id ? null : lead.id)}
+                      className={cn("font-medium px-3 py-1.5 rounded-md text-sm flex items-center gap-1 hover:shadow-md transition-shadow", stage.className)}
+                      title="Click to change stage"
+                    >
+                      {stage.label}
+                      <ChevronDown className="h-3 w-3" />
+                    </button>
+
+                    {/* Dropdown Menu */}
+                    {openDropdown === lead.id && (
+                      <div className="absolute top-full left-0 mt-1 bg-white border border-border rounded-lg shadow-lg z-50 min-w-48">
+                        <div className="p-1">
+                          {stagesData.map((stageOption) => (
+                            <button
+                              key={stageOption.key}
+                              onClick={() => {
+                                if (onChangeStage) {
+                                  onChangeStage(lead.id, stageOption.key);
+                                }
+                                setOpenDropdown(null);
+                              }}
+                              className={cn(
+                                "w-full text-left px-3 py-2 text-sm rounded hover:bg-muted transition-colors",
+                                lead.stage === stageOption.key && "bg-primary/10 text-primary font-semibold"
+                              )}
+                            >
+                              {stageOption.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </td>
 
                 {/* Assigned */}

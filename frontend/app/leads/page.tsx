@@ -112,6 +112,24 @@ export default function LeadsPage() {
     setShowAdd(true);
   }
 
+  async function handleChangeStage(leadId: number, newStage: string) {
+    try {
+      await leadsApi.update(leadId, { stage: newStage });
+      showToast({
+        type: "success",
+        message: "✓ Lead stage updated successfully",
+        duration: 2000,
+      });
+      fetchLeads();
+    } catch (err: any) {
+      showToast({
+        type: "error",
+        message: `✕ Failed to update stage: ${err.message}`,
+        duration: 4000,
+      });
+    }
+  }
+
   const tabs = [
     { id: "today-reminders", label: "Today's Reminders", icon: Phone, count: tab === "today-reminders" ? total : null },
     { id: "all", label: "All Leads", icon: null, count: tab === "all" ? total : null },
@@ -267,6 +285,7 @@ export default function LeadsPage() {
               }}
               onDelete={handleDelete}
               onViewDetails={(id) => router.push(`/leads/${id}`)}
+              onChangeStage={handleChangeStage}
               onAdd={() => {
                 setEditLead(null);
                 setUseAiForAdd(false);
