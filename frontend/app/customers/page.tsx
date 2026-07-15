@@ -15,6 +15,7 @@ import { useAuth } from "@/context/AuthContext";
 import { SkeletonTable } from "@/components/SkeletonLoader";
 import TravelLoader from "@/components/TravelLoader";
 import { cn } from "@/lib/cn";
+import CustomerCsvImportModal from "./CustomerCsvImportModal";
 import {
   Eye,
   Pencil,
@@ -37,6 +38,8 @@ import {
   Receipt,
   Clock,
   ExternalLink,
+  Download,
+  Upload,
 } from "lucide-react";
 
 const TH = "text-left font-semibold text-xs uppercase tracking-wide text-muted-foreground px-4 py-3";
@@ -74,6 +77,7 @@ export default function CustomersPage() {
   const [formEmail, setFormEmail] = useState("");
   const [formWhatsapp, setFormWhatsapp] = useState("");
   const [saving, setSaving] = useState(false);
+  const [showCsvImport, setShowCsvImport] = useState(false);
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
@@ -99,6 +103,43 @@ export default function CustomersPage() {
     setFormName(""); setFormPhone(""); setFormEmail(""); setFormWhatsapp("");
     setEditingCustomer(null);
     setShowPanel("add");
+  }
+
+  async function handleExport() {
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/customers/export/csv`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("trippilot_token")}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to export customers");
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `customers_${new Date().toISOString().split("T")[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      showToast({
+        type: "success",
+        message: "✓ Customers exported successfully",
+        duration: 3000,
+      });
+    } catch (err: any) {
+      showToast({
+        type: "error",
+        message: `✕ Failed to export: ${err.message}`,
+        duration: 4000,
+      });
+    }
   }
 
   function openEditPanel(c: any) {
@@ -192,6 +233,28 @@ export default function CustomersPage() {
               <span className="text-sm text-muted-foreground">
                 <strong className="text-foreground">{total}</strong> customers
               </span>
+              <div className="flex gap-2 ml-auto">
+                {canWrite && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowCsvImport(true)}
+                      title="Bulk import customers from CSV"
+                    >
+                      <Upload className="h-4 w-4" /> Import
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleExport}
+                      title="Export all customers as CSV"
+                    >
+                      <Download className="h-4 w-4" /> Export
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
 
             {/* Table */}
@@ -595,6 +658,17 @@ export default function CustomersPage() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* CSV Import Modal */}
+        {showCsvImport && (
+          <CustomerCsvImportModal
+            onClose={() => setShowCsvImport(false)}
+            onImported={() => {
+              setShowCsvImport(false);
+              fetchCustomers();
+            }}
+          />
         )}
       </PageContainer>
     </AppShell>
