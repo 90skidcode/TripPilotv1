@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useDebounce } from "@/hooks/useDebounce";
+import { usePlanLimit } from "@/hooks/usePlanLimit";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import { PageHeader, PageContainer } from "@/components/layout";
@@ -24,6 +25,8 @@ export default function LeadsPage() {
   const { hasPermission } = useAuth();
   const router = useRouter();
   const canWrite = hasPermission("leads", "write");
+  const { getStatus } = usePlanLimit();
+  const leadsStatus = getStatus("leads");
   const [leads, setLeads] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -122,7 +125,14 @@ export default function LeadsPage() {
     <AppShell title="Master Leads">
       <PageContainer>
         <div className="space-y-6">
-        <PageHeader title="Master Leads" description="Manage and track customer leads" />
+        <div>
+          <PageHeader title="Master Leads" description="Manage and track customer leads" />
+          {leadsStatus && (
+            <p className="text-sm text-muted-foreground mt-1">
+              {leadsStatus.used}/{leadsStatus.limit} leads used
+            </p>
+          )}
+        </div>
 
         {/* Tabs */}
         <div className="flex gap-2 flex-wrap border-b border-border">
@@ -207,6 +217,8 @@ export default function LeadsPage() {
                 id="leads-add-btn"
                 variant="primary"
                 size="sm"
+                disabled={leadsStatus && !leadsStatus.canCreate}
+                title={leadsStatus && !leadsStatus.canCreate ? `You've reached the limit of ${leadsStatus.limit} leads` : ""}
                 onClick={() => {
                   setEditLead(null);
                   setUseAiForAdd(false);
@@ -219,8 +231,9 @@ export default function LeadsPage() {
                 id="leads-ai-btn"
                 variant="outline"
                 size="sm"
+                disabled={leadsStatus && !leadsStatus.canCreate}
+                title={leadsStatus && !leadsStatus.canCreate ? `You've reached the limit of ${leadsStatus.limit} leads` : "AI Lead Entry"}
                 onClick={handleAIImport}
-                title="AI Lead Entry"
               >
                 <Sparkles className="h-4 w-4" /> AI Entry
               </Button>

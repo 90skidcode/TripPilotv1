@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { itineraryApi } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { usePlanLimit } from "@/hooks/usePlanLimit";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -16,6 +17,8 @@ export default function ItineraryListPage() {
   const router = useRouter();
   const { hasPermission } = useAuth();
   const canWrite = hasPermission("itinerary", "write");
+  const { getStatus, loading: planLoading } = usePlanLimit();
+  const itineraryStatus = getStatus("itineraries");
 
   useEffect(() => {
     itineraryApi
@@ -30,19 +33,30 @@ export default function ItineraryListPage() {
     itineraryApi.delete(id).then(() => setItems((p) => p.filter((i) => i.id !== id)));
   }
 
+  const limitReached = itineraryStatus && !itineraryStatus.canCreate;
+
   return (
     <AppShell title="Itinerary Builder">
       <PageContainer>
         <div className="space-y-6">
         <div className="flex items-center justify-between gap-4">
-          <PageHeader
-            title="Itinerary Builder"
-            description={`${items.length} itineraries created`}
-          />
+          <div>
+            <PageHeader
+              title="Itinerary Builder"
+              description={`${items.length} itineraries created`}
+            />
+            {itineraryStatus && (
+              <p className="text-sm text-muted-foreground mt-1">
+                {itineraryStatus.used}/{itineraryStatus.limit} itineraries used
+              </p>
+            )}
+          </div>
           {canWrite && (
             <Button
               id="create-itinerary-btn"
               variant="primary"
+              disabled={limitReached}
+              title={limitReached ? `You've reached the limit of ${itineraryStatus?.limit} itineraries` : ""}
               onClick={() => router.push("/itinerary/new")}
             >
               ✨ New Itinerary
@@ -58,7 +72,9 @@ export default function ItineraryListPage() {
           <div className="flex flex-col items-center justify-center gap-4 py-16 px-4">
             <div className="text-6xl">🗺️</div>
             <h3 className="text-xl font-semibold">No itineraries yet</h3>
-            {canWrite && (
+            {limitReached ? (
+              <p className="text-destructive text-sm">You've reached the maximum itineraries limit. Please upgrade your plan.</p>
+            ) : canWrite ? (
               <>
                 <p className="text-muted-foreground">Create your first AI-powered itinerary</p>
                 <Button
@@ -68,7 +84,7 @@ export default function ItineraryListPage() {
                   ✨ Create Itinerary
                 </Button>
               </>
-            )}
+            ) : null}
           </div>
         ) : (
           <ResponsiveGrid columns={3} gap="md">

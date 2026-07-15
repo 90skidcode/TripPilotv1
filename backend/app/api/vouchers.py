@@ -138,6 +138,13 @@ def create_voucher(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("vouchers", "write")),
 ):
+    from app.api.pricing import check_plan_limit
+    from fastapi import HTTPException
+
+    allowed, error_msg, _, _ = check_plan_limit(db, current_user.org_id, "vouchers")
+    if not allowed:
+        raise HTTPException(status_code=403, detail=error_msg)
+
     voucher = HotelVoucher(**payload.dict(), created_by=current_user.id, org_id=current_user.org_id)
     db.add(voucher)
     db.commit()
@@ -191,7 +198,13 @@ async def ai_voucher(
 ):
     """AI parse booking description into a hotel voucher using Gemini."""
     from app.services.ai_service import parse_hotel_voucher
+    from app.api.pricing import check_plan_limit
     from datetime import datetime as dt
+    from fastapi import HTTPException
+
+    allowed, error_msg, _, _ = check_plan_limit(db, current_user.org_id, "vouchers")
+    if not allowed:
+        raise HTTPException(status_code=403, detail=error_msg)
 
     parsed = await parse_hotel_voucher(payload.description)
 

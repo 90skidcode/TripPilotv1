@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { invoicesApi, leadsApi } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { usePlanLimit } from "@/hooks/usePlanLimit";
 import { useToast } from "@/components/Toast";
 
 interface LineItem {
@@ -24,6 +25,8 @@ function InvoiceContent() {
   const { showToast } = useToast();
   const { hasPermission } = useAuth();
   const canWrite = hasPermission("bills" as any, "write") || hasPermission("vouchers", "write");
+  const { getStatus } = usePlanLimit();
+  const billsStatus = getStatus("bills");
 
   const [invoices, setInvoices] = useState<any[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
@@ -226,12 +229,24 @@ function InvoiceContent() {
       <PageContainer>
         <div className="max-w-4xl mx-auto space-y-6">
           <div className="flex items-center justify-between gap-4">
-            <PageHeader
-              title="Billing & Invoices"
-              description="Create and manage customer invoices with GST"
-            />
+            <div>
+              <PageHeader
+                title="Billing & Invoices"
+                description="Create and manage customer invoices with GST"
+              />
+              {billsStatus && (
+                <p className="text-sm text-muted-foreground mt-1">
+                  {billsStatus.used}/{billsStatus.limit} invoices used
+                </p>
+              )}
+            </div>
             {canWrite && (
-              <Button variant="primary" onClick={openCreateDrawer}>
+              <Button
+                variant="primary"
+                disabled={billsStatus && !billsStatus.canCreate}
+                title={billsStatus && !billsStatus.canCreate ? `You've reached the limit of ${billsStatus.limit} invoices` : ""}
+                onClick={openCreateDrawer}
+              >
                 ＋ Create Invoice
               </Button>
             )}

@@ -77,11 +77,18 @@ def _user_with_permissions(user: User, db: Session = None) -> dict:
 
 @router.post("/register", response_model=UserOut, status_code=201)
 def register(payload: UserCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    from app.api.pricing import check_plan_limit
+
     existing = db.query(User).filter(User.email == payload.email).first()
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
 
     org_id = payload.org_id or current_user.org_id
+
+    allowed, error_msg, _, _ = check_plan_limit(db, org_id, "team_members")
+    if not allowed:
+        raise HTTPException(status_code=403, detail=error_msg)
+
     user = User(
         name=payload.name,
         email=payload.email,

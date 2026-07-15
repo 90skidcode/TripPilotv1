@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { vouchersApi } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { usePlanLimit } from "@/hooks/usePlanLimit";
 import { useRouter } from "next/navigation";
 
 export default function VouchersList() {
@@ -19,6 +20,8 @@ export default function VouchersList() {
   const router = useRouter();
   const { hasPermission } = useAuth();
   const canWrite = hasPermission("vouchers", "write");
+  const { getStatus } = usePlanLimit();
+  const vouchersStatus = getStatus("vouchers");
 
   const fetchVouchers = useCallback(async () => {
     setLoading(true);
@@ -54,13 +57,22 @@ export default function VouchersList() {
       <PageContainer>
         <div className="space-y-6">
         <div className="flex items-center justify-between gap-4">
-          <PageHeader
-            title="Hotel Vouchers"
-            description="Manage and generate AI-powered booking vouchers"
-          />
+          <div>
+            <PageHeader
+              title="Hotel Vouchers"
+              description="Manage and generate AI-powered booking vouchers"
+            />
+            {vouchersStatus && (
+              <p className="text-sm text-muted-foreground mt-1">
+                {vouchersStatus.used}/{vouchersStatus.limit} vouchers used
+              </p>
+            )}
+          </div>
           {canWrite && (
             <Button
               variant="primary"
+              disabled={vouchersStatus && !vouchersStatus.canCreate}
+              title={vouchersStatus && !vouchersStatus.canCreate ? `You've reached the limit of ${vouchersStatus.limit} vouchers` : ""}
               onClick={() => router.push("/vouchers/new")}
             >
               ✨ Generate New Voucher

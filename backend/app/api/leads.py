@@ -218,6 +218,8 @@ def create_lead(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("leads", "write")),
 ):
+    from app.api.pricing import check_plan_limit
+
     # Verify customer exists and belongs to org
     customer = db.query(Customer).filter(
         Customer.id == payload.customer_id,
@@ -225,6 +227,10 @@ def create_lead(
     ).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
+
+    allowed, error_msg, _, _ = check_plan_limit(db, current_user.org_id, "leads")
+    if not allowed:
+        raise HTTPException(status_code=403, detail=error_msg)
 
     lead = Lead(**payload.dict(), created_by=current_user.id, org_id=current_user.org_id)
     db.add(lead)

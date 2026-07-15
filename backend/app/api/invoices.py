@@ -102,6 +102,13 @@ def create_invoice(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    from app.api.pricing import check_plan_limit
+    from fastapi import HTTPException
+
+    allowed, error_msg, _, _ = check_plan_limit(db, current_user.org_id, "bills")
+    if not allowed:
+        raise HTTPException(status_code=403, detail=error_msg)
+
     inv = Invoice(
         invoice_number=_next_invoice_number(db, current_user.org_id),
         org_id=current_user.org_id,

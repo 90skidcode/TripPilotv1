@@ -258,6 +258,69 @@ def get_usage(
     }
 
 
+def check_plan_limit(
+    db: Session,
+    org_id: int,
+    resource_type: str,  # itineraries, leads, vouchers, bills, team_members
+) -> tuple[bool, str, int, int]:
+    """
+    Check if organization can create a new resource based on plan limits.
+    Returns: (allowed: bool, error_message: str, current_usage: int, limit: int)
+    """
+    # Get subscription
+    subscription = db.query(Subscription).filter(
+        Subscription.org_id == org_id,
+        Subscription.status.in_(["active", "trial"]),
+    ).first()
+
+    if not subscription:
+        return False, "No active subscription found", 0, 0
+
+    plan = db.query(PricingPlan).filter(PricingPlan.id == subscription.plan_id).first()
+    if not plan:
+        return False, "Plan not found", 0, 0
+
+    # Check trial expiry
+    now = datetime.now(timezone.utc)
+    if subscription.trial_ends_at and subscription.trial_ends_at <= now:
+        subscription.status = "expired"
+        db.commit()
+        return False, "Trial period has expired. Please upgrade your plan.", 0, 0
+
+    # Check subscription expiry
+    if subscription.status == "expired":
+        return False, "Subscription has expired. Please renew your plan.", 0, 0
+
+    # Count actual records — source of truth
+    resource_counts = {
+        "leads": db.query(func.count(Lead.id)).filter(Lead.org_id == org_id).scalar() or 0,
+        "itineraries": db.query(func.count(Itinerary.id)).filter(Itinerary.org_id == org_id).scalar() or 0,
+        "vouchers": db.query(func.count(HotelVoucher.id)).filter(HotelVoucher.org_id == org_id).scalar() or 0,
+        "bills": db.query(func.count(Invoice.id)).filter(Invoice.org_id == org_id).scalar() or 0,
+        "team_members": db.query(func.count(User.id)).filter(User.org_id == org_id, User.is_active == True).scalar() or 0,  # noqa: E712
+    }
+
+    limit_map = {
+        "leads": "leads_limit",
+        "itineraries": "itineraries_limit",
+        "vouchers": "vouchers_limit",
+        "bills": "bills_limit",
+        "team_members": "team_members_limit",
+    }
+
+    if resource_type not in resource_counts:
+        return False, f"Unknown resource type: {resource_type}", 0, 0
+
+    current_usage = resource_counts[resource_type]
+    limit = getattr(plan, limit_map[resource_type], 0)
+
+    if current_usage >= limit:
+        resource_name = resource_type.replace("_", " ").title()
+        return False, f"You have reached the maximum {resource_name} ({limit}) allowed by your plan. Please upgrade.", current_usage, limit
+
+    return True, "", current_usage, limit
+
+
 def increment_usage(
     db: Session,
     org_id: int,

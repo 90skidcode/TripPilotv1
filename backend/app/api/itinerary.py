@@ -107,6 +107,12 @@ def create_itinerary(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("itinerary", "write")),
 ):
+    from app.api.pricing import check_plan_limit
+
+    allowed, error_msg, _, _ = check_plan_limit(db, current_user.org_id, "itineraries")
+    if not allowed:
+        raise HTTPException(status_code=403, detail=error_msg)
+
     itin = Itinerary(**payload.dict(), created_by=current_user.id, org_id=current_user.org_id)
     db.add(itin)
     db.commit()
@@ -157,6 +163,11 @@ async def generate_itinerary(
 ):
     """AI-powered itinerary generation from raw text using Gemini."""
     from app.services.ai_service import generate_itinerary as ai_generate
+    from app.api.pricing import check_plan_limit
+
+    allowed, error_msg, _, _ = check_plan_limit(db, current_user.org_id, "itineraries")
+    if not allowed:
+        raise HTTPException(status_code=403, detail=error_msg)
 
     data = await ai_generate(payload.raw_text, payload.layout)
 
