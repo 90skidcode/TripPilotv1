@@ -1,13 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel
+from typing import List
 
 from app.core.database import get_db
 from app.core.security import get_current_user, require_superadmin
 from app.models.user import User
-from app.models.pricing_plan import PricingPlan, Subscription, UsageTracking
+from app.models.pricing_plan import PricingPlan, Subscription, UsageTracking, PlanBillingCycle, BillingCycle
 from app.models.lead import Lead
 from app.models.itinerary import Itinerary
 from app.models.tools import HotelVoucher, Invoice
@@ -15,10 +16,37 @@ from app.models.tools import HotelVoucher, Invoice
 router = APIRouter()
 
 
+def calculate_renewal_date(billing_cycle: str) -> datetime:
+    """Calculate renewal date based on billing cycle."""
+    now = datetime.now(timezone.utc)
+    if billing_cycle == "monthly":
+        return now + timedelta(days=30)
+    elif billing_cycle == "quarterly":
+        return now + timedelta(days=90)
+    elif billing_cycle == "half_yearly":
+        return now + timedelta(days=180)
+    elif billing_cycle == "yearly":
+        return now + timedelta(days=365)
+    else:
+        return now + timedelta(days=30)
+
+
+class PlanBillingCycleOut(BaseModel):
+    id: int
+    plan_id: int
+    billing_cycle: str
+    monthly_price: float
+    discount_percent: float
+    display_price: str
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+
 class PricingPlanOut(BaseModel):
     id: int
     name: str
-    monthly_price: float
     itineraries_limit: int
     leads_limit: int
     vouchers_limit: int
@@ -27,6 +55,34 @@ class PricingPlanOut(BaseModel):
     storage_gb: int
     trial_days: int
     is_active: bool
+    billing_cycles: List[PlanBillingCycleOut] = []
+
+    class Config:
+        from_attributes = True
+
+
+class PlanBillingCycleCreate(BaseModel):
+    billing_cycle: str  # monthly, quarterly, half_yearly, yearly
+    monthly_price: float
+    discount_percent: float = 0
+    display_price: str
+
+
+class SubscriptionCreatePayload(BaseModel):
+    plan_id: int
+    plan_billing_cycle_id: int
+    billing_cycle: str  # monthly, quarterly, half_yearly, yearly
+
+
+class SubscriptionOut(BaseModel):
+    id: int
+    org_id: int
+    plan_id: int
+    billing_cycle: str | None
+    status: str
+    start_date: str
+    renewal_date: str | None
+    trial_ends_at: str | None
 
     class Config:
         from_attributes = True
@@ -44,7 +100,6 @@ class UsageOut(BaseModel):
     team_members_used: int
     team_members_limit: int
     plan_name: str
-    monthly_price: float
     subscription_status: str
     renewal_date: str | None
     trial_ends_at: str | None
@@ -198,6 +253,175 @@ def delete_plan(
     plan.is_active = False
     db.commit()
     return None
+
+
+# ─── Billing Cycles ──────────────────────────────────────────────────────────
+
+@router.get("/plans/{plan_id}/billing-cycles", response_model=list[PlanBillingCycleOut])
+def get_plan_billing_cycles(
+    plan_id: int,
+    db: Session = Depends(get_db),
+):
+    """Get all billing cycles for a plan."""
+    plan = db.query(PricingPlan).filter(PricingPlan.id == plan_id).first()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+
+    cycles = db.query(PlanBillingCycle).filter(
+        PlanBillingCycle.plan_id == plan_id,
+        PlanBillingCycle.is_active == True,
+    ).all()
+    return cycles
+
+
+@router.post("/plans/{plan_id}/billing-cycles", response_model=PlanBillingCycleOut, status_code=201)
+def create_billing_cycle(
+    plan_id: int,
+    payload: PlanBillingCycleCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_superadmin),
+):
+    """Create a billing cycle for a plan."""
+    plan = db.query(PricingPlan).filter(PricingPlan.id == plan_id).first()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+
+    # Check if cycle already exists
+    existing = db.query(PlanBillingCycle).filter(
+        PlanBillingCycle.plan_id == plan_id,
+        PlanBillingCycle.billing_cycle == payload.billing_cycle,
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Billing cycle already exists for this plan")
+
+    cycle = PlanBillingCycle(
+        plan_id=plan_id,
+        billing_cycle=payload.billing_cycle,
+        monthly_price=payload.monthly_price,
+        discount_percent=payload.discount_percent,
+        display_price=payload.display_price,
+    )
+    db.add(cycle)
+    db.commit()
+    db.refresh(cycle)
+    return cycle
+
+
+@router.put("/billing-cycles/{cycle_id}", response_model=PlanBillingCycleOut)
+def update_billing_cycle(
+    cycle_id: int,
+    payload: PlanBillingCycleCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_superadmin),
+):
+    """Update a billing cycle."""
+    cycle = db.query(PlanBillingCycle).filter(PlanBillingCycle.id == cycle_id).first()
+    if not cycle:
+        raise HTTPException(status_code=404, detail="Billing cycle not found")
+
+    cycle.billing_cycle = payload.billing_cycle
+    cycle.monthly_price = payload.monthly_price
+    cycle.discount_percent = payload.discount_percent
+    cycle.display_price = payload.display_price
+    db.commit()
+    db.refresh(cycle)
+    return cycle
+
+
+@router.delete("/billing-cycles/{cycle_id}", status_code=204)
+def delete_billing_cycle(
+    cycle_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_superadmin),
+):
+    """Delete a billing cycle (soft delete)."""
+    cycle = db.query(PlanBillingCycle).filter(PlanBillingCycle.id == cycle_id).first()
+    if not cycle:
+        raise HTTPException(status_code=404, detail="Billing cycle not found")
+
+    cycle.is_active = False
+    db.commit()
+    return None
+
+
+# ─── Subscriptions ──────────────────────────────────────────────────────────
+
+@router.post("/subscriptions", response_model=SubscriptionOut, status_code=201)
+def create_or_update_subscription(
+    payload: SubscriptionCreatePayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Create or update organization subscription with billing cycle."""
+    org_id = current_user.org_id
+
+    # Verify plan and billing cycle exist
+    plan = db.query(PricingPlan).filter(PricingPlan.id == payload.plan_id).first()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+
+    billing_cycle = db.query(PlanBillingCycle).filter(
+        PlanBillingCycle.id == payload.plan_billing_cycle_id,
+        PlanBillingCycle.plan_id == payload.plan_id,
+    ).first()
+    if not billing_cycle:
+        raise HTTPException(status_code=404, detail="Billing cycle not found for this plan")
+
+    # Check if subscription already exists
+    existing = db.query(Subscription).filter(
+        Subscription.org_id == org_id,
+        Subscription.status.in_(["active", "trial"]),
+    ).first()
+
+    now = datetime.now(timezone.utc)
+    renewal_date = calculate_renewal_date(payload.billing_cycle)
+
+    if existing:
+        # Update existing subscription
+        existing.plan_id = payload.plan_id
+        existing.plan_billing_cycle_id = payload.plan_billing_cycle_id
+        existing.billing_cycle = payload.billing_cycle
+        existing.status = "active"
+        existing.start_date = now
+        existing.renewal_date = renewal_date
+        existing.trial_ends_at = None
+        db.commit()
+        db.refresh(existing)
+        return existing
+    else:
+        # Create new subscription
+        subscription = Subscription(
+            org_id=org_id,
+            plan_id=payload.plan_id,
+            plan_billing_cycle_id=payload.plan_billing_cycle_id,
+            billing_cycle=payload.billing_cycle,
+            status="active",
+            start_date=now,
+            renewal_date=renewal_date,
+        )
+        db.add(subscription)
+        db.commit()
+        db.refresh(subscription)
+        return subscription
+
+
+@router.get("/subscriptions/current", response_model=SubscriptionOut)
+def get_current_subscription(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get current organization subscription."""
+    org_id = current_user.org_id
+
+    subscription = db.query(Subscription).filter(
+        Subscription.org_id == org_id,
+        Subscription.status.in_(["active", "trial", "expired"]),
+    ).first()
+
+    if not subscription:
+        raise HTTPException(status_code=404, detail="No subscription found")
+
+    return subscription
 
 
 @router.get("/usage", response_model=UsageOut)
