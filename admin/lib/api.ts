@@ -347,6 +347,67 @@ export class SuperAdminAPI {
 
     return response.json();
   }
+
+  // ── Billing Cycles ──
+
+  static async getPlanBillingCycles(planId: number): Promise<any[]> {
+    const response = await fetch(`${API_URL}/pricing/plans/${planId}/billing-cycles`, {
+      headers: { Authorization: `Bearer ${this.getToken()}` },
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch billing cycles");
+    }
+
+    return response.json();
+  }
+
+  static async createBillingCycle(planId: number, data: any): Promise<any> {
+    const response = await fetch(`${API_URL}/pricing/plans/${planId}/billing-cycles`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.getToken()}`,
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.detail || "Failed to create billing cycle");
+    }
+
+    return response.json();
+  }
+
+  static async updateBillingCycle(cycleId: number, data: any): Promise<any> {
+    const response = await fetch(`${API_URL}/pricing/billing-cycles/${cycleId}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.getToken()}`,
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.detail || "Failed to update billing cycle");
+    }
+
+    return response.json();
+  }
+
+  static async deleteBillingCycle(cycleId: number): Promise<void> {
+    const response = await fetch(`${API_URL}/pricing/billing-cycles/${cycleId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${this.getToken()}` },
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to delete billing cycle");
+    }
+  }
 }
 
 

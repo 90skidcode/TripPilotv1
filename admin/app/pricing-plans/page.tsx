@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { SuperAdminAPI } from "@/lib/api";
+import BillingCyclesManager from "@/components/BillingCyclesManager";
 
 interface PricingPlan {
   id: number;
@@ -42,6 +43,13 @@ export default function PricingPlansPage() {
   const [formData, setFormData] = useState(defaultFormData);
   const [saving, setSaving] = useState(false);
   const [statusModal, setStatusModal] = useState<{
+    isOpen: boolean;
+    plan: PricingPlan | null;
+  }>({
+    isOpen: false,
+    plan: null
+  });
+  const [billingCyclesModal, setBillingCyclesModal] = useState<{
     isOpen: boolean;
     plan: PricingPlan | null;
   }>({
@@ -630,7 +638,15 @@ export default function PricingPlansPage() {
                   
                   {/* Actions */}
                   <td style={{ padding: "16px 20px", textAlign: "center" }}>
-                    <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
+                    <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
+                      <button
+                        onClick={() => setBillingCyclesModal({ isOpen: true, plan })}
+                        className="btn btn-sm btn-outline"
+                        style={{ padding: "4px 10px", borderRadius: "6px", border: "1px solid var(--border)", fontSize: "12px" }}
+                        title="Manage billing cycles (monthly, quarterly, yearly)"
+                      >
+                        💰 Cycles
+                      </button>
                       <button
                         onClick={() => handleOpenEdit(plan)}
                         className="btn btn-sm btn-outline"
@@ -744,6 +760,15 @@ export default function PricingPlansPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Billing Cycles Manager Modal */}
+      {billingCyclesModal.isOpen && billingCyclesModal.plan && (
+        <BillingCyclesManager
+          planId={billingCyclesModal.plan.id}
+          planName={billingCyclesModal.plan.name}
+          onClose={() => setBillingCyclesModal({ isOpen: false, plan: null })}
+        />
       )}
 
       {/* Premium Toast Notification */}
