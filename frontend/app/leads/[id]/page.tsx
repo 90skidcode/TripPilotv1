@@ -117,6 +117,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"overview" | "itineraries" | "vouchers" | "flights" | "b2b" | "invoices" | "payments" | "timeline">("overview");
   const [partnerOptions, setPartnerOptions] = useState<any[]>([]);
+  const [partnerLoadError, setPartnerLoadError] = useState("");
   const [showConnectPartner, setShowConnectPartner] = useState(false);
   const [partnerForm, setPartnerForm] = useState({ b2b_partner_id: "", role: "", country: "", cost: "", notes: "" });
   const [partnerCountryFilter, setPartnerCountryFilter] = useState("");
@@ -151,12 +152,20 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
     setPartnerForm({ b2b_partner_id: "", role: "", country: "", cost: "", notes: "" });
     setPartnerCountryFilter(lead?.destination || "");
     setShowConnectPartner(true);
+    setPartnerLoadError("");
     if (partnerOptions.length === 0) {
       try {
         const res = await b2bPartnersApi.list({ per_page: 200 });
-        setPartnerOptions(res?.items || res || []);
-      } catch (err) {
-        console.error("Failed to load partners:", err);
+        const partners = res?.items || res || [];
+        const partnerArray = Array.isArray(partners) ? partners : [];
+        setPartnerOptions(partnerArray);
+        if (partnerArray.length === 0) {
+          console.log("[Partners] No partners found. Response:", res);
+        }
+      } catch (err: any) {
+        const errMsg = err.message || "Failed to load partners";
+        console.error("[Partners] Load error:", err);
+        setPartnerLoadError(errMsg);
       }
     }
   }
@@ -1018,42 +1027,63 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
               </div>
 
               <div className="space-y-4 p-4">
+                {partnerLoadError && (
+                  <div className="rounded-md border border-red-200 bg-red-50 p-3">
+                    <p className="text-sm text-red-800">
+                      <strong>Error:</strong> {partnerLoadError}
+                    </p>
+                    <p className="text-xs text-red-700 mt-1">Try refreshing the page or contact support.</p>
+                  </div>
+                )}
+
+                {partnerOptions.length === 0 && !partnerLoadError && (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
+                    <p className="text-sm text-amber-800">
+                      <strong>No partners found.</strong> <a href="/b2b-partners" className="underline font-medium hover:text-amber-900">Create B2B partners first →</a>
+                    </p>
+                  </div>
+                )}
+
                 {/* Country filter */}
-                <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
-                  <Filter className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                  <input
-                    className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                    placeholder="Filter partners by country (e.g. Maldives)…"
-                    value={partnerCountryFilter}
-                    onChange={(e) => setPartnerCountryFilter(e.target.value)}
-                  />
-                  {partnerCountryFilter && (
-                    <button onClick={() => setPartnerCountryFilter("")} className="text-muted-foreground hover:text-foreground">
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                </div>
+                {partnerOptions.length > 0 && (
+                  <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
+                    <Filter className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <input
+                      className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                      placeholder="Filter partners by country (e.g. Maldives)…"
+                      value={partnerCountryFilter}
+                      onChange={(e) => setPartnerCountryFilter(e.target.value)}
+                    />
+                    {partnerCountryFilter && (
+                      <button onClick={() => setPartnerCountryFilter("")} className="text-muted-foreground hover:text-foreground">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 {/* Partner select */}
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Partner *</label>
-                  <select
-                    value={partnerForm.b2b_partner_id}
-                    onChange={(e) => setPartnerForm((f) => ({ ...f, b2b_partner_id: e.target.value, country: "" }))}
-                    className="w-full h-10 rounded-md border border-input bg-white px-3 text-sm focus-ring"
-                  >
-                    <option value="">Select a partner…</option>
-                    {filteredPartners.map((p: any) => (
-                      <option key={p.id} value={p.id}>
-                        {p.company_name}{p.category ? ` (${p.category})` : ""}
-                        {p.countries?.length ? ` — ${p.countries.join(", ")}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                  {filteredPartners.length === 0 && (
-                    <p className="text-xs text-muted-foreground mt-1">No partners match this country filter.</p>
-                  )}
-                </div>
+                {partnerOptions.length > 0 && (
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Partner *</label>
+                    <select
+                      value={partnerForm.b2b_partner_id}
+                      onChange={(e) => setPartnerForm((f) => ({ ...f, b2b_partner_id: e.target.value, country: "" }))}
+                      className="w-full h-10 rounded-md border border-input bg-white px-3 text-sm focus-ring"
+                    >
+                      <option value="">Select a partner…</option>
+                      {filteredPartners.map((p: any) => (
+                        <option key={p.id} value={p.id}>
+                          {p.company_name}{p.category ? ` (${p.category})` : ""}
+                          {p.countries?.length ? ` — ${p.countries.join(", ")}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                    {filteredPartners.length === 0 && (
+                      <p className="text-xs text-muted-foreground mt-1">No partners match this country filter.</p>
+                    )}
+                  </div>
+                )}
 
                 {/* Country handled for this lead */}
                 <div>

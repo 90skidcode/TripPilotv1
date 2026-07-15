@@ -49,6 +49,7 @@ export default function AddLeadSidePanel({ lead, initialUseAi, onClose, onSaved 
   const [isOpen, setIsOpen] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [b2bPartners, setB2bPartners] = useState<any[]>([]);
+  const [loadingError, setLoadingError] = useState("");
 
   useEffect(() => {
     loadData();
@@ -79,6 +80,7 @@ export default function AddLeadSidePanel({ lead, initialUseAi, onClose, onSaved 
   async function loadData() {
     try {
       setCustomersLoading(true);
+      setLoadingError("");
       const [customersRes, usersList, b2bRes] = await Promise.all([
         customersApi.list({ per_page: 100 }),
         authApi.listUsers(),
@@ -86,9 +88,15 @@ export default function AddLeadSidePanel({ lead, initialUseAi, onClose, onSaved 
       ]);
       setCustomers(customersRes.items || customersRes);
       setUsers(usersList);
-      setB2bPartners(b2bRes.items || []);
-    } catch (err) {
+      // Handle both paginated and direct response formats
+      const partners = b2bRes?.items || b2bRes || [];
+      setB2bPartners(Array.isArray(partners) ? partners : []);
+      if (!Array.isArray(partners) || partners.length === 0) {
+        console.log("[B2B Partners] No partners found or unexpected response format:", b2bRes);
+      }
+    } catch (err: any) {
       console.error("Failed to fetch data:", err);
+      setLoadingError(err.message || "Failed to load data");
     } finally {
       setCustomersLoading(false);
     }
@@ -405,6 +413,11 @@ export default function AddLeadSidePanel({ lead, initialUseAi, onClose, onSaved 
                         <h3 style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--text-secondary)", marginBottom: 12, letterSpacing: "0.6px" }}>🤝 B2B Partner</h3>
                         <div className="input-group">
                           <label className="input-label">Assign B2B Partner{form.stage === "won" ? " *" : ""}</label>
+                          {loadingError ? (
+                            <div style={{ padding: "8px 12px", fontSize: "12px", color: "#991b1b", background: "#fee2e2", borderRadius: "6px", marginBottom: "8px" }}>
+                              ⚠️ Failed to load partners: {loadingError}
+                            </div>
+                          ) : null}
                           <select id="lead-b2b-partner" className="input" value={form.b2b_partner_id} onChange={(e) => update("b2b_partner_id", e.target.value)}>
                             <option value="">— Select Partner —</option>
                             {b2bPartners.map((p) => (
@@ -412,8 +425,10 @@ export default function AddLeadSidePanel({ lead, initialUseAi, onClose, onSaved 
                             ))}
                           </select>
                         </div>
-                        {b2bPartners.length === 0 && (
-                          <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6 }}>No B2B partners yet. Add one from the B2B Partners page.</p>
+                        {b2bPartners.length === 0 && !loadingError && (
+                          <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6 }}>
+                            No B2B partners yet. <a href="/b2b-partners" style={{ color: "var(--brand)", textDecoration: "underline", cursor: "pointer" }}>Add one from the B2B Partners page →</a>
+                          </p>
                         )}
                       </div>
                     )}
