@@ -282,6 +282,13 @@ def update_agency(
             subscription = db.query(Subscription).filter(Subscription.org_id == org.id).first()
             if subscription:
                 subscription.plan_id = payload.plan_id
+                # Update trial/renewal dates based on plan type
+                if plan.trial_days > 0:
+                    subscription.trial_ends_at = datetime.utcnow() + timedelta(days=plan.trial_days)
+                    subscription.renewal_date = None
+                else:
+                    subscription.renewal_date = datetime.utcnow() + timedelta(days=30)
+                    subscription.trial_ends_at = None
             else:
                 subscription = Subscription(
                     org_id=org.id,
@@ -289,6 +296,12 @@ def update_agency(
                     status="active",
                     start_date=datetime.utcnow()
                 )
+                # Set trial end date if it's a trial plan
+                if plan.trial_days > 0:
+                    subscription.trial_ends_at = datetime.utcnow() + timedelta(days=plan.trial_days)
+                else:
+                    # Set renewal date for paid plans (1 month from now)
+                    subscription.renewal_date = datetime.utcnow() + timedelta(days=30)
                 db.add(subscription)
 
     db.commit()

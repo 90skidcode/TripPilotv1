@@ -72,7 +72,7 @@ export default function VouchersList() {
           {canWrite && (
             <Button
               variant="primary"
-              disabled={trialExpired || (vouchersStatus && !vouchersStatus.canCreate)}
+              disabled={trialExpired || !!(vouchersStatus && !vouchersStatus.canCreate)}
               title={
                 trialExpired
                   ? "Trial period expired. Please upgrade your plan."

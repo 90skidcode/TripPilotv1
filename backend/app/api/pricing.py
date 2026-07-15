@@ -383,8 +383,13 @@ def create_or_update_subscription(
         existing.billing_cycle = payload.billing_cycle
         existing.status = "active"
         existing.start_date = now
-        existing.renewal_date = renewal_date
-        existing.trial_ends_at = None
+        # Only set renewal_date for paid plans (not trial)
+        if plan.trial_days > 0:
+            existing.trial_ends_at = now + timedelta(days=plan.trial_days)
+            existing.renewal_date = None
+        else:
+            existing.renewal_date = renewal_date
+            existing.trial_ends_at = None
         db.commit()
         db.refresh(existing)
         return existing
@@ -397,8 +402,12 @@ def create_or_update_subscription(
             billing_cycle=payload.billing_cycle,
             status="active",
             start_date=now,
-            renewal_date=renewal_date,
         )
+        # Set trial/renewal dates based on plan type
+        if plan.trial_days > 0:
+            subscription.trial_ends_at = now + timedelta(days=plan.trial_days)
+        else:
+            subscription.renewal_date = renewal_date
         db.add(subscription)
         db.commit()
         db.refresh(subscription)

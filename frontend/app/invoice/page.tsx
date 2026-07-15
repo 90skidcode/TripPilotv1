@@ -244,7 +244,7 @@ function InvoiceContent() {
             {canWrite && (
               <Button
                 variant="primary"
-                disabled={trialExpired || (billsStatus && !billsStatus.canCreate)}
+                disabled={trialExpired || !!(billsStatus && !billsStatus.canCreate)}
                 title={
                   trialExpired
                     ? "Trial period expired. Please upgrade your plan."

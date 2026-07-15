@@ -218,7 +218,7 @@ export default function LeadsPage() {
                 id="leads-add-btn"
                 variant="primary"
                 size="sm"
-                disabled={trialExpired || (leadsStatus && !leadsStatus.canCreate)}
+                disabled={trialExpired || !!(leadsStatus && !leadsStatus.canCreate)}
                 title={
                   trialExpired
                     ? "Trial period expired. Please upgrade your plan."
@@ -238,7 +238,7 @@ export default function LeadsPage() {
                 id="leads-ai-btn"
                 variant="outline"
                 size="sm"
-                disabled={trialExpired || (leadsStatus && !leadsStatus.canCreate)}
+                disabled={trialExpired || !!(leadsStatus && !leadsStatus.canCreate)}
                 title={
                   trialExpired
                     ? "Trial period expired. Please upgrade your plan."
