@@ -1,7 +1,7 @@
 """add org_id to flights and partners
 
 Revision ID: 082a062be3c7
-Revises: e02b4e9c29a3
+Revises: fbd848f261ad
 Create Date: 2026-06-08 21:24:26.473472
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '082a062be3c7'
-down_revision: Union[str, None] = 'e02b4e9c29a3'
+down_revision: Union[str, None] = 'fbd848f261ad'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
