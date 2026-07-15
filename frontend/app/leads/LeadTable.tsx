@@ -114,7 +114,7 @@ export default function LeadTable({
   }, {});
 
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto overflow-y-visible">
       <table className="w-full text-sm border-collapse">
         <thead>
           <tr className="border-b border-border bg-muted/40">
@@ -254,8 +254,8 @@ export default function LeadTable({
 
                     {/* Dropdown Menu */}
                     {openDropdown === lead.id && (
-                      <div className="absolute top-full left-0 mt-1 bg-white border border-border rounded-lg shadow-lg z-50 min-w-48">
-                        <div className="p-1">
+                      <div className="absolute top-full left-0 mt-2 bg-white border border-border rounded-lg shadow-xl z-[9999] min-w-56 max-h-96 overflow-y-auto">
+                        <div className="p-1.5">
                           {stagesData.map((stageOption) => (
                             <button
                               key={stageOption.key}
@@ -266,7 +266,7 @@ export default function LeadTable({
                                 setOpenDropdown(null);
                               }}
                               className={cn(
-                                "w-full text-left px-3 py-2 text-sm rounded hover:bg-muted transition-colors",
+                                "w-full text-left px-3 py-2.5 text-sm rounded hover:bg-muted transition-colors whitespace-nowrap",
                                 lead.stage === stageOption.key && "bg-primary/10 text-primary font-semibold"
                               )}
                             >
