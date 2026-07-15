@@ -20,8 +20,9 @@ export default function VouchersList() {
   const router = useRouter();
   const { hasPermission } = useAuth();
   const canWrite = hasPermission("vouchers", "write");
-  const { getStatus } = usePlanLimit();
+  const { getStatus, hasWriteAccess } = usePlanLimit();
   const vouchersStatus = getStatus("vouchers");
+  const trialExpired = !hasWriteAccess;
 
   const fetchVouchers = useCallback(async () => {
     setLoading(true);
@@ -71,8 +72,14 @@ export default function VouchersList() {
           {canWrite && (
             <Button
               variant="primary"
-              disabled={vouchersStatus && !vouchersStatus.canCreate}
-              title={vouchersStatus && !vouchersStatus.canCreate ? `You've reached the limit of ${vouchersStatus.limit} vouchers` : ""}
+              disabled={trialExpired || (vouchersStatus && !vouchersStatus.canCreate)}
+              title={
+                trialExpired
+                  ? "Trial period expired. Please upgrade your plan."
+                  : vouchersStatus && !vouchersStatus.canCreate
+                    ? `You've reached the limit of ${vouchersStatus.limit} vouchers`
+                    : ""
+              }
               onClick={() => router.push("/vouchers/new")}
             >
               ✨ Generate New Voucher

@@ -220,6 +220,12 @@ def get_usage(
     if not plan:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
 
+    # Check trial expiry and update status if needed
+    now = datetime.now(timezone.utc)
+    if subscription.trial_ends_at and subscription.trial_ends_at <= now:
+        subscription.status = "expired"
+        db.commit()
+
     # Count actual records — source of truth, always accurate regardless of deletes/imports
     leads_used = db.query(func.count(Lead.id)).filter(Lead.org_id == org_id).scalar() or 0
     itineraries_used = db.query(func.count(Itinerary.id)).filter(Itinerary.org_id == org_id).scalar() or 0
@@ -228,7 +234,6 @@ def get_usage(
     team_members_used = db.query(func.count(User.id)).filter(User.org_id == org_id, User.is_active == True).scalar() or 0  # noqa: E712
 
     # Determine effective status: show "trial" when trial_ends_at is in the future
-    now = datetime.now(timezone.utc)
     if subscription.trial_ends_at and subscription.trial_ends_at > now:
         effective_status = "trial"
     else:
@@ -258,6 +263,88 @@ def get_usage(
     }
 
 
+class SubscriptionStatusOut(BaseModel):
+    is_expired: bool
+    days_left_in_trial: int | None
+    trial_ends_at: str | None
+    status: str
+
+
+@router.get("/subscription-status", response_model=SubscriptionStatusOut)
+def get_subscription_status(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get subscription status including trial expiry."""
+    org_id = current_user.org_id
+
+    subscription = db.query(Subscription).filter(
+        Subscription.org_id == org_id,
+        Subscription.status.in_(["active", "trial", "expired"]),
+    ).first()
+
+    if not subscription:
+        return {
+            "is_expired": True,
+            "days_left_in_trial": None,
+            "trial_ends_at": None,
+            "status": "no_subscription",
+        }
+
+    now = datetime.now(timezone.utc)
+    is_expired = False
+
+    # Check trial expiry
+    if subscription.trial_ends_at and subscription.trial_ends_at <= now:
+        is_expired = True
+        if subscription.status != "expired":
+            subscription.status = "expired"
+            db.commit()
+
+    # Check subscription expiry
+    if subscription.status == "expired":
+        is_expired = True
+
+    days_left_in_trial = None
+    if subscription.trial_ends_at:
+        days_left_in_trial = max(0, (subscription.trial_ends_at - now).days)
+
+    return {
+        "is_expired": is_expired,
+        "days_left_in_trial": days_left_in_trial,
+        "trial_ends_at": subscription.trial_ends_at.isoformat() if subscription.trial_ends_at else None,
+        "status": subscription.status,
+    }
+
+
+def check_write_access(db: Session, org_id: int) -> tuple[bool, str | None]:
+    """
+    Check if organization has write access (trial not expired).
+    Returns: (has_write_access: bool, expiration_message: str | None)
+    """
+    subscription = db.query(Subscription).filter(
+        Subscription.org_id == org_id,
+        Subscription.status.in_(["active", "trial"]),
+    ).first()
+
+    if not subscription:
+        return False, "No active subscription found"
+
+    now = datetime.now(timezone.utc)
+
+    # Check trial expiry
+    if subscription.trial_ends_at and subscription.trial_ends_at <= now:
+        subscription.status = "expired"
+        db.commit()
+        return False, "Trial period has expired. You can only read existing data. Please upgrade your plan."
+
+    # Check subscription expiry
+    if subscription.status == "expired":
+        return False, "Subscription has expired. You can only read existing data. Please renew your plan."
+
+    return True, None
+
+
 def check_plan_limit(
     db: Session,
     org_id: int,
@@ -267,6 +354,11 @@ def check_plan_limit(
     Check if organization can create a new resource based on plan limits.
     Returns: (allowed: bool, error_message: str, current_usage: int, limit: int)
     """
+    # First check write access
+    has_write, write_error = check_write_access(db, org_id)
+    if not has_write:
+        return False, write_error or "No write access", 0, 0
+
     # Get subscription
     subscription = db.query(Subscription).filter(
         Subscription.org_id == org_id,
@@ -279,17 +371,6 @@ def check_plan_limit(
     plan = db.query(PricingPlan).filter(PricingPlan.id == subscription.plan_id).first()
     if not plan:
         return False, "Plan not found", 0, 0
-
-    # Check trial expiry
-    now = datetime.now(timezone.utc)
-    if subscription.trial_ends_at and subscription.trial_ends_at <= now:
-        subscription.status = "expired"
-        db.commit()
-        return False, "Trial period has expired. Please upgrade your plan.", 0, 0
-
-    # Check subscription expiry
-    if subscription.status == "expired":
-        return False, "Subscription has expired. Please renew your plan.", 0, 0
 
     # Count actual records — source of truth
     resource_counts = {

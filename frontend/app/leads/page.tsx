@@ -25,8 +25,9 @@ export default function LeadsPage() {
   const { hasPermission } = useAuth();
   const router = useRouter();
   const canWrite = hasPermission("leads", "write");
-  const { getStatus } = usePlanLimit();
+  const { getStatus, hasWriteAccess } = usePlanLimit();
   const leadsStatus = getStatus("leads");
+  const trialExpired = !hasWriteAccess;
   const [leads, setLeads] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -217,8 +218,14 @@ export default function LeadsPage() {
                 id="leads-add-btn"
                 variant="primary"
                 size="sm"
-                disabled={leadsStatus && !leadsStatus.canCreate}
-                title={leadsStatus && !leadsStatus.canCreate ? `You've reached the limit of ${leadsStatus.limit} leads` : ""}
+                disabled={trialExpired || (leadsStatus && !leadsStatus.canCreate)}
+                title={
+                  trialExpired
+                    ? "Trial period expired. Please upgrade your plan."
+                    : leadsStatus && !leadsStatus.canCreate
+                      ? `You've reached the limit of ${leadsStatus.limit} leads`
+                      : ""
+                }
                 onClick={() => {
                   setEditLead(null);
                   setUseAiForAdd(false);
@@ -231,8 +238,14 @@ export default function LeadsPage() {
                 id="leads-ai-btn"
                 variant="outline"
                 size="sm"
-                disabled={leadsStatus && !leadsStatus.canCreate}
-                title={leadsStatus && !leadsStatus.canCreate ? `You've reached the limit of ${leadsStatus.limit} leads` : "AI Lead Entry"}
+                disabled={trialExpired || (leadsStatus && !leadsStatus.canCreate)}
+                title={
+                  trialExpired
+                    ? "Trial period expired. Please upgrade your plan."
+                    : leadsStatus && !leadsStatus.canCreate
+                      ? `You've reached the limit of ${leadsStatus.limit} leads`
+                      : "AI Lead Entry"
+                }
                 onClick={handleAIImport}
               >
                 <Sparkles className="h-4 w-4" /> AI Entry

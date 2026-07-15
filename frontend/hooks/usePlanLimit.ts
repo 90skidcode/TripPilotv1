@@ -20,21 +20,34 @@ export interface PlanUsage {
   days_left_in_trial: number | null;
 }
 
+export interface SubscriptionStatus {
+  is_expired: boolean;
+  days_left_in_trial: number | null;
+  trial_ends_at: string | null;
+  status: string;
+}
+
 export function usePlanLimit() {
   const [usage, setUsage] = useState<PlanUsage | null>(null);
+  const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    pricingApi
-      .usage()
-      .then(setUsage)
+    Promise.all([
+      pricingApi.usage(),
+      pricingApi.subscriptionStatus(),
+    ])
+      .then(([usageData, subData]) => {
+        setUsage(usageData);
+        setSubscription(subData);
+      })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
 
   const canCreate = (resource: keyof typeof RESOURCE_MAP) => {
-    if (!usage) return false;
+    if (!usage || subscription?.is_expired) return false;
     const key = RESOURCE_MAP[resource];
     const used = usage[`${key}_used` as keyof PlanUsage];
     const limit = usage[`${key}_limit` as keyof PlanUsage];
@@ -49,11 +62,23 @@ export function usePlanLimit() {
     return {
       used: typeof used === "number" ? used : 0,
       limit: typeof limit === "number" ? limit : 0,
-      canCreate: typeof used === "number" && typeof limit === "number" && used < limit,
+      canCreate: subscription?.is_expired ? false : (typeof used === "number" && typeof limit === "number" && used < limit),
     };
   };
 
-  return { usage, loading, error, canCreate, getStatus, refetch: () => setUsage(null) };
+  return {
+    usage,
+    subscription,
+    loading,
+    error,
+    canCreate,
+    getStatus,
+    hasWriteAccess: !subscription?.is_expired,
+    refetch: () => {
+      setUsage(null);
+      setSubscription(null);
+    }
+  };
 }
 
 const RESOURCE_MAP = {

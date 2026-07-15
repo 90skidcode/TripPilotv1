@@ -17,7 +17,7 @@ export default function ItineraryListPage() {
   const router = useRouter();
   const { hasPermission } = useAuth();
   const canWrite = hasPermission("itinerary", "write");
-  const { getStatus, loading: planLoading } = usePlanLimit();
+  const { getStatus, hasWriteAccess } = usePlanLimit();
   const itineraryStatus = getStatus("itineraries");
 
   useEffect(() => {
@@ -34,6 +34,7 @@ export default function ItineraryListPage() {
   }
 
   const limitReached = itineraryStatus && !itineraryStatus.canCreate;
+  const trialExpired = !hasWriteAccess;
 
   return (
     <AppShell title="Itinerary Builder">
@@ -55,8 +56,14 @@ export default function ItineraryListPage() {
             <Button
               id="create-itinerary-btn"
               variant="primary"
-              disabled={limitReached}
-              title={limitReached ? `You've reached the limit of ${itineraryStatus?.limit} itineraries` : ""}
+              disabled={limitReached || trialExpired}
+              title={
+                trialExpired
+                  ? "Trial period expired. Please upgrade your plan."
+                  : limitReached
+                    ? `You've reached the limit of ${itineraryStatus?.limit} itineraries`
+                    : ""
+              }
               onClick={() => router.push("/itinerary/new")}
             >
               ✨ New Itinerary
@@ -72,7 +79,9 @@ export default function ItineraryListPage() {
           <div className="flex flex-col items-center justify-center gap-4 py-16 px-4">
             <div className="text-6xl">🗺️</div>
             <h3 className="text-xl font-semibold">No itineraries yet</h3>
-            {limitReached ? (
+            {trialExpired ? (
+              <p className="text-destructive text-sm">Trial period expired. You can only view existing data. Please upgrade your plan to create new itineraries.</p>
+            ) : limitReached ? (
               <p className="text-destructive text-sm">You've reached the maximum itineraries limit. Please upgrade your plan.</p>
             ) : canWrite ? (
               <>

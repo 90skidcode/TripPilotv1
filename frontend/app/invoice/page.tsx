@@ -25,8 +25,9 @@ function InvoiceContent() {
   const { showToast } = useToast();
   const { hasPermission } = useAuth();
   const canWrite = hasPermission("bills" as any, "write") || hasPermission("vouchers", "write");
-  const { getStatus } = usePlanLimit();
+  const { getStatus, hasWriteAccess } = usePlanLimit();
   const billsStatus = getStatus("bills");
+  const trialExpired = !hasWriteAccess;
 
   const [invoices, setInvoices] = useState<any[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
@@ -243,8 +244,14 @@ function InvoiceContent() {
             {canWrite && (
               <Button
                 variant="primary"
-                disabled={billsStatus && !billsStatus.canCreate}
-                title={billsStatus && !billsStatus.canCreate ? `You've reached the limit of ${billsStatus.limit} invoices` : ""}
+                disabled={trialExpired || (billsStatus && !billsStatus.canCreate)}
+                title={
+                  trialExpired
+                    ? "Trial period expired. Please upgrade your plan."
+                    : billsStatus && !billsStatus.canCreate
+                      ? `You've reached the limit of ${billsStatus.limit} invoices`
+                      : ""
+                }
                 onClick={openCreateDrawer}
               >
                 ＋ Create Invoice

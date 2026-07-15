@@ -216,6 +216,7 @@ export const inventoryApi = {
 export const pricingApi = {
   usage: () => api.get<any>("/pricing/usage"),
   plans: () => api.get<any[]>("/pricing/plans"),
+  subscriptionStatus: () => api.get<any>("/pricing/subscription-status"),
 };
 
 // ── Invoices ──
