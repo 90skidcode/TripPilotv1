@@ -256,3 +256,43 @@ export const leadCostingApi = {
   get: (leadId: number) => api.get<any>(`/leads/${leadId}/costing`),
   upsert: (leadId: number, data: any) => api.put<any>(`/leads/${leadId}/costing`, data),
 };
+
+// ── Master Data ──
+export const masterDataApi = {
+  getCategories: () => api.get<string[]>("/master-data/categories"),
+  list: (category?: string) => {
+    const path = category ? `/master-data/${category}` : "/master-data";
+    return api.get<any[]>(path);
+  },
+  getByCategory: (category: string) =>
+    api.get<any[]>(`/master-data/${category}`),
+  create: (data: any) =>
+    api.post<any>("/master-data", data),
+  update: (id: number, data: any) =>
+    api.put<any>(`/master-data/${id}`, data),
+  delete: (id: number) =>
+    api.delete(`/master-data/${id}`),
+};
+
+export const SuperAdminAPI = {
+  getToken: () => typeof window !== "undefined" ? localStorage.getItem("trippilot_token") : null,
+  getAllPricingPlans: () => api.get<any[]>("/pricing/plans/all"),
+  getAgencies: () => api.get<any[]>("/superadmin/agencies"),
+  getPlanBillingCycles: (planId: number) =>
+    api.get<any[]>(`/pricing/plans/${planId}/billing-cycles`),
+  createBillingCycle: (planId: number, data: any) =>
+    api.post<any>(`/pricing/plans/${planId}/billing-cycles`, data),
+  updateBillingCycle: (cycleId: number, data: any) =>
+    api.put<any>(`/pricing/billing-cycles/${cycleId}`, data),
+  deleteBillingCycle: (cycleId: number) =>
+    api.delete(`/pricing/billing-cycles/${cycleId}`),
+  getMasterDataCategories: () => api.get<string[]>("/master-data/categories"),
+  getMasterData: (category: string) =>
+    api.get<any[]>(`/master-data/${category}`),
+  createMasterData: (data: any) =>
+    api.post<any>("/master-data", data),
+  updateMasterData: (id: number, data: any) =>
+    api.put<any>(`/master-data/${id}`, data),
+  deleteMasterData: (id: number) =>
+    api.delete(`/master-data/${id}`),
+};

@@ -408,6 +408,79 @@ export class SuperAdminAPI {
       throw new Error("Failed to delete billing cycle");
     }
   }
+
+  // ── Master Data ──
+
+  static async getMasterDataCategories(): Promise<string[]> {
+    const response = await fetch(`${API_URL}/master-data/categories`, {
+      headers: { Authorization: `Bearer ${this.getToken()}` },
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch categories");
+    }
+
+    return response.json();
+  }
+
+  static async getMasterData(category: string): Promise<any[]> {
+    const response = await fetch(`${API_URL}/master-data/${category}`, {
+      headers: { Authorization: `Bearer ${this.getToken()}` },
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch master data");
+    }
+
+    return response.json();
+  }
+
+  static async createMasterData(data: any): Promise<any> {
+    const response = await fetch(`${API_URL}/master-data`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.getToken()}`,
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.detail || "Failed to create master data");
+    }
+
+    return response.json();
+  }
+
+  static async updateMasterData(id: number, data: any): Promise<any> {
+    const response = await fetch(`${API_URL}/master-data/${id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.getToken()}`,
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.detail || "Failed to update master data");
+    }
+
+    return response.json();
+  }
+
+  static async deleteMasterData(id: number): Promise<void> {
+    const response = await fetch(`${API_URL}/master-data/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${this.getToken()}` },
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to delete master data");
+    }
+  }
 }
 
 

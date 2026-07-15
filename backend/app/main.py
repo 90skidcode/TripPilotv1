@@ -8,10 +8,11 @@ import traceback
 from app.core.database import SessionLocal
 from app.core.security import hash_password
 from fastapi.staticfiles import StaticFiles
-from app.api import auth, leads, customers, itinerary, vouchers, invoices, inventory, dashboard, upload, followups, user_groups, superadmin, pricing, webhooks, chats, b2b_partners, lead_costing, flights, lead_partners, lead_payments, org_data
+from app.api import auth, leads, customers, itinerary, vouchers, invoices, inventory, dashboard, upload, followups, user_groups, superadmin, pricing, webhooks, chats, b2b_partners, lead_costing, flights, lead_partners, lead_payments, org_data, master_data
 from app.models import organization, user, lead, customer as customer_model, itinerary as itinerary_model, followup, inventory as inventory_model, user_group, message as message_model
 from app.models import b2b_partner as b2b_partner_model, lead_costing as lead_costing_model
 from app.models.pricing_plan import PricingPlan
+from app.models.master_data import MasterData
 
 
 def seed_pricing_plans(db: Session):
@@ -137,6 +138,48 @@ def seed_admin(db: Session):
         print("[INFO] Subscription already exists for default organization")
 
 
+def seed_master_data(db: Session):
+    """Create default master data if none exist."""
+    default_data = [
+        # Lead Stages
+        ("lead_stages", "fresh", "Fresh Lead", 1),
+        ("lead_stages", "qualified_hot", "Qualified Hot", 2),
+        ("lead_stages", "qualified_warm", "Qualified Warm", 3),
+        ("lead_stages", "won", "Won", 4),
+        ("lead_stages", "lost", "Lost", 5),
+        ("lead_stages", "not_responding", "Not Responding", 6),
+        ("lead_stages", "disqualified", "Disqualified", 7),
+        ("lead_stages", "future_prospect", "Future Prospect", 8),
+        # Payment Types
+        ("payment_types", "full", "Full Payment", 1),
+        ("payment_types", "partial", "Partial Payment", 2),
+        # Payment Methods
+        ("payment_methods", "cash", "Cash", 1),
+        ("payment_methods", "upi", "UPI", 2),
+        ("payment_methods", "bank_transfer", "Bank Transfer", 3),
+        ("payment_methods", "card", "Card", 4),
+        ("payment_methods", "cheque", "Cheque", 5),
+        ("payment_methods", "other", "Other", 6),
+    ]
+
+    for category, key, label, order in default_data:
+        existing = db.query(MasterData).filter(
+            MasterData.category == category,
+            MasterData.key == key
+        ).first()
+        if not existing:
+            data = MasterData(
+                category=category,
+                key=key,
+                label=label,
+                order=order,
+            )
+            db.add(data)
+
+    db.commit()
+    print("[OK] Master data seeded successfully")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Schema is managed by Alembic (`alembic upgrade head` runs at container
@@ -147,6 +190,7 @@ async def lifespan(app: FastAPI):
     try:
         seed_pricing_plans(db)
         seed_admin(db)
+        seed_master_data(db)
     finally:
         db.close()
     yield
@@ -188,6 +232,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 # ── Routers ──
 app.include_router(auth.router,        prefix="/auth",         tags=["Auth"])
+app.include_router(master_data.router,  prefix="/master-data",  tags=["Master Data"])
 app.include_router(pricing.router,     prefix="/pricing",      tags=["Pricing"])
 app.include_router(user_groups.router, prefix="/user-groups",  tags=["User Groups"])
 app.include_router(customers.router,   prefix="/customers",    tags=["Customers"])
