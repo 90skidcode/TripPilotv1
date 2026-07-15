@@ -1,7 +1,7 @@
 """add advisor and agency settings to organizations
 
 Revision ID: c6d7e8f9g0h1
-Revises: fbd848f261ad
+Revises: e02b4e9c29a3
 Create Date: 2026-07-14 00:00:00.000000
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'c6d7e8f9g0h1'
-down_revision: Union[str, None] = 'fbd848f261ad'
+down_revision: Union[str, None] = 'e02b4e9c29a3'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
