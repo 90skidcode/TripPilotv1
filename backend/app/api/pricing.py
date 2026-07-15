@@ -226,6 +226,11 @@ def get_usage(
         subscription.status = "expired"
         db.commit()
 
+    # Check paid plan renewal date expiry
+    if subscription.renewal_date and subscription.renewal_date <= now:
+        subscription.status = "expired"
+        db.commit()
+
     # Count actual records — source of truth, always accurate regardless of deletes/imports
     leads_used = db.query(func.count(Lead.id)).filter(Lead.org_id == org_id).scalar() or 0
     itineraries_used = db.query(func.count(Itinerary.id)).filter(Itinerary.org_id == org_id).scalar() or 0
@@ -275,7 +280,7 @@ def get_subscription_status(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get subscription status including trial expiry."""
+    """Get subscription status including trial & paid plan expiry."""
     org_id = current_user.org_id
 
     subscription = db.query(Subscription).filter(
@@ -301,7 +306,14 @@ def get_subscription_status(
             subscription.status = "expired"
             db.commit()
 
-    # Check subscription expiry
+    # Check paid plan renewal date expiry
+    if subscription.renewal_date and subscription.renewal_date <= now:
+        is_expired = True
+        if subscription.status != "expired":
+            subscription.status = "expired"
+            db.commit()
+
+    # Check explicit expired status
     if subscription.status == "expired":
         is_expired = True
 
@@ -319,12 +331,12 @@ def get_subscription_status(
 
 def check_write_access(db: Session, org_id: int) -> tuple[bool, str | None]:
     """
-    Check if organization has write access (trial not expired).
+    Check if organization has write access (trial not expired & subscription active).
     Returns: (has_write_access: bool, expiration_message: str | None)
     """
     subscription = db.query(Subscription).filter(
         Subscription.org_id == org_id,
-        Subscription.status.in_(["active", "trial"]),
+        Subscription.status.in_(["active", "trial", "expired"]),
     ).first()
 
     if not subscription:
@@ -338,11 +350,21 @@ def check_write_access(db: Session, org_id: int) -> tuple[bool, str | None]:
         db.commit()
         return False, "Trial period has expired. You can only read existing data. Please upgrade your plan."
 
-    # Check subscription expiry
+    # Check paid plan renewal date expiry
+    if subscription.renewal_date and subscription.renewal_date <= now:
+        subscription.status = "expired"
+        db.commit()
+        return False, "Subscription has expired. You can only read existing data. Please renew your plan."
+
+    # Check explicit expired status
     if subscription.status == "expired":
         return False, "Subscription has expired. You can only read existing data. Please renew your plan."
 
-    return True, None
+    # Active subscription with valid dates
+    if subscription.status in ["active", "trial"]:
+        return True, None
+
+    return False, "Subscription status is not active."
 
 
 def check_plan_limit(

@@ -41,6 +41,7 @@ export default function AppShell({ children, title }: { children: React.ReactNod
             isExpired={subscription.is_expired}
             daysLeft={subscription.days_left_in_trial}
             trialEndsAt={subscription.trial_ends_at}
+            status={subscription.status}
           />
         )}
         <main className="flex-1 overflow-y-auto p-6 lg:p-8">
