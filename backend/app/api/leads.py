@@ -380,8 +380,10 @@ def get_lead_workspace(
                 "company_name": p.partner.company_name if p.partner else None,
                 "category": (p.partner.category.value if p.partner and hasattr(p.partner.category, "value") else (p.partner.category if p.partner else None)),
                 "role": p.role,
+                "country": p.country,
                 "cost": p.cost,
                 "notes": p.notes,
+                "countries": p.partner.countries if p.partner else [],
                 "created_at": p.created_at,
             }
             for p in partners

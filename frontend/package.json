@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev -p 3000 -H localhost",
+    "dev": "next dev -p 3001 -H localhost",
     "build": "next build",
     "analyze": "cross-env ANALYZE=true next build",
     "start": "next start",
