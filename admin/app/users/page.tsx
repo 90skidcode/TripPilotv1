@@ -23,7 +23,6 @@ interface AgencyUser {
   id: number;
   name: string;
   email: string;
-  role: "admin" | "manager" | "agent";
   org_id: number;
   group_id: number | null;
 }
@@ -64,7 +63,6 @@ export default function UsersPage() {
   const [userFormData, setUserFormData] = useState({
     name: "",
     email: "",
-    role: "agent" as "admin" | "manager" | "agent",
     group_id: -1 // -1 means no group assignment
   });
   const [savingUser, setSavingUser] = useState(false);
@@ -186,7 +184,6 @@ export default function UsersPage() {
     setUserFormData({
       name: user.name,
       email: user.email,
-      role: user.role,
       group_id: user.group_id !== null ? user.group_id : -1
     });
     setEditUserDrawerOpen(true);
@@ -206,7 +203,6 @@ export default function UsersPage() {
       await SuperAdminAPI.updateAgencyUser(editingUser.id, {
         name: userFormData.name,
         email: userFormData.email,
-        role: userFormData.role,
         group_id: userFormData.group_id
       });
       showToast("User settings updated successfully", "success");
@@ -382,8 +378,7 @@ export default function UsersPage() {
 
   const filteredUsers = users.filter(user =>
     user.name.toLowerCase().includes(searchUserQuery.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchUserQuery.toLowerCase()) ||
-    user.role.toLowerCase().includes(searchUserQuery.toLowerCase())
+    user.email.toLowerCase().includes(searchUserQuery.toLowerCase())
   );
 
   return (
@@ -583,7 +578,6 @@ export default function UsersPage() {
                       <thead>
                         <tr style={{ background: "var(--bg-hover)", borderBottom: "1px solid var(--border)" }}>
                           <th style={{ padding: "16px 20px", fontSize: "12px", fontWeight: 700, color: "var(--text-primary)", textTransform: "uppercase" }}>User Name</th>
-                          <th style={{ padding: "16px 20px", fontSize: "12px", fontWeight: 700, color: "var(--text-primary)", textTransform: "uppercase" }}>System Role</th>
                           <th style={{ padding: "16px 20px", fontSize: "12px", fontWeight: 700, color: "var(--text-primary)", textTransform: "uppercase" }}>Assigned Group</th>
                           <th style={{ padding: "16px 20px", fontSize: "12px", fontWeight: 700, color: "var(--text-primary)", textTransform: "uppercase", textAlign: "right" }}>Actions</th>
                         </tr>
@@ -600,8 +594,8 @@ export default function UsersPage() {
                                     width: "36px",
                                     height: "36px",
                                     borderRadius: "50%",
-                                    background: user.role === "admin" ? "var(--brand)" : "var(--bg-hover)",
-                                    color: user.role === "admin" ? "white" : "var(--text-primary)",
+                                    background: "var(--bg-hover)",
+                                    color: "var(--text-primary)",
                                     fontWeight: 700,
                                     fontSize: "12px",
                                     display: "flex",
@@ -617,35 +611,7 @@ export default function UsersPage() {
                                 </div>
                               </td>
                               <td style={{ padding: "16px 20px" }}>
-                                <span style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  padding: "4px 10px",
-                                  borderRadius: "6px",
-                                  fontSize: "11px",
-                                  fontWeight: 700,
-                                  textTransform: "uppercase",
-                                  letterSpacing: "0.02em",
-                                  background: user.role === "admin" 
-                                    ? "#F3E8FF" 
-                                    : user.role === "manager" 
-                                    ? "#E0F2FE" 
-                                    : "#F1F5F9",
-                                  color: user.role === "admin" 
-                                    ? "#6B21A8" 
-                                    : user.role === "manager" 
-                                    ? "#0369A1" 
-                                    : "#475569"
-                                }}>
-                                  {user.role}
-                                </span>
-                              </td>
-                              <td style={{ padding: "16px 20px" }}>
-                                {user.role === "admin" ? (
-                                  <span style={{ fontSize: "13px", color: "var(--text-secondary)", fontStyle: "italic" }}>
-                                    ✨ Full Access (Bypassed)
-                                  </span>
-                                ) : assignedGroup ? (
+                                {assignedGroup ? (
                                   <span style={{
                                     display: "inline-flex",
                                     alignItems: "center",
@@ -916,24 +882,6 @@ export default function UsersPage() {
                 </div>
 
                 <div className="input-group">
-                  <label className="input-label" style={{ fontWeight: 600, fontSize: "13px" }}>System Role</label>
-                  <select
-                    value={userFormData.role}
-                    onChange={(e) => setUserFormData(prev => ({ ...prev, role: e.target.value as any }))}
-                    className="input"
-                    style={{ background: "white" }}
-                  >
-                    <option value="admin">Administrator (Full Access)</option>
-                    <option value="manager">Manager</option>
-                    <option value="agent">Agent</option>
-                  </select>
-                  <p style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "4px" }}>
-                    Administrators bypass group-level restrictions and have full read & write privileges.
-                  </p>
-                </div>
-
-                {userFormData.role !== "admin" && (
-                  <div className="input-group">
                     <label className="input-label" style={{ fontWeight: 600, fontSize: "13px" }}>Permission Group Assignment</label>
                     <select
                       value={userFormData.group_id}
@@ -947,10 +895,9 @@ export default function UsersPage() {
                       ))}
                     </select>
                     <p style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "4px" }}>
-                      Choose a permission group to set screen-wise matrix access. Unassigned managers/agents are blocked from all functions.
+                      Choose a permission group to set screen-wise matrix access. Users without a group are blocked from all functions.
                     </p>
                   </div>
-                )}
               </div>
 
               <div style={{ padding: "20px 24px", borderTop: "1px solid var(--border)", display: "flex", gap: "12px", background: "var(--bg-hover)" }}>
@@ -1214,7 +1161,7 @@ export default function UsersPage() {
                 </div>
                 <div>
                   <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>{impersonateModal.user.name}</div>
-                  <div style={{ fontSize: "11px", color: "var(--text-secondary)" }}>{impersonateModal.user.email} (Role: {impersonateModal.user.role})</div>
+                  <div style={{ fontSize: "11px", color: "var(--text-secondary)" }}>{impersonateModal.user.email}</div>
                 </div>
               </div>
 
