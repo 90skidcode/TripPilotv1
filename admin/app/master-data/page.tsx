@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { SuperAdminAPI } from "@/lib/api";
+import { DataTable, DataTableColumn } from "@/components/DataTable";
+import { usePagination } from "@/components/DataTable/usePagination";
+import { Edit2, Trash2 } from "lucide-react";
 
 interface MasterDataItem {
   id: number;
@@ -21,6 +24,7 @@ export default function MasterDataPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [data, setData] = useState<MasterDataItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const { pagination, handlers } = usePagination(0);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
@@ -229,109 +233,63 @@ export default function MasterDataPage() {
       </div>
 
       {/* Data Table */}
-      <div
-        style={{
-          background: "white",
-          borderRadius: "12px",
-          border: "1px solid var(--border)",
-          boxShadow: "0 4px 6px rgba(0, 0, 0, 0.07)",
-          overflow: "hidden",
-          marginBottom: "24px",
-        }}
-      >
-        {data.length === 0 ? (
-          <div style={{ padding: "48px 20px", textAlign: "center", color: "var(--text-secondary)" }}>
-            <div style={{ fontSize: "36px", marginBottom: "12px" }}>📋</div>
-            <div style={{ fontSize: "14px", fontWeight: 600, marginBottom: "4px" }}>No data found</div>
-            <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-              Create your first master data entry to get started.
-            </div>
+      {(() => {
+        const columns: DataTableColumn<MasterDataItem>[] = [
+          {
+            key: "key",
+            header: "Key",
+            render: (value) => <code className="font-mono text-sm">{value}</code>,
+          },
+          {
+            key: "label",
+            header: "Label",
+          },
+          {
+            key: "description",
+            header: "Description",
+            render: (value) => value || "—",
+          },
+          {
+            key: "order",
+            header: "Order",
+            align: "center",
+          },
+        ];
+
+        const actions = [
+          {
+            id: "edit",
+            icon: <Edit2 className="w-4 h-4" />,
+            label: "Edit",
+            onClick: (item: MasterDataItem) => handleOpenEdit(item),
+          },
+          {
+            id: "delete",
+            icon: <Trash2 className="w-4 h-4" />,
+            label: "Delete",
+            variant: "danger" as const,
+            onClick: (item: MasterDataItem) => handleDelete(item.id),
+          },
+        ];
+
+        return (
+          <div style={{ marginBottom: "24px" }}>
+            <DataTable<MasterDataItem>
+              columns={columns}
+              data={data}
+              actions={actions}
+              pagination={{ ...pagination, total: data.length }}
+              onPaginationChange={handlers.onPaginationChange}
+              isLoading={loading}
+              emptyMessage="Create your first master data entry to get started."
+              emptyIcon="📋"
+              compact={false}
+              striped={true}
+              hoverable={true}
+            />
           </div>
-        ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", margin: 0 }}>
-              <thead>
-                <tr style={{ background: "var(--bg-hover)", borderBottom: "1px solid var(--border)" }}>
-                  <th style={{ padding: "16px 20px", textAlign: "left", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-secondary)" }}>
-                    Key
-                  </th>
-                  <th style={{ padding: "16px 20px", textAlign: "left", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-secondary)" }}>
-                    Label
-                  </th>
-                  <th style={{ padding: "16px 20px", textAlign: "left", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-secondary)" }}>
-                    Description
-                  </th>
-                  <th style={{ padding: "16px 20px", textAlign: "center", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-secondary)" }}>
-                    Order
-                  </th>
-                  <th style={{ padding: "16px 20px", textAlign: "right", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-secondary)" }}>
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.map((item) => (
-                  <tr
-                    key={item.id}
-                    style={{
-                      borderBottom: "1px solid var(--border)",
-                      transition: "background 0.2s ease",
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                  >
-                    <td style={{ padding: "16px 20px", fontWeight: 600, color: "var(--text-primary)", fontFamily: "monospace", fontSize: "12px" }}>
-                      {item.key}
-                    </td>
-                    <td style={{ padding: "16px 20px", color: "var(--text-primary)" }}>
-                      {item.label}
-                    </td>
-                    <td style={{ padding: "16px 20px", color: "var(--text-secondary)", fontSize: "13px" }}>
-                      {item.description || "—"}
-                    </td>
-                    <td style={{ padding: "16px 20px", textAlign: "center", color: "var(--text-secondary)", fontSize: "13px" }}>
-                      {item.order}
-                    </td>
-                    <td style={{ padding: "16px 20px", textAlign: "right", display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-                      <button
-                        onClick={() => handleOpenEdit(item)}
-                        style={{
-                          padding: "6px 12px",
-                          background: "#e0f2fe",
-                          color: "#0369a1",
-                          border: "none",
-                          borderRadius: "6px",
-                          cursor: "pointer",
-                          fontSize: "12px",
-                          fontWeight: 500,
-                        }}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDelete(item.id)}
-                        style={{
-                          padding: "6px 12px",
-                          background: "#fee2e2",
-                          color: "#991b1b",
-                          border: "none",
-                          borderRadius: "6px",
-                          cursor: "pointer",
-                          fontSize: "12px",
-                          fontWeight: 500,
-                        }}
-                        disabled={saving}
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+        );
+      })()}
 
       {/* Form */}
       {showForm && (

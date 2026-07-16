@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { SuperAdminAPI } from "@/lib/api";
+import { DataTable, DataTableColumn } from "@/components/DataTable";
+import { usePagination } from "@/components/DataTable/usePagination";
+import { Edit2, Settings, ToggleRight } from "lucide-react";
 import BillingCyclesManager from "@/components/BillingCyclesManager";
 
 interface PricingPlan {
@@ -62,6 +65,7 @@ export default function PricingPlansPage() {
     type: "success" | "error" | "info";
     isOpen: boolean;
   } | null>(null);
+  const { pagination, handlers } = usePagination(0);
 
   useEffect(() => {
     const token = SuperAdminAPI.getToken();
@@ -495,180 +499,132 @@ export default function PricingPlansPage() {
         </>
       )}
 
-      {/* Premium Plans Table Container */}
-      <div
-        style={{
-          background: "white",
-          borderRadius: "16px",
-          border: "1px solid var(--border)",
-          boxShadow: "0 4px 20px rgba(15, 23, 42, 0.04)",
-          overflow: "hidden"
-        }}
-      >
-        <div style={{ overflowX: "auto" }}>
-          <table className="table" style={{ width: "100%", borderCollapse: "collapse", margin: 0 }}>
-            <thead>
-              <tr style={{ background: "var(--bg-hover)", borderBottom: "1px solid var(--border)" }}>
-                <th style={{ padding: "16px 20px", textAlign: "left", fontSize: "13px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-secondary)" }}>Plan Name</th>
-                <th style={{ padding: "16px 20px", textAlign: "center", fontSize: "13px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-secondary)" }}>Monthly Price</th>
-                <th style={{ padding: "16px 20px", textAlign: "center", fontSize: "13px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-secondary)" }}>Itineraries</th>
-                <th style={{ padding: "16px 20px", textAlign: "center", fontSize: "13px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-secondary)" }}>Leads</th>
-                <th style={{ padding: "16px 20px", textAlign: "center", fontSize: "13px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-secondary)" }}>Vouchers</th>
-                <th style={{ padding: "16px 20px", textAlign: "center", fontSize: "13px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-secondary)" }}>Bills</th>
-                <th style={{ padding: "16px 20px", textAlign: "center", fontSize: "13px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-secondary)" }}>Team Limit</th>
-                <th style={{ padding: "16px 20px", textAlign: "center", fontSize: "13px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-secondary)" }}>Storage Cap</th>
-                <th style={{ padding: "16px 20px", textAlign: "center", fontSize: "13px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-secondary)" }}>Trial Period</th>
-                <th style={{ padding: "16px 20px", textAlign: "center", fontSize: "13px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-secondary)" }}>Status</th>
-                <th style={{ padding: "16px 20px", textAlign: "center", fontSize: "13px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-secondary)" }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {plans.length === 0 ? (
-                <tr>
-                  <td colSpan={11} style={{ padding: "48px 20px", textAlign: "center", color: "var(--text-secondary)" }}>
-                    <div style={{ fontSize: "36px", marginBottom: "12px" }}>🔍</div>
-                    <div style={{ fontSize: "16px", fontWeight: 600, marginBottom: "4px" }}>No pricing plans found</div>
-                    <div style={{ fontSize: "13px", color: "var(--text-muted)", marginBottom: "16px" }}>
-                      There are no pricing plans available or the server could not be reached.
-                    </div>
-                    <button type="button" onClick={loadPlans} className="btn btn-outline" style={{ display: "inline-flex", alignItems: "center", gap: "6px", margin: "0 auto", padding: "6px 14px", borderRadius: "8px", fontSize: "13px", fontWeight: 600 }}>
-                      🔄 Retry Loading
-                    </button>
-                  </td>
-                </tr>
+      {/* Pricing Plans Table */}
+      {(() => {
+        const columns: DataTableColumn<PricingPlan>[] = [
+          { key: "name", header: "Plan Name" },
+          {
+            key: "monthly_price",
+            header: "Monthly Price",
+            align: "center",
+            render: (value) =>
+              value === 0 ? (
+                <span className="px-2 py-1 rounded text-xs font-semibold bg-teal-100 text-teal-800">
+                  Free
+                </span>
               ) : (
-                plans.map((plan) => (
-                <tr
-                  key={plan.id}
-                  style={{
-                    borderBottom: "1px solid var(--border)",
-                    opacity: plan.is_active ? 1 : 0.65,
-                    transition: "background 0.2s ease, opacity 0.2s ease"
-                  }}
-                  className="table-row-hover"
-                >
-                  {/* Name */}
-                  <td style={{ padding: "16px 20px", fontWeight: 700, color: "var(--text-primary)", fontSize: "15px" }}>
-                    {plan.name}
-                  </td>
-                  
-                  {/* Monthly Price */}
-                  <td style={{ padding: "16px 20px", textAlign: "center" }}>
-                    {plan.monthly_price === 0 ? (
-                      <span className="badge badge-teal" style={{ fontWeight: 700, fontSize: "12px", padding: "4px 8px" }}>
-                        Free
-                      </span>
-                    ) : (
-                      <span style={{ fontWeight: 700, color: "var(--brand)", fontSize: "15px" }}>
-                        ₹{plan.monthly_price}
-                        <span style={{ fontSize: "11px", fontWeight: 500, color: "var(--text-secondary)" }}>/mo</span>
-                      </span>
-                    )}
-                  </td>
-                  
-                  {/* Itineraries */}
-                  <td style={{ padding: "16px 20px", textAlign: "center", color: "var(--text-primary)", fontWeight: 600 }}>
-                    {plan.itineraries_limit === -1 ? (
-                      <span style={{ color: "var(--text-secondary)", fontSize: "16px", fontWeight: 500 }}>∞</span>
-                    ) : (
-                      plan.itineraries_limit
-                    )}
-                  </td>
-                  
-                  {/* Leads */}
-                  <td style={{ padding: "16px 20px", textAlign: "center", color: "var(--text-primary)", fontWeight: 600 }}>
-                    {plan.leads_limit === -1 ? (
-                      <span style={{ color: "var(--text-secondary)", fontSize: "16px", fontWeight: 500 }}>∞</span>
-                    ) : (
-                      plan.leads_limit
-                    )}
-                  </td>
-                  
-                  {/* Vouchers */}
-                  <td style={{ padding: "16px 20px", textAlign: "center", color: "var(--text-primary)", fontWeight: 600 }}>
-                    {plan.vouchers_limit === -1 ? (
-                      <span style={{ color: "var(--text-secondary)", fontSize: "16px", fontWeight: 500 }}>∞</span>
-                    ) : (
-                      plan.vouchers_limit
-                    )}
-                  </td>
-                  
-                  {/* Bills */}
-                  <td style={{ padding: "16px 20px", textAlign: "center", color: "var(--text-primary)", fontWeight: 600 }}>
-                    {plan.bills_limit === -1 ? (
-                      <span style={{ color: "var(--text-secondary)", fontSize: "16px", fontWeight: 500 }}>∞</span>
-                    ) : (
-                      plan.bills_limit
-                    )}
-                  </td>
-                  
-                  {/* Team Members */}
-                  <td style={{ padding: "16px 20px", textAlign: "center", color: "var(--text-primary)", fontWeight: 600 }}>
-                    {plan.team_members_limit === -1 ? (
-                      <span style={{ color: "var(--text-secondary)", fontSize: "16px", fontWeight: 500 }}>∞</span>
-                    ) : (
-                      `${plan.team_members_limit} users`
-                    )}
-                  </td>
-                  
-                  {/* Storage */}
-                  <td style={{ padding: "16px 20px", textAlign: "center", color: "var(--text-primary)", fontWeight: 600 }}>
-                    {plan.storage_gb === -1 ? (
-                      <span style={{ color: "var(--text-secondary)", fontSize: "16px", fontWeight: 500 }}>∞</span>
-                    ) : (
-                      `${plan.storage_gb} GB`
-                    )}
-                  </td>
-                  
-                  {/* Trial Days */}
-                  <td style={{ padding: "16px 20px", textAlign: "center", color: "var(--text-secondary)" }}>
-                    {plan.trial_days === 0 ? (
-                      <span style={{ color: "var(--text-secondary)", fontSize: "13px", fontStyle: "italic" }}>No Trial</span>
-                    ) : (
-                      <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>{plan.trial_days} days</span>
-                    )}
-                  </td>
-                  
-                  {/* Status */}
-                  <td style={{ padding: "16px 20px", textAlign: "center" }}>
-                    <span className={`badge ${plan.is_active ? "badge-green" : "badge-red"}`} style={{ display: "inline-block", padding: "4px 8px" }}>
-                      {plan.is_active ? "Active" : "Inactive"}
-                    </span>
-                  </td>
-                  
-                  {/* Actions */}
-                  <td style={{ padding: "16px 20px", textAlign: "center" }}>
-                    <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
-                      <button
-                        onClick={() => setBillingCyclesModal({ isOpen: true, plan })}
-                        className="btn btn-sm btn-outline"
-                        style={{ padding: "4px 10px", borderRadius: "6px", border: "1px solid var(--border)", fontSize: "12px" }}
-                        title="Manage billing cycles (monthly, quarterly, yearly)"
-                      >
-                        💰 Cycles
-                      </button>
-                      <button
-                        onClick={() => handleOpenEdit(plan)}
-                        className="btn btn-sm btn-outline"
-                        style={{ padding: "4px 10px", borderRadius: "6px", border: "1px solid var(--border)", fontSize: "12px" }}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleToggleStatus(plan)}
-                        className={`btn btn-sm ${plan.is_active ? "btn-outline btn-danger" : "btn-primary"}`}
-                        style={{ padding: "4px 10px", borderRadius: "6px", fontSize: "12px", border: plan.is_active ? "1px solid var(--error-border)" : "none" }}
-                      >
-                        {plan.is_active ? "Deactivate" : "Activate"}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              )))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                <span className="font-bold text-blue-600">
+                  ₹{value}<span className="text-xs text-slate-600 font-normal">/mo</span>
+                </span>
+              ),
+          },
+          {
+            key: "itineraries_limit",
+            header: "Itineraries",
+            align: "center",
+            render: (value) => (value === -1 ? <span className="text-lg font-light">∞</span> : value),
+          },
+          {
+            key: "leads_limit",
+            header: "Leads",
+            align: "center",
+            render: (value) => (value === -1 ? <span className="text-lg font-light">∞</span> : value),
+          },
+          {
+            key: "vouchers_limit",
+            header: "Vouchers",
+            align: "center",
+            render: (value) => (value === -1 ? <span className="text-lg font-light">∞</span> : value),
+          },
+          {
+            key: "bills_limit",
+            header: "Bills",
+            align: "center",
+            render: (value) => (value === -1 ? <span className="text-lg font-light">∞</span> : value),
+          },
+          {
+            key: "team_members_limit",
+            header: "Team Limit",
+            align: "center",
+            render: (value) =>
+              value === -1 ? <span className="text-lg font-light">∞</span> : `${value} users`,
+          },
+          {
+            key: "storage_gb",
+            header: "Storage",
+            align: "center",
+            render: (value) =>
+              value === -1 ? <span className="text-lg font-light">∞</span> : `${value} GB`,
+          },
+          {
+            key: "trial_days",
+            header: "Trial",
+            align: "center",
+            render: (value) =>
+              value === 0 ? (
+                <span className="text-sm text-slate-500 italic">No Trial</span>
+              ) : (
+                <span className="font-semibold">{value} days</span>
+              ),
+          },
+          {
+            key: "is_active",
+            header: "Status",
+            align: "center",
+            render: (value) => (
+              <span
+                className={`px-2 py-1 rounded text-xs font-semibold ${
+                  value
+                    ? "bg-green-100 text-green-800"
+                    : "bg-red-100 text-red-800"
+                }`}
+              >
+                {value ? "Active" : "Inactive"}
+              </span>
+            ),
+          },
+        ];
+
+        const actions = [
+          {
+            id: "cycles",
+            icon: <Settings className="w-4 h-4" />,
+            label: "Billing Cycles",
+            tooltip: "Manage billing cycles",
+            onClick: (plan: PricingPlan) =>
+              setBillingCyclesModal({ isOpen: true, plan }),
+          },
+          {
+            id: "edit",
+            icon: <Edit2 className="w-4 h-4" />,
+            label: "Edit",
+            onClick: (plan: PricingPlan) => handleOpenEdit(plan),
+          },
+          {
+            id: "toggle",
+            icon: <ToggleRight className="w-4 h-4" />,
+            label: "Toggle Status",
+            variant: "warning" as const,
+            onClick: (plan: PricingPlan) => handleToggleStatus(plan),
+          },
+        ];
+
+        return (
+          <DataTable<PricingPlan>
+            columns={columns}
+            data={plans}
+            actions={actions as any}
+            pagination={{ ...pagination, total: plans.length }}
+            onPaginationChange={handlers.onPaginationChange}
+            isLoading={loading}
+            emptyMessage="No pricing plans found"
+            emptyIcon="💰"
+            compact={false}
+            striped={true}
+            hoverable={true}
+          />
+        );
+      })()}
 
       {/* Premium Status Toggle Confirmation Dialog Modal */}
       {statusModal.isOpen && statusModal.plan && (

@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { SuperAdminAPI } from "@/lib/api";
+import { DataTable, DataTableColumn } from "@/components/DataTable";
+import { usePagination } from "@/components/DataTable/usePagination";
 
 interface Subscription {
   id: number;
@@ -28,6 +30,7 @@ export default function SubscriptionsPage() {
     type: "success" | "error" | "info";
     isOpen: boolean;
   } | null>(null);
+  const { pagination, handlers } = usePagination(0);
 
   useEffect(() => {
     const token = SuperAdminAPI.getToken();
@@ -162,104 +165,76 @@ export default function SubscriptionsPage() {
       )}
 
       {/* Subscriptions Table */}
-      <div
-        style={{
-          background: "white",
-          borderRadius: "12px",
-          border: "1px solid var(--border)",
-          boxShadow: "0 4px 6px rgba(0, 0, 0, 0.07)",
-          overflow: "hidden",
-        }}
-      >
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", margin: 0 }}>
-            <thead>
-              <tr style={{ background: "var(--bg-hover)", borderBottom: "1px solid var(--border)" }}>
-                <th style={{ padding: "16px 20px", textAlign: "left", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-secondary)" }}>
-                  Organization
-                </th>
-                <th style={{ padding: "16px 20px", textAlign: "left", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-secondary)" }}>
-                  Plan
-                </th>
-                <th style={{ padding: "16px 20px", textAlign: "center", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-secondary)" }}>
-                  Billing Cycle
-                </th>
-                <th style={{ padding: "16px 20px", textAlign: "center", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-secondary)" }}>
-                  Started
-                </th>
-                <th style={{ padding: "16px 20px", textAlign: "center", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-secondary)" }}>
-                  Renewal Date
-                </th>
-                <th style={{ padding: "16px 20px", textAlign: "center", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-secondary)" }}>
-                  Status
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredSubscriptions.length === 0 ? (
-                <tr>
-                  <td colSpan={6} style={{ padding: "48px 20px", textAlign: "center", color: "var(--text-secondary)" }}>
-                    <div style={{ fontSize: "36px", marginBottom: "12px" }}>📋</div>
-                    <div style={{ fontSize: "14px", fontWeight: 600, marginBottom: "4px" }}>No subscriptions found</div>
-                    <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-                      {filter === "all"
-                        ? "No subscriptions yet. Organizations will appear here once they subscribe."
-                        : `No ${filter} subscriptions found.`}
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                filteredSubscriptions.map((sub) => {
-                  const badgeStyle = getStatusBadge(sub.status);
-                  return (
-                    <tr
-                      key={sub.id}
-                      style={{
-                        borderBottom: "1px solid var(--border)",
-                        transition: "background 0.2s ease",
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                    >
-                      <td style={{ padding: "16px 20px", fontWeight: 600, color: "var(--text-primary)" }}>
-                        {sub.org_name || `Org #${sub.org_id}`}
-                      </td>
-                      <td style={{ padding: "16px 20px", color: "var(--text-primary)" }}>
-                        {sub.plan_name || `Plan #${sub.plan_id}`}
-                      </td>
-                      <td style={{ padding: "16px 20px", textAlign: "center", textTransform: "capitalize", color: "var(--text-primary)", fontWeight: 500 }}>
-                        {sub.billing_cycle || "—"}
-                      </td>
-                      <td style={{ padding: "16px 20px", textAlign: "center", color: "var(--text-secondary)", fontSize: "13px" }}>
-                        {formatDate(sub.start_date)}
-                      </td>
-                      <td style={{ padding: "16px 20px", textAlign: "center", color: "var(--text-secondary)", fontSize: "13px" }}>
-                        {sub.renewal_date ? formatDate(sub.renewal_date) : sub.trial_ends_at ? formatDate(sub.trial_ends_at) : "—"}
-                      </td>
-                      <td style={{ padding: "16px 20px", textAlign: "center" }}>
-                        <span
-                          style={{
-                            display: "inline-block",
-                            padding: "4px 12px",
-                            background: badgeStyle.bg,
-                            color: badgeStyle.color,
-                            borderRadius: "6px",
-                            fontSize: "12px",
-                            fontWeight: 600,
-                            textTransform: "capitalize",
-                          }}
-                        >
-                          {badgeStyle.text}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {(() => {
+        const columns: DataTableColumn<Subscription>[] = [
+          {
+            key: "org_name",
+            header: "Organization",
+            render: (value, sub) => value || `Org #${sub.org_id}`,
+          },
+          {
+            key: "plan_name",
+            header: "Plan",
+            render: (value, sub) => value || `Plan #${sub.plan_id}`,
+          },
+          {
+            key: "billing_cycle",
+            header: "Billing Cycle",
+            align: "center",
+            render: (value) => value ? value.charAt(0).toUpperCase() + value.slice(1) : "—",
+          },
+          {
+            key: "start_date",
+            header: "Started",
+            align: "center",
+            render: (value) => formatDate(value),
+          },
+          {
+            key: "renewal_date",
+            header: "Renewal Date",
+            align: "center",
+            render: (value, sub) => value ? formatDate(value) : sub.trial_ends_at ? formatDate(sub.trial_ends_at) : "—",
+          },
+          {
+            key: "status",
+            header: "Status",
+            align: "center",
+            render: (value) => {
+              const badgeStyle = getStatusBadge(value);
+              return (
+                <span
+                  className="inline-block px-3 py-1 rounded text-xs font-semibold"
+                  style={{
+                    background: badgeStyle.bg,
+                    color: badgeStyle.color,
+                  }}
+                >
+                  {badgeStyle.text}
+                </span>
+              );
+            },
+          },
+        ];
+
+        return (
+          <DataTable<Subscription>
+            columns={columns}
+            data={filteredSubscriptions}
+            pagination={{ ...pagination, total: filteredSubscriptions.length }}
+            onPaginationChange={handlers.onPaginationChange}
+            isLoading={loading}
+            emptyMessage={
+              filter === "all"
+                ? "No subscriptions yet. Organizations will appear here once they subscribe."
+                : `No ${filter} subscriptions found.`
+            }
+            emptyIcon="📋"
+            compact={false}
+            striped={true}
+            hoverable={true}
+          />
+        );
+      })()}
 
       {/* Summary Stats */}
       {subscriptions.length > 0 && (

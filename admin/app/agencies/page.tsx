@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { SuperAdminAPI } from "@/lib/api";
+import { DataTable, DataTableColumn } from "@/components/DataTable";
+import { Eye, Edit2 } from "lucide-react";
 
 interface Agency {
   id: number;
@@ -506,115 +508,133 @@ export default function AgenciesPage() {
       )}
 
       {/* Agencies Table */}
-      {agencies.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "48px 0" }}>
-          <p style={{ color: "var(--text-secondary)", fontSize: "18px" }}>No agencies yet. Create your first one!</p>
-        </div>
-      ) : (
-        <div className="table-wrap" style={{ background: "white", boxShadow: "var(--shadow-sm)" }}>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Agency Name</th>
-                <th>Phone Number</th>
-                <th>Plan Tier</th>
-                <th>Billing Status</th>
-                <th style={{ textAlign: "center" }}>Users Limit</th>
-                <th style={{ textAlign: "center" }}>Leads Limit</th>
-                <th style={{ textAlign: "center" }}>Status</th>
-                <th style={{ textAlign: "center" }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {agencies.map((agency) => (
-                <tr key={agency.id}>
-                  <td>
-                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                      {!agency.logo_url || brokenLogos[agency.id] ? (
-                        <div style={{
-                          width: "32px", height: "32px", borderRadius: "50%",
-                          background: "var(--brand-light)", color: "var(--brand)",
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          fontWeight: 700, fontSize: "13px"
-                        }}>
-                          {agency.name.substring(0, 2).toUpperCase()}
-                        </div>
-                      ) : (
-                        <img
-                          src={agency.logo_url}
-                          alt={`${agency.name} Logo`}
-                          style={{ width: "32px", height: "32px", borderRadius: "50%", objectFit: "cover", border: "1px solid var(--border)" }}
-                          onError={() => {
-                            setBrokenLogos((prev) => ({ ...prev, [agency.id]: true }));
-                          }}
-                        />
-                      )}
-                      <div>
-                        <div style={{ fontWeight: 700, color: "var(--text-primary)" }}>{agency.name}</div>
-                        <div style={{ color: "var(--text-muted)", fontSize: "11px" }}>{agency.slug}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td style={{ color: "var(--text-secondary)", fontSize: "13px" }}>
-                    {agency.phone_number || <em style={{ color: "var(--text-muted)" }}>Not Provided</em>}
-                  </td>
-                  <td>
-                    <span className="badge badge-purple">{agency.plan}</span>
-                  </td>
-                  <td>
-                    <div style={{ fontSize: "13px" }}>
-                      <div style={{ fontWeight: 600, color: "var(--text-primary)" }}>
-                        {agency.subscription_status.toUpperCase()}
-                      </div>
-                      {agency.trial_ends_at && (
-                        <div style={{ color: "var(--warning)", fontSize: "11px" }}>
-                          Trial ends: {new Date(agency.trial_ends_at).toLocaleDateString()}
-                        </div>
-                      )}
-                      {agency.renewal_date && (
-                        <div style={{ color: "var(--text-muted)", fontSize: "11px" }}>
-                          Renews: {new Date(agency.renewal_date).toLocaleDateString()}
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                  <td style={{ textAlign: "center", color: "var(--text-primary)", fontWeight: 600 }}>{agency.user_count}</td>
-                  <td style={{ textAlign: "center", color: "var(--text-primary)", fontWeight: 600 }}>{agency.lead_count}</td>
-                  <td style={{ textAlign: "center" }}>
-                    <span className={`badge ${agency.is_active ? "badge-green" : "badge-red"}`}>
-                      {agency.is_active ? "Active" : "Suspended"}
-                    </span>
-                  </td>
-                  <td style={{ textAlign: "center" }}>
-                    <div style={{ display: "flex", gap: "8px", justifyContent: "center", alignItems: "center" }}>
-                      <Link
-                        href={`/agencies/${agency.id}`}
-                        style={{
-                          color: "var(--brand)", fontWeight: 700, textDecoration: "none",
-                          background: "var(--brand-light)", padding: "6px 12px", borderRadius: "6px",
-                          fontSize: "13px"
-                        }}
-                      >
-                        View
-                      </Link>
-                      <Link
-                        href={`/agencies/${agency.id}?edit=true`}
-                        style={{
-                          color: "var(--text-primary)", fontWeight: 700, textDecoration: "none",
-                          background: "#F3F4F6", padding: "6px 12px", borderRadius: "6px",
-                          fontSize: "13px"
-                        }}
-                      >
-                        ✏ Edit
-                      </Link>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {(() => {
+        const columns: DataTableColumn<Agency>[] = [
+          {
+            key: "name",
+            header: "Agency Name",
+            render: (_, agency) => (
+              <div className="flex items-center gap-3">
+                {!agency.logo_url || brokenLogos[agency.id] ? (
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm text-blue-600 bg-blue-100">
+                    {agency.name.substring(0, 2).toUpperCase()}
+                  </div>
+                ) : (
+                  <img
+                    src={agency.logo_url}
+                    alt={agency.name}
+                    className="w-8 h-8 rounded-full object-cover border border-slate-200"
+                    onError={() =>
+                      setBrokenLogos((prev) => ({ ...prev, [agency.id]: true }))
+                    }
+                  />
+                )}
+                <div>
+                  <div className="font-semibold text-slate-900">{agency.name}</div>
+                  <div className="text-xs text-slate-500">/{agency.slug}</div>
+                </div>
+              </div>
+            ),
+          },
+          {
+            key: "phone_number",
+            header: "Phone",
+            render: (value) =>
+              value || <em className="text-slate-400">Not provided</em>,
+          },
+          {
+            key: "plan",
+            header: "Plan Tier",
+            render: (value) => (
+              <span className="px-2 py-1 rounded text-xs font-semibold bg-purple-100 text-purple-800">
+                {value}
+              </span>
+            ),
+          },
+          {
+            key: "subscription_status",
+            header: "Billing Status",
+            render: (value, agency) => (
+              <div className="text-sm">
+                <div className="font-semibold text-slate-900">
+                  {value.toUpperCase()}
+                </div>
+                {agency.trial_ends_at && (
+                  <div className="text-xs text-amber-600">
+                    Trial ends: {new Date(agency.trial_ends_at).toLocaleDateString()}
+                  </div>
+                )}
+                {agency.renewal_date && (
+                  <div className="text-xs text-slate-500">
+                    Renews: {new Date(agency.renewal_date).toLocaleDateString()}
+                  </div>
+                )}
+              </div>
+            ),
+          },
+          {
+            key: "user_count",
+            header: "Users",
+            align: "center",
+            render: (value) => <span className="font-semibold">{value}</span>,
+          },
+          {
+            key: "lead_count",
+            header: "Leads",
+            align: "center",
+            render: (value) => <span className="font-semibold">{value}</span>,
+          },
+          {
+            key: "is_active",
+            header: "Status",
+            align: "center",
+            render: (value) => (
+              <span
+                className={`px-2 py-1 rounded text-xs font-semibold ${
+                  value
+                    ? "bg-green-100 text-green-800"
+                    : "bg-red-100 text-red-800"
+                }`}
+              >
+                {value ? "Active" : "Suspended"}
+              </span>
+            ),
+          },
+        ];
+
+        const actions = [
+          {
+            id: "view",
+            icon: <Eye className="w-4 h-4" />,
+            label: "View Details",
+            onClick: (agency: Agency) =>
+              router.push(`/agencies/${agency.id}`),
+          },
+          {
+            id: "edit",
+            icon: <Edit2 className="w-4 h-4" />,
+            label: "Edit",
+            onClick: (agency: Agency) =>
+              router.push(`/agencies/${agency.id}?edit=true`),
+          },
+        ];
+
+        return (
+          <DataTable<Agency>
+            columns={columns}
+            data={agencies}
+            actions={actions}
+            pagination={{ page: 1, pageSize: 25, total: agencies.length }}
+            onPaginationChange={() => {}}
+            isLoading={loading}
+            emptyMessage="No agencies yet. Create your first one!"
+            emptyIcon="🏢"
+            compact={false}
+            striped={true}
+            hoverable={true}
+          />
+        );
+      })()}
 
 
     </div>

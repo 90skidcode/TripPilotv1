@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SuperAdminAPI } from "@/lib/api";
+import { DataTable, DataTableColumn } from "@/components/DataTable";
+import { usePagination } from "@/components/DataTable/usePagination";
+import { Edit2, LogIn } from "lucide-react";
 
 interface Agency {
   id: number;
@@ -56,6 +59,7 @@ export default function UsersPage() {
   const [groups, setGroups] = useState<UserGroup[]>([]);
   const [loadingAgencyData, setLoadingAgencyData] = useState(false);
   const [searchUserQuery, setSearchUserQuery] = useState("");
+  const { pagination, handlers } = usePagination(0);
 
   // Drawer & Modal States
   const [editUserDrawerOpen, setEditUserDrawerOpen] = useState(false);
@@ -562,106 +566,71 @@ export default function UsersPage() {
                   </div>
                 </div>
 
-                {loadingAgencyData ? (
-                  <div style={{ padding: "40px", textAlign: "center", color: "var(--text-primary)" }}>
-                    Loading agency team roster...
-                  </div>
-                ) : filteredUsers.length === 0 ? (
-                  <div className="empty-state" style={{ padding: "40px", background: "white", borderRadius: "12px", textAlign: "center", border: "1px dashed var(--border)" }}>
-                    <div style={{ fontSize: "28px", marginBottom: "8px" }}>👥</div>
-                    <h4 style={{ fontWeight: 700, color: "var(--text-primary)", margin: "0 0 4px 0" }}>No Team Members Found</h4>
-                    <p style={{ color: "var(--text-secondary)", fontSize: "13px", margin: 0 }}>Try clearing your search query or check this agency's setup</p>
-                  </div>
-                ) : (
-                  <div className="table-responsive" style={{ background: "white", borderRadius: "12px", border: "1px solid var(--border)", overflow: "hidden" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
-                      <thead>
-                        <tr style={{ background: "var(--bg-hover)", borderBottom: "1px solid var(--border)" }}>
-                          <th style={{ padding: "16px 20px", fontSize: "12px", fontWeight: 700, color: "var(--text-primary)", textTransform: "uppercase" }}>User Name</th>
-                          <th style={{ padding: "16px 20px", fontSize: "12px", fontWeight: 700, color: "var(--text-primary)", textTransform: "uppercase" }}>Assigned Group</th>
-                          <th style={{ padding: "16px 20px", fontSize: "12px", fontWeight: 700, color: "var(--text-primary)", textTransform: "uppercase", textAlign: "right" }}>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredUsers.map((user) => {
-                          const assignedGroup = groups.find(g => g.id === user.group_id);
-                          const userInitials = user.name.substring(0, 2).toUpperCase();
-                          return (
-                            <tr key={user.id} style={{ borderBottom: "1px solid var(--border)", transition: "background 0.2s" }}>
-                              <td style={{ padding: "16px 20px" }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                                  <div style={{
-                                    width: "36px",
-                                    height: "36px",
-                                    borderRadius: "50%",
-                                    background: "var(--bg-hover)",
-                                    color: "var(--text-primary)",
-                                    fontWeight: 700,
-                                    fontSize: "12px",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center"
-                                  }}>
-                                    {userInitials}
-                                  </div>
-                                  <div>
-                                    <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>{user.name}</div>
-                                    <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{user.email}</div>
-                                  </div>
-                                </div>
-                              </td>
-                              <td style={{ padding: "16px 20px" }}>
-                                {assignedGroup ? (
-                                  <span style={{
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    padding: "4px 8px",
-                                    borderRadius: "6px",
-                                    fontSize: "12px",
-                                    fontWeight: 600,
-                                    background: "#F3F4F6",
-                                    color: "var(--text-primary)",
-                                    border: "1px solid var(--border)"
-                                  }}>
-                                    🛡️ {assignedGroup.name}
-                                  </span>
-                                ) : (
-                                  <span style={{ fontSize: "13px", color: "var(--text-secondary)", fontStyle: "italic" }}>
-                                    ⚠️ No Permission Matrix (All Blocked)
-                                  </span>
-                                )}
-                              </td>
-                              <td style={{ padding: "16px 20px", textAlign: "right" }}>
-                                <div style={{ display: "inline-flex", gap: "8px" }}>
-                                  <button
-                                    onClick={() => handleOpenEditUser(user)}
-                                    className="btn btn-outline"
-                                    style={{ padding: "6px 12px", fontSize: "12px", height: "32px" }}
-                                  >
-                                    ✏️ Edit
-                                  </button>
-                                  <button
-                                    onClick={() => triggerImpersonation(user)}
-                                    className="btn btn-outline"
-                                    style={{
-                                      padding: "6px 12px",
-                                      fontSize: "12px",
-                                      height: "32px",
-                                      borderColor: "var(--brand-alpha)",
-                                      color: "var(--brand)"
-                                    }}
-                                  >
-                                    🚪 Impersonate
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                {/* Users Table */}
+                {(() => {
+                  const columns: DataTableColumn<AgencyUser>[] = [
+                    {
+                      key: "name",
+                      header: "User Name",
+                      render: (_, user) => (
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center font-bold text-sm">
+                            {user.name.substring(0, 2).toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="font-semibold text-slate-900">{user.name}</div>
+                            <div className="text-xs text-slate-500">{user.email}</div>
+                          </div>
+                        </div>
+                      ),
+                    },
+                    {
+                      key: "group_id",
+                      header: "Permission Group",
+                      render: (_, user) => {
+                        const assignedGroup = groups.find(g => g.id === user.group_id);
+                        return assignedGroup ? (
+                          <span className="inline-flex items-center px-2 py-1 rounded text-xs font-semibold bg-slate-100 text-slate-800 border border-slate-200">
+                            🛡️ {assignedGroup.name}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-amber-600 italic">⚠️ No Group (Blocked)</span>
+                        );
+                      },
+                    },
+                  ];
+
+                  const actions = [
+                    {
+                      id: "edit",
+                      icon: <Edit2 className="w-4 h-4" />,
+                      label: "Edit",
+                      onClick: (user: AgencyUser) => handleOpenEditUser(user),
+                    },
+                    {
+                      id: "impersonate",
+                      icon: <LogIn className="w-4 h-4" />,
+                      label: "Impersonate",
+                      onClick: (user: AgencyUser) => triggerImpersonation(user),
+                    },
+                  ];
+
+                  return (
+                    <DataTable<AgencyUser>
+                      columns={columns}
+                      data={filteredUsers}
+                      actions={actions}
+                      pagination={{ ...pagination, total: filteredUsers.length }}
+                      onPaginationChange={handlers.onPaginationChange}
+                      isLoading={loadingAgencyData}
+                      emptyMessage="No users found"
+                      emptyIcon="👥"
+                      compact={false}
+                      striped={true}
+                      hoverable={true}
+                    />
+                  );
+                })()}
               </div>
             )}
 

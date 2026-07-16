@@ -4,6 +4,9 @@ import { useEffect, useState, Suspense } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { SuperAdminAPI } from "@/lib/api";
+import { DataTable, DataTableColumn } from "@/components/DataTable";
+import { usePagination } from "@/components/DataTable/usePagination";
+import { LogIn } from "lucide-react";
 
 interface Agency {
   id: number;
@@ -47,6 +50,7 @@ function AgencyDetailContent() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [plans, setPlans] = useState<any[]>([]);
+  const { pagination, handlers } = usePagination(0);
   const [editData, setEditData] = useState({
     name: "",
     phone_number: "",
@@ -448,45 +452,52 @@ function AgencyDetailContent() {
           <h2 className="card-title">Team Members</h2>
         </div>
         <div className="card-body" style={{ padding: "0" }}>
-          {users.length === 0 ? (
-            <div style={{ padding: "24px", color: "var(--text-secondary)" }}>
-              No users registered in this agency.
-            </div>
-          ) : (
-            <div className="table-wrap">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Email Address</th>
-                    <th>Role</th>
-                    <th style={{ textAlign: "center" }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((user) => (
-                    <tr key={user.id}>
-                      <td style={{ fontWeight: 600, color: "var(--text-primary)" }}>{user.name}</td>
-                      <td style={{ color: "var(--text-secondary)" }}>{user.email}</td>
-                      <td>
-                        <span className="badge badge-teal">{user.role}</span>
-                      </td>
-                      <td style={{ textAlign: "center" }}>
-                        <button
-                          onClick={() => handleImpersonate(user)}
-                          disabled={impersonating}
-                          className="btn btn-sm btn-outline"
-                          id={`impersonate-${user.id}`}
-                        >
-                          {impersonating && impersonateModal.userId === user.id ? "Connecting..." : "Impersonate"}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          {(() => {
+            const columns: DataTableColumn<User>[] = [
+              {
+                key: "name",
+                header: "Name",
+              },
+              {
+                key: "email",
+                header: "Email Address",
+              },
+              {
+                key: "role",
+                header: "Role",
+                render: (value) => (
+                  <span className="px-2 py-1 rounded text-xs font-semibold bg-teal-100 text-teal-800">
+                    {value}
+                  </span>
+                ),
+              },
+            ];
+
+            const actions = [
+              {
+                id: "impersonate",
+                icon: <LogIn className="w-4 h-4" />,
+                label: "Impersonate",
+                onClick: (user: User) => handleImpersonate(user),
+              },
+            ];
+
+            return (
+              <DataTable<User>
+                columns={columns}
+                data={users}
+                actions={actions}
+                pagination={{ ...pagination, total: users.length }}
+                onPaginationChange={handlers.onPaginationChange}
+                isLoading={loading}
+                emptyMessage="No users registered in this agency."
+                emptyIcon="👥"
+                compact={false}
+                striped={true}
+                hoverable={true}
+              />
+            );
+          })()}
         </div>
       </div>
 

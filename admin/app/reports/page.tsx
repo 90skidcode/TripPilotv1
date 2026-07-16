@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SuperAdminAPI } from "@/lib/api";
+import { DataTable, DataTableColumn } from "@/components/DataTable";
+import { usePagination } from "@/components/DataTable/usePagination";
 
 interface AgencyReportData {
   id: number;
@@ -30,6 +32,7 @@ export default function ReportsPage() {
   const [agencies, setAgencies] = useState<AgencyReportData[]>([]);
   const [latency, setLatency] = useState<number | null>(null);
   const [testingLatency, setTestingLatency] = useState(false);
+  const { pagination, handlers } = usePagination(0);
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error" | "info";
@@ -393,86 +396,86 @@ export default function ReportsPage() {
           <p style={{ fontSize: "12px", color: "var(--text-secondary)", margin: "2px 0 0 0" }}>Chronologically ordered ledger of tenant creations and system utilization indices</p>
         </div>
 
-        <div className="table-responsive">
-          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
-            <thead>
-              <tr style={{ background: "var(--bg-hover)", borderBottom: "1px solid var(--border)" }}>
-                <th style={{ padding: "14px 20px", fontSize: "12px", fontWeight: 700, color: "var(--text-primary)", textTransform: "uppercase" }}>Registration Date</th>
-                <th style={{ padding: "14px 20px", fontSize: "12px", fontWeight: 700, color: "var(--text-primary)", textTransform: "uppercase" }}>Organization Name</th>
-                <th style={{ padding: "14px 20px", fontSize: "12px", fontWeight: 700, color: "var(--text-primary)", textTransform: "uppercase" }}>Subscription Plan</th>
-                <th style={{ padding: "14px 20px", fontSize: "12px", fontWeight: 700, color: "var(--text-primary)", textTransform: "uppercase", textAlign: "center" }}>User Index</th>
-                <th style={{ padding: "14px 20px", fontSize: "12px", fontWeight: 700, color: "var(--text-primary)", textTransform: "uppercase", textAlign: "center" }}>Lead Index</th>
-                <th style={{ padding: "14px 20px", fontSize: "12px", fontWeight: 700, color: "var(--text-primary)", textTransform: "uppercase", textAlign: "right" }}>Account Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {chronologicalLogs.length === 0 ? (
-                <tr>
-                  <td colSpan={6} style={{ padding: "24px", textAlign: "center", color: "var(--text-secondary)", fontSize: "13px" }}>
-                    No audit log parameters found
-                  </td>
-                </tr>
-              ) : (
-                chronologicalLogs.map((log) => {
-                  const regDate = log.created_at
-                    ? new Date(log.created_at).toLocaleDateString("en-IN", {
-                        year: "numeric",
-                        month: "short",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit"
-                      })
-                    : "Pre-existing Seed";
+        {(() => {
+          const columns: DataTableColumn<AgencyReportData>[] = [
+            {
+              key: "created_at",
+              header: "Registration Date",
+              render: (value) =>
+                value
+                  ? new Date(value).toLocaleDateString("en-IN", {
+                      year: "numeric",
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit"
+                    })
+                  : "Pre-existing Seed",
+            },
+            {
+              key: "name",
+              header: "Organization Name",
+              render: (value, log) => (
+                <div>
+                  <div className="font-semibold">{value}</div>
+                  <div className="text-xs text-slate-500">/{log.slug}</div>
+                </div>
+              ),
+            },
+            {
+              key: "plan",
+              header: "Subscription Plan",
+              render: (value) => (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-600">
+                  👑 {value || "Free Trial Plan"}
+                </span>
+              ),
+            },
+            {
+              key: "user_count",
+              header: "User Index",
+              align: "center",
+              render: (value) => <span className="font-semibold">{value}</span>,
+            },
+            {
+              key: "lead_count",
+              header: "Lead Index",
+              align: "center",
+              render: (value) => <span className="font-semibold">{value}</span>,
+            },
+            {
+              key: "is_active",
+              header: "Account Status",
+              align: "center",
+              render: (value) => (
+                <span
+                  className={`inline-flex px-2 py-1 rounded text-xs font-bold ${
+                    value
+                      ? "bg-green-100 text-green-800"
+                      : "bg-red-100 text-red-800"
+                  }`}
+                >
+                  {value ? "Active" : "Suspended"}
+                </span>
+              ),
+            },
+          ];
 
-                  return (
-                    <tr key={log.id} style={{ borderBottom: "1px solid var(--border)", transition: "background 0.15s" }}>
-                      <td style={{ padding: "14px 20px", fontSize: "13px", color: "var(--text-secondary)" }}>
-                        {regDate}
-                      </td>
-                      <td style={{ padding: "14px 20px", fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>
-                        {log.name}
-                        <div style={{ fontSize: "11px", color: "var(--text-secondary)", fontWeight: 400 }}>/{log.slug}</div>
-                      </td>
-                      <td style={{ padding: "14px 20px", fontSize: "13px", color: "var(--text-primary)" }}>
-                        <span style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          padding: "2px 6px",
-                          borderRadius: "4px",
-                          fontSize: "11px",
-                          fontWeight: 700,
-                          background: "var(--brand-light)",
-                          color: "var(--brand)"
-                        }}>
-                          👑 {log.plan || "Free Trial Plan"}
-                        </span>
-                      </td>
-                      <td style={{ padding: "14px 20px", fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", textAlign: "center" }}>
-                        {log.user_count}
-                      </td>
-                      <td style={{ padding: "14px 20px", fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", textAlign: "center" }}>
-                        {log.lead_count}
-                      </td>
-                      <td style={{ padding: "14px 20px", textAlign: "right" }}>
-                        <span style={{
-                          display: "inline-flex",
-                          padding: "4px 8px",
-                          borderRadius: "6px",
-                          fontSize: "11px",
-                          fontWeight: 700,
-                          background: log.is_active ? "#DCFCE7" : "#FEE2E2",
-                          color: log.is_active ? "#15803D" : "#991B1B"
-                        }}>
-                          {log.is_active ? "Active" : "Suspended"}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+          return (
+            <DataTable<AgencyReportData>
+              columns={columns}
+              data={chronologicalLogs}
+              pagination={{ ...pagination, total: chronologicalLogs.length }}
+              onPaginationChange={handlers.onPaginationChange}
+              isLoading={loading}
+              emptyMessage="No audit log parameters found"
+              emptyIcon="📋"
+              compact={false}
+              striped={true}
+              hoverable={true}
+            />
+          );
+        })()}
       </div>
 
       {/* FLOATING TOAST COMPONENT */}
