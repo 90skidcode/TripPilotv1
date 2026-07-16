@@ -172,7 +172,7 @@ export function ExampleUsersTable({
       tooltip: "Delete user",
       onClick: (user: AgencyUser) => handleActionClick("delete", user),
       variant: "danger" as const,
-      disabled: (user) => user.id === 1, // Prevent deleting admin user
+      disabled: (user: AgencyUser) => user.id === 1, // Prevent deleting admin user
     },
   ];
 
