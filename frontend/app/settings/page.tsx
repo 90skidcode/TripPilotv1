@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
-import { authApi, orgApi } from "@/lib/api";
+import { authApi, orgApi, userGroupsApi } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import { cn } from "@/lib/cn";
 
@@ -42,6 +42,7 @@ export default function SettingsPage() {
 
   // Team Members state
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
+  const [userGroups, setUserGroups] = useState<any[]>([]);
   const [loadingTeam, setLoadingTeam] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
   const [addingMember, setAddingMember] = useState(false);
@@ -49,12 +50,20 @@ export default function SettingsPage() {
     name: "",
     email: "",
     password: "",
-    role: "agent",
+    group_id: null as number | null,
+  });
+
+  // User Group Management state
+  const [showGroupForm, setShowGroupForm] = useState(false);
+  const [creatingGroup, setCreatingGroup] = useState(false);
+  const [newGroup, setNewGroup] = useState({
+    name: "",
   });
 
   useEffect(() => {
     loadProfile();
     loadTeamMembers();
+    loadUserGroups();
     if (globalThis.window !== undefined) {
       const storedName = localStorage.getItem("agency_name");
       const storedAddr = localStorage.getItem("agency_address");
@@ -101,6 +110,18 @@ export default function SettingsPage() {
     }
   }
 
+  async function loadUserGroups() {
+    try {
+      const groups = await userGroupsApi.list();
+      setUserGroups(groups);
+      if (groups.length > 0 && !newMember.group_id) {
+        setNewMember(prev => ({ ...prev, group_id: groups[0].id }));
+      }
+    } catch (err) {
+      console.error("Failed to load user groups:", err);
+    }
+  }
+
   async function handleAddMember() {
     if (!newMember.name || !newMember.email || !newMember.password) {
       showToast({ type: "error", message: "Please fill in all required fields" });
@@ -117,16 +138,59 @@ export default function SettingsPage() {
         name: newMember.name,
         email: newMember.email,
         password: newMember.password,
-        role: newMember.role,
+        role: "agent",
       });
       showToast({ type: "success", message: "Team member added successfully!" });
-      setNewMember({ name: "", email: "", password: "", role: "agent" });
+      setNewMember({ name: "", email: "", password: "", group_id: userGroups.length > 0 ? userGroups[0].id : null });
       setShowAddMember(false);
       loadTeamMembers();
     } catch (err: any) {
       showToast({ type: "error", message: err.message || "Failed to add team member" });
     } finally {
       setAddingMember(false);
+    }
+  }
+
+  async function handleCreateGroup() {
+    if (!newGroup.name.trim()) {
+      showToast({ type: "error", message: "Group name is required" });
+      return;
+    }
+
+    setCreatingGroup(true);
+    try {
+      await userGroupsApi.create({
+        name: newGroup.name,
+        permissions: {
+          leads: { read: false, write: false },
+          itinerary: { read: false, write: false },
+          vouchers: { read: false, write: false },
+          inventory: { read: false, write: false },
+          dashboard: { read: false, write: false },
+          settings: { read: false, write: false },
+          users: { read: false, write: false },
+        },
+      });
+      showToast({ type: "success", message: "User group created successfully!" });
+      setNewGroup({ name: "" });
+      setShowGroupForm(false);
+      loadUserGroups();
+    } catch (err: any) {
+      showToast({ type: "error", message: err.message || "Failed to create user group" });
+    } finally {
+      setCreatingGroup(false);
+    }
+  }
+
+  async function handleDeleteGroup(groupId: number) {
+    if (!confirm("Are you sure you want to delete this user group?")) return;
+
+    try {
+      await userGroupsApi.delete(groupId);
+      showToast({ type: "success", message: "User group deleted successfully!" });
+      loadUserGroups();
+    } catch (err: any) {
+      showToast({ type: "error", message: err.message || "Failed to delete user group" });
     }
   }
 
@@ -362,6 +426,90 @@ export default function SettingsPage() {
             {/* Team Members Tab */}
             {activeTab === "team" && (
               <div className="space-y-6">
+                {/* User Groups Section */}
+                <Section
+                  title="User Groups & Permissions"
+                  description="Create and manage user groups to control access permissions"
+                >
+                  {userGroups.length === 0 ? (
+                    <div className="text-center py-8 border border-dashed border-border rounded-lg">
+                      <p className="text-muted-foreground mb-4">No user groups yet</p>
+                      <Button variant="primary" size="sm" onClick={() => setShowGroupForm(true)}>
+                        Create First Group
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {userGroups.map((group) => (
+                        <div key={group.id} className="flex items-center justify-between p-3 border border-border rounded-lg hover:bg-muted/50">
+                          <div>
+                            <p className="font-medium text-sm">{group.name}</p>
+                            <p className="text-xs text-muted-foreground">ID: {group.id}</p>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeleteGroup(group.id)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Section>
+
+                <Separator />
+
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h3 className="font-semibold text-sm">Create New Group</h3>
+                    <p className="text-xs text-muted-foreground mt-1">Set up a new user group with specific permissions</p>
+                  </div>
+                  <Button
+                    variant="primary"
+                    onClick={() => setShowGroupForm(!showGroupForm)}
+                  >
+                    {showGroupForm ? "Cancel" : "+ New Group"}
+                  </Button>
+                </div>
+
+                {showGroupForm && (
+                  <div className="border border-border rounded-lg p-4 space-y-4 bg-muted/30">
+                    <div className="space-y-2">
+                      <Label htmlFor="group_name">Group Name *</Label>
+                      <Input
+                        id="group_name"
+                        type="text"
+                        placeholder="e.g., Senior Agents, Managers"
+                        value={newGroup.name}
+                        onChange={(e) => setNewGroup({ name: e.target.value })}
+                      />
+                      <p className="text-xs text-muted-foreground">You can configure detailed permissions after creating the group</p>
+                    </div>
+
+                    <div className="flex justify-end gap-3">
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowGroupForm(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        variant="primary"
+                        onClick={handleCreateGroup}
+                        disabled={creatingGroup}
+                      >
+                        {creatingGroup ? "Creating..." : "Create Group"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                <Separator />
+
+                {/* Team Members Section */}
                 <Section
                   title="Team Members"
                   description="Add and manage team members for your agency"
@@ -376,17 +524,20 @@ export default function SettingsPage() {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {teamMembers.map((member) => (
-                        <div key={member.id} className="flex items-center justify-between p-3 border border-border rounded-lg hover:bg-muted/50">
-                          <div>
-                            <p className="font-medium text-sm">{member.name}</p>
-                            <p className="text-xs text-muted-foreground">{member.email}</p>
+                      {teamMembers.map((member) => {
+                        const groupName = userGroups.find(g => g.id === member.group_id)?.name || "No Group";
+                        return (
+                          <div key={member.id} className="flex items-center justify-between p-3 border border-border rounded-lg hover:bg-muted/50">
+                            <div>
+                              <p className="font-medium text-sm">{member.name}</p>
+                              <p className="text-xs text-muted-foreground">{member.email}</p>
+                            </div>
+                            <span className="text-xs px-2 py-1 bg-primary/10 text-primary rounded-full font-semibold">
+                              {groupName}
+                            </span>
                           </div>
-                          <span className="text-xs px-2 py-1 bg-primary/10 text-primary rounded-full font-semibold">
-                            {member.role.toUpperCase()}
-                          </span>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </Section>
@@ -401,12 +552,19 @@ export default function SettingsPage() {
                   <Button
                     variant="primary"
                     onClick={() => setShowAddMember(!showAddMember)}
+                    disabled={userGroups.length === 0}
                   >
                     {showAddMember ? "Cancel" : "+ Add Member"}
                   </Button>
                 </div>
 
-                {showAddMember && (
+                {userGroups.length === 0 && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                    <p className="text-xs text-amber-800">Create at least one user group before adding team members</p>
+                  </div>
+                )}
+
+                {showAddMember && userGroups.length > 0 && (
                   <div className="border border-border rounded-lg p-4 space-y-4 bg-muted/30">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
@@ -443,16 +601,19 @@ export default function SettingsPage() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="member_role">Role</Label>
+                        <Label htmlFor="member_group">User Group *</Label>
                         <select
-                          id="member_role"
-                          value={newMember.role}
-                          onChange={(e) => setNewMember({ ...newMember, role: e.target.value })}
+                          id="member_group"
+                          value={newMember.group_id || ""}
+                          onChange={(e) => setNewMember({ ...newMember, group_id: parseInt(e.target.value) })}
                           className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
                         >
-                          <option value="agent">Agent</option>
-                          <option value="manager">Manager</option>
-                          <option value="admin">Admin</option>
+                          <option value="">Select a group</option>
+                          {userGroups.map((group) => (
+                            <option key={group.id} value={group.id}>
+                              {group.name}
+                            </option>
+                          ))}
                         </select>
                       </div>
                     </div>

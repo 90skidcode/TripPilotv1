@@ -54,6 +54,10 @@ export const orgApi = {
 // ── User Groups ──
 export const userGroupsApi = {
   list: () => api.get<any[]>("/user-groups"),
+  get: (id: number) => api.get<any>(`/user-groups/${id}`),
+  create: (data: any) => api.post<any>("/user-groups", data),
+  update: (id: number, data: any) => api.put<any>(`/user-groups/${id}`, data),
+  delete: (id: number) => api.delete(`/user-groups/${id}`),
 };
 
 // ── Customers ──
