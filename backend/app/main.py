@@ -133,7 +133,6 @@ def seed_admin(db: Session):
             email="admin@trippilot.com",
             hashed_password=hash_password("password123"),
             org_id=org_id,
-            role="admin",
             is_superadmin=True,
             group_id=default_group_id,  # Assign to default admin group
         )

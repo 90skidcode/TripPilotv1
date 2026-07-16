@@ -58,7 +58,6 @@ class AgencyUserOut(BaseModel):
     id: int
     name: str
     email: str
-    role: str
     org_id: int
     group_id: int | None = None
 
@@ -198,7 +197,6 @@ def create_agency(
         phone_number=payload.user_phone,
         hashed_password=hash_password(payload.user_password),
         org_id=org.id,
-        role="admin",
         is_superadmin=False,
         group_id=admin_group.id,  # Assign to default admin group
     )
@@ -484,7 +482,6 @@ class UserGroupOut(BaseModel):
 class UserUpdate(BaseModel):
     name: str | None = None
     email: str | None = None
-    role: str | None = None
     group_id: int | None = None
 
 
@@ -596,8 +593,6 @@ def update_agency_user(
         if existing:
             raise HTTPException(status_code=400, detail="Email address is already in use by another user")
         user.email = payload.email
-    if payload.role is not None:
-        user.role = payload.role
     if payload.group_id is not None:
         # Verify group exists in organization
         group = db.query(UserGroup).filter(

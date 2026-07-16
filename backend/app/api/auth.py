@@ -53,7 +53,6 @@ def _user_with_permissions(user: User, db: Session = None) -> dict:
         "id": user.id,
         "name": user.name,
         "email": user.email,
-        "role": user.role,
         "avatar_url": user.avatar_url,
         "org_id": user.org_id,
         "group_id": user.group_id,
