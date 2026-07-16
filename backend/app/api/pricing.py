@@ -18,7 +18,7 @@ router = APIRouter()
 
 def calculate_renewal_date(billing_cycle: str) -> datetime:
     """Calculate renewal date based on billing cycle."""
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
     if billing_cycle == "monthly":
         return now + timedelta(days=30)
     elif billing_cycle == "quarterly":
@@ -374,7 +374,7 @@ def create_or_update_subscription(
         Subscription.status.in_(["active", "trial"]),
     ).first()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
     renewal_date = calculate_renewal_date(payload.billing_cycle)
 
     if existing:
@@ -464,7 +464,7 @@ def get_usage(
             monthly_price = billing_cycle.monthly_price
 
     # Check trial expiry and update status if needed
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
     if subscription.trial_ends_at and subscription.trial_ends_at <= now:
         subscription.status = "expired"
         db.commit()
@@ -539,7 +539,7 @@ def get_subscription_status(
             "status": "no_subscription",
         }
 
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
     is_expired = False
 
     # Check trial expiry
@@ -585,7 +585,7 @@ def check_write_access(db: Session, org_id: int) -> tuple[bool, str | None]:
     if not subscription:
         return False, "No active subscription found"
 
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
 
     # Check trial expiry
     if subscription.trial_ends_at and subscription.trial_ends_at <= now:
@@ -675,7 +675,7 @@ def increment_usage(
     """
     Increment usage counter. Returns True if successful, False if limit exceeded.
     """
-    current_month = datetime.now(timezone.utc).strftime("%Y-%m")
+    current_month = datetime.utcnow().strftime("%Y-%m")
 
     # Get usage record
     usage = db.query(UsageTracking).filter(
@@ -708,7 +708,7 @@ def increment_usage(
         return False
 
     # Check trial expiry
-    if subscription.trial_ends_at and datetime.now(timezone.utc) > subscription.trial_ends_at:
+    if subscription.trial_ends_at and datetime.utcnow() > subscription.trial_ends_at:
         subscription.status = "expired"
         db.commit()
         return False
