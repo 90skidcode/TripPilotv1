@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { SuperAdminAPI } from "@/lib/api";
 import { DataTable, DataTableColumn } from "@/components/DataTable";
 import { usePagination } from "@/components/DataTable/usePagination";
+import { TableSkeleton } from "@/components/SkeletonLoaders";
 import { Edit2, LogIn } from "lucide-react";
 
 interface Agency {
@@ -366,11 +367,8 @@ export default function UsersPage() {
   // --- Render Fallbacks ---
   if (loadingAgencies) {
     return (
-      <div style={{ padding: "28px", display: "flex", justifyContent: "center", alignItems: "center", minHeight: "350px", color: "var(--text-primary)" }}>
-        <div style={{ textAlign: "center" }}>
-          <div className="spinner" style={{ margin: "0 auto 16px auto", width: "40px", height: "40px", border: "3px solid var(--border)", borderTop: "3px solid var(--brand)", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
-          <div style={{ fontSize: "16px", fontWeight: 600 }}>Loading system organizations...</div>
-        </div>
+      <div style={{ padding: "28px" }}>
+        <TableSkeleton rows={5} />
       </div>
     );
   }
@@ -652,8 +650,8 @@ export default function UsersPage() {
                 </div>
 
                 {loadingAgencyData ? (
-                  <div style={{ padding: "40px", textAlign: "center", color: "var(--text-primary)" }}>
-                    Loading permission schema details...
+                  <div style={{ padding: "28px" }}>
+                    <TableSkeleton rows={3} />
                   </div>
                 ) : groups.length === 0 ? (
                   <div className="empty-state" style={{ padding: "40px", background: "white", borderRadius: "12px", textAlign: "center", border: "1px dashed var(--border)" }}>

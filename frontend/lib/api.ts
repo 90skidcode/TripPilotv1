@@ -43,6 +43,8 @@ export const authApi = {
   updateMe: (data: any) => api.put<any>("/auth/me", data),
   listUsers: () => api.get<any[]>("/auth/users"),
   register: (data: any) => api.post<any>("/auth/register", data),
+  createUser: (data: { name: string; email: string; password: string; role?: string }) =>
+    api.post<any>("/auth/register", data),
 };
 
 export const orgApi = {

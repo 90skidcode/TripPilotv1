@@ -6,6 +6,7 @@ import Link from "next/link";
 import { SuperAdminAPI } from "@/lib/api";
 import { DataTable, DataTableColumn } from "@/components/DataTable";
 import { usePagination } from "@/components/DataTable/usePagination";
+import { TableSkeleton } from "@/components/SkeletonLoaders";
 import { Edit2, Trash2 } from "lucide-react";
 
 interface MasterDataItem {
@@ -169,8 +170,8 @@ export default function MasterDataPage() {
 
   if (loading) {
     return (
-      <div style={{ padding: "28px", display: "flex", justifyContent: "center", alignItems: "center", minHeight: "200px", color: "var(--text-secondary)" }}>
-        <div style={{ fontSize: "16px", fontWeight: 600 }}>Loading master data...</div>
+      <div style={{ padding: "28px" }}>
+        <TableSkeleton rows={5} />
       </div>
     );
   }

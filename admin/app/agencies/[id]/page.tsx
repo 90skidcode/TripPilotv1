@@ -6,6 +6,7 @@ import Link from "next/link";
 import { SuperAdminAPI } from "@/lib/api";
 import { DataTable, DataTableColumn } from "@/components/DataTable";
 import { usePagination } from "@/components/DataTable/usePagination";
+import { TableSkeleton } from "@/components/SkeletonLoaders";
 import { LogIn } from "lucide-react";
 
 interface Agency {
@@ -155,8 +156,8 @@ function AgencyDetailContent() {
 
   if (loading) {
     return (
-      <div style={{ padding: "28px", display: "flex", justifyContent: "center", alignItems: "center", minHeight: "200px", color: "var(--text-secondary)" }}>
-        <div style={{ fontSize: "16px", fontWeight: 600 }}>Loading agency details...</div>
+      <div style={{ padding: "28px" }}>
+        <TableSkeleton rows={5} />
       </div>
     );
   }
@@ -560,8 +561,8 @@ function AgencyDetailContent() {
 export default function AgencyDetailPage() {
   return (
     <Suspense fallback={
-      <div style={{ padding: "28px", display: "flex", justifyContent: "center", alignItems: "center", minHeight: "200px", color: "var(--text-secondary)" }}>
-        <div style={{ fontSize: "16px", fontWeight: 600 }}>Loading agency details...</div>
+      <div style={{ padding: "28px" }}>
+        <TableSkeleton rows={5} />
       </div>
     }>
       <AgencyDetailContent />

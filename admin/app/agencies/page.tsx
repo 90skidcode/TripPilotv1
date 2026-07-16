@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { SuperAdminAPI } from "@/lib/api";
 import { DataTable, DataTableColumn } from "@/components/DataTable";
+import { TableSkeleton } from "@/components/SkeletonLoaders";
 import { Eye, Edit2 } from "lucide-react";
 
 interface Agency {
@@ -186,8 +187,8 @@ export default function AgenciesPage() {
 
   if (loading) {
     return (
-      <div style={{ padding: "28px", display: "flex", justifyContent: "center", alignItems: "center", minHeight: "200px", color: "var(--text-secondary)" }}>
-        <div style={{ fontSize: "16px", fontWeight: 600 }}>Loading agencies...</div>
+      <div style={{ padding: "28px" }}>
+        <TableSkeleton rows={5} />
       </div>
     );
   }
@@ -513,6 +514,7 @@ export default function AgenciesPage() {
           {
             key: "name",
             header: "Agency Name",
+            width: "32%",
             render: (_, agency) => (
               <div className="flex items-center gap-3">
                 {!agency.logo_url || brokenLogos[agency.id] ? (
@@ -539,12 +541,14 @@ export default function AgenciesPage() {
           {
             key: "phone_number",
             header: "Phone",
+            width: "14%",
             render: (value) =>
               value || <em className="text-slate-400">Not provided</em>,
           },
           {
             key: "plan",
             header: "Plan Tier",
+            width: "11%",
             render: (value) => (
               <span className="px-2 py-1 rounded text-xs font-semibold bg-purple-100 text-purple-800">
                 {value}
@@ -554,6 +558,7 @@ export default function AgenciesPage() {
           {
             key: "subscription_status",
             header: "Billing Status",
+            width: "20%",
             render: (value, agency) => (
               <div className="text-sm">
                 <div className="font-semibold text-slate-900">
@@ -575,18 +580,21 @@ export default function AgenciesPage() {
           {
             key: "user_count",
             header: "Users",
+            width: "8%",
             align: "center",
             render: (value) => <span className="font-semibold">{value}</span>,
           },
           {
             key: "lead_count",
             header: "Leads",
+            width: "8%",
             align: "center",
             render: (value) => <span className="font-semibold">{value}</span>,
           },
           {
             key: "is_active",
             header: "Status",
+            width: "9%",
             align: "center",
             render: (value) => (
               <span

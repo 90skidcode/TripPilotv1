@@ -16,7 +16,7 @@ import { cn } from "@/lib/cn";
 
 export default function SettingsPage() {
   const { showToast } = useToast();
-  const [activeTab, setActiveTab] = useState<"profile" | "security" | "agency">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "security" | "agency" | "team">("profile");
 
   const [user, setUser] = useState<any>(null);
   const [name, setName] = useState("");
@@ -40,8 +40,21 @@ export default function SettingsPage() {
   const [bankName, setBankName] = useState("HDFC Bank");
   const [bankIfsc, setBankIfsc] = useState("HDFC0001202");
 
+  // Team Members state
+  const [teamMembers, setTeamMembers] = useState<any[]>([]);
+  const [loadingTeam, setLoadingTeam] = useState(false);
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [addingMember, setAddingMember] = useState(false);
+  const [newMember, setNewMember] = useState({
+    name: "",
+    email: "",
+    password: "",
+    role: "agent",
+  });
+
   useEffect(() => {
     loadProfile();
+    loadTeamMembers();
     if (globalThis.window !== undefined) {
       const storedName = localStorage.getItem("agency_name");
       const storedAddr = localStorage.getItem("agency_address");
@@ -72,6 +85,48 @@ export default function SettingsPage() {
       console.error(e);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadTeamMembers() {
+    setLoadingTeam(true);
+    try {
+      const members = await authApi.listUsers();
+      setTeamMembers(members);
+    } catch (err) {
+      console.error("Failed to load team members:", err);
+      showToast({ type: "error", message: "Failed to load team members" });
+    } finally {
+      setLoadingTeam(false);
+    }
+  }
+
+  async function handleAddMember() {
+    if (!newMember.name || !newMember.email || !newMember.password) {
+      showToast({ type: "error", message: "Please fill in all required fields" });
+      return;
+    }
+    if (newMember.password.length < 6) {
+      showToast({ type: "error", message: "Password must be at least 6 characters" });
+      return;
+    }
+
+    setAddingMember(true);
+    try {
+      await authApi.createUser({
+        name: newMember.name,
+        email: newMember.email,
+        password: newMember.password,
+        role: newMember.role,
+      });
+      showToast({ type: "success", message: "Team member added successfully!" });
+      setNewMember({ name: "", email: "", password: "", role: "agent" });
+      setShowAddMember(false);
+      loadTeamMembers();
+    } catch (err: any) {
+      showToast({ type: "error", message: err.message || "Failed to add team member" });
+    } finally {
+      setAddingMember(false);
     }
   }
 
@@ -162,6 +217,7 @@ export default function SettingsPage() {
   const tabs = [
     { id: "profile", label: "👤 User Profile" },
     { id: "security", label: "🔒 Security & Password" },
+    { id: "team", label: "👥 Team Members" },
     { id: "agency", label: "🏢 Agency Defaults" },
   ] as const;
 
@@ -301,6 +357,124 @@ export default function SettingsPage() {
                   </Button>
                 </div>
               </form>
+            )}
+
+            {/* Team Members Tab */}
+            {activeTab === "team" && (
+              <div className="space-y-6">
+                <Section
+                  title="Team Members"
+                  description="Add and manage team members for your agency"
+                >
+                  {loadingTeam ? (
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground">Loading team members...</p>
+                    </div>
+                  ) : teamMembers.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground">No team members yet</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {teamMembers.map((member) => (
+                        <div key={member.id} className="flex items-center justify-between p-3 border border-border rounded-lg hover:bg-muted/50">
+                          <div>
+                            <p className="font-medium text-sm">{member.name}</p>
+                            <p className="text-xs text-muted-foreground">{member.email}</p>
+                          </div>
+                          <span className="text-xs px-2 py-1 bg-primary/10 text-primary rounded-full font-semibold">
+                            {member.role.toUpperCase()}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Section>
+
+                <Separator />
+
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h3 className="font-semibold text-sm">Add New Team Member</h3>
+                    <p className="text-xs text-muted-foreground mt-1">Invite a new user to join your agency</p>
+                  </div>
+                  <Button
+                    variant="primary"
+                    onClick={() => setShowAddMember(!showAddMember)}
+                  >
+                    {showAddMember ? "Cancel" : "+ Add Member"}
+                  </Button>
+                </div>
+
+                {showAddMember && (
+                  <div className="border border-border rounded-lg p-4 space-y-4 bg-muted/30">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="member_name">Full Name *</Label>
+                        <Input
+                          id="member_name"
+                          type="text"
+                          placeholder="John Doe"
+                          value={newMember.name}
+                          onChange={(e) => setNewMember({ ...newMember, name: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="member_email">Email Address *</Label>
+                        <Input
+                          id="member_email"
+                          type="email"
+                          placeholder="john@example.com"
+                          value={newMember.email}
+                          onChange={(e) => setNewMember({ ...newMember, email: e.target.value })}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="member_password">Password *</Label>
+                        <Input
+                          id="member_password"
+                          type="password"
+                          placeholder="Min. 6 characters"
+                          value={newMember.password}
+                          onChange={(e) => setNewMember({ ...newMember, password: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="member_role">Role</Label>
+                        <select
+                          id="member_role"
+                          value={newMember.role}
+                          onChange={(e) => setNewMember({ ...newMember, role: e.target.value })}
+                          className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
+                        >
+                          <option value="agent">Agent</option>
+                          <option value="manager">Manager</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-3">
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowAddMember(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        variant="primary"
+                        onClick={handleAddMember}
+                        disabled={addingMember}
+                      >
+                        {addingMember ? "Adding..." : "Add Team Member"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
             {/* Agency Tab */}
