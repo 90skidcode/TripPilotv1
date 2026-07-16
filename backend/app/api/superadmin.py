@@ -555,7 +555,7 @@ def delete_agency_user_group(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_superadmin),
 ):
-    """Delete a user group in an agency."""
+    """Delete a user group in an agency. Users in this group must be reassigned first."""
     group = db.query(UserGroup).filter(
         UserGroup.id == group_id,
         UserGroup.org_id == agency_id
@@ -563,9 +563,14 @@ def delete_agency_user_group(
     if not group:
         raise HTTPException(status_code=404, detail="User group not found in this agency")
 
-    # Clear association from users
-    db.query(User).filter(User.group_id == group_id).update({User.group_id: None})
-    
+    # Check if any users are in this group
+    users_in_group = db.query(func.count(User.id)).filter(User.group_id == group_id).scalar()
+    if users_in_group > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot delete group with {users_in_group} assigned user(s). Reassign them to another group first."
+        )
+
     db.delete(group)
     db.commit()
     return None
@@ -594,17 +599,14 @@ def update_agency_user(
     if payload.role is not None:
         user.role = payload.role
     if payload.group_id is not None:
-        if payload.group_id == -1: # indicator to clear group assignment
-            user.group_id = None
-        else:
-            # Verify group exists in organization
-            group = db.query(UserGroup).filter(
-                UserGroup.id == payload.group_id,
-                UserGroup.org_id == user.org_id
-            ).first()
-            if not group:
-                raise HTTPException(status_code=404, detail="User Group not found in this organization")
-            user.group_id = payload.group_id
+        # Verify group exists in organization
+        group = db.query(UserGroup).filter(
+            UserGroup.id == payload.group_id,
+            UserGroup.org_id == user.org_id
+        ).first()
+        if not group:
+            raise HTTPException(status_code=404, detail="User Group not found in this organization")
+        user.group_id = payload.group_id
 
     db.commit()
     db.refresh(user)

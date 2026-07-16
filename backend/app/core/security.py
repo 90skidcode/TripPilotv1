@@ -82,10 +82,7 @@ def require_permission(screen: str, action: str = "read"):
         if current_user.is_superadmin:
             return current_user
 
-        # Allow admin and manager roles to bypass group check (for newly created organizations)
-        if current_user.role in ["admin", "manager"]:
-            return current_user
-
+        # All users must have a group assigned (no role-based bypass)
         if not current_user.group:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
