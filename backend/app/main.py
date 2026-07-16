@@ -100,6 +100,31 @@ def seed_admin(db: Session):
         org_id = existing_org.id
         print("[INFO] Default organization already exists.")
 
+    # Create default "Admin" group with full permissions
+    from app.models.user_group import UserGroup
+    existing_group = db.query(UserGroup).filter(UserGroup.org_id == org_id, UserGroup.name == "Admin Group").first()
+    if not existing_group:
+        admin_group = UserGroup(
+            org_id=org_id,
+            name="Admin Group",
+            permissions={
+                "leads": {"read": True, "write": True},
+                "itinerary": {"read": True, "write": True},
+                "vouchers": {"read": True, "write": True},
+                "inventory": {"read": True, "write": True},
+                "dashboard": {"read": True, "write": True},
+                "settings": {"read": True, "write": True},
+                "users": {"read": True, "write": True},
+            }
+        )
+        db.add(admin_group)
+        db.commit()
+        db.refresh(admin_group)
+        print("[OK] Default admin group created with full permissions")
+        default_group_id = admin_group.id
+    else:
+        default_group_id = existing_group.id
+
     # Create default admin user
     existing = db.query(User).filter(User.email == "admin@trippilot.com").first()
     if not existing:
@@ -110,6 +135,7 @@ def seed_admin(db: Session):
             org_id=org_id,
             role="admin",
             is_superadmin=True,
+            group_id=default_group_id,  # Assign to default admin group
         )
         db.add(admin)
         db.commit()

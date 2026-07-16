@@ -172,7 +172,26 @@ def create_agency(
     db.commit()
     db.refresh(subscription)
 
-    # Create first admin user for this org
+    # Create default "Admin" group with full permissions
+    from app.models.user_group import UserGroup
+    admin_group = UserGroup(
+        org_id=org.id,
+        name="Admin Group",
+        permissions={
+            "leads": {"read": True, "write": True},
+            "itinerary": {"read": True, "write": True},
+            "vouchers": {"read": True, "write": True},
+            "inventory": {"read": True, "write": True},
+            "dashboard": {"read": True, "write": True},
+            "settings": {"read": True, "write": True},
+            "users": {"read": True, "write": True},
+        }
+    )
+    db.add(admin_group)
+    db.commit()
+    db.refresh(admin_group)
+
+    # Create first admin user for this org with group assignment
     admin = User(
         name=payload.user_name,
         email=payload.user_email,
@@ -181,6 +200,7 @@ def create_agency(
         org_id=org.id,
         role="admin",
         is_superadmin=False,
+        group_id=admin_group.id,  # Assign to default admin group
     )
     db.add(admin)
     db.commit()
