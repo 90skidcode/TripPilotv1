@@ -196,6 +196,7 @@ def create_agency(
         email=payload.user_email,
         phone_number=payload.user_phone,
         hashed_password=hash_password(payload.user_password),
+        role="admin",  # Set admin role for full access
         org_id=org.id,
         is_superadmin=False,
         group_id=admin_group.id,  # Assign to default admin group
