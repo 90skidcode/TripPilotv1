@@ -3,17 +3,37 @@ Migration script to assign users to Admin Group if they don't have a group assig
 Run this once to fix existing users after the group-based permission system migration.
 """
 
-from app.core.database import SessionLocal
-from app.models.user import User
-from app.models.user_group import UserGroup
-from app.models.organization import Organization
+import sys
+import os
+
+# Add the backend directory to the path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+try:
+    from app.core.database import SessionLocal
+    from app.models.user import User
+    from app.models.user_group import UserGroup
+    from app.models.organization import Organization
+except ImportError as e:
+    print(f"✗ Error importing modules: {e}")
+    print("Make sure you're running this from the backend directory with the virtual environment activated")
+    sys.exit(1)
 
 def migrate():
-    db = SessionLocal()
+    try:
+        print("Connecting to database...")
+        db = SessionLocal()
+        db.execute("SELECT 1")  # Test connection
+        print("✓ Database connected")
+    except Exception as e:
+        print(f"✗ Failed to connect to database: {e}")
+        print("Make sure the database is running and accessible")
+        sys.exit(1)
 
     try:
         # Get all organizations
         orgs = db.query(Organization).all()
+        print(f"Found {len(orgs)} organization(s)")
 
         for org in orgs:
             print(f"Processing organization: {org.name} (ID: {org.id})")
