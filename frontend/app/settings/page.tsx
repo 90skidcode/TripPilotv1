@@ -138,7 +138,7 @@ export default function SettingsPage() {
         name: newMember.name,
         email: newMember.email,
         password: newMember.password,
-        role: "agent",
+        group_id: newMember.group_id,
       });
       showToast({ type: "success", message: "Team member added successfully!" });
       setNewMember({ name: "", email: "", password: "", group_id: userGroups.length > 0 ? userGroups[0].id : null });

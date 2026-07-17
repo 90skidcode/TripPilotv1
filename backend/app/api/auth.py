@@ -16,8 +16,9 @@ class UserCreate(BaseModel):
     name: str
     email: EmailStr
     password: str
-    role: str = "agent"
+    role: str = "agent"  # Kept for backward compatibility
     org_id: int | None = None
+    group_id: int | None = None  # User group assignment
 
 
 class UserOut(BaseModel):
@@ -78,6 +79,7 @@ def _user_with_permissions(user: User, db: Session = None) -> dict:
 @router.post("/register", response_model=UserOut, status_code=201)
 def register(payload: UserCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     from app.api.pricing import check_plan_limit
+    from app.models.user_group import UserGroup
 
     existing = db.query(User).filter(User.email == payload.email).first()
     if existing:
@@ -89,12 +91,23 @@ def register(payload: UserCreate, db: Session = Depends(get_db), current_user: U
     if not allowed:
         raise HTTPException(status_code=403, detail=error_msg)
 
+    # Validate group if provided
+    group_id = payload.group_id
+    if group_id:
+        group = db.query(UserGroup).filter(
+            UserGroup.id == group_id,
+            UserGroup.org_id == org_id
+        ).first()
+        if not group:
+            raise HTTPException(status_code=404, detail="User group not found")
+
     user = User(
         name=payload.name,
         email=payload.email,
         hashed_password=hash_password(payload.password),
         role=payload.role,
         org_id=org_id,
+        group_id=group_id,  # Assign to user group
     )
     db.add(user)
     db.commit()

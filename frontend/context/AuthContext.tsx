@@ -38,8 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const hasPermission = (screen: string, action: "read" | "write"): boolean => {
     if (!user) return false;
-    // Admin and superadmin always have full permissions
-    if (user.role === "admin" || user.role === "superadmin") return true;
+    // Check group-based permissions
     if (!user.permissions) return false;
     return user.permissions[screen]?.[action] || false;
   };
