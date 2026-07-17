@@ -248,7 +248,7 @@ def get_agency(
     lead_count = db.query(func.count(Lead.id)).filter(Lead.org_id == org.id).scalar()
 
     plan_id = subscription.plan_id if subscription else 1
-    sub_status = subscription.status if subscription else None
+    sub_status = subscription.status if subscription else "no_subscription"
     renewal_date = subscription.renewal_date.isoformat() if subscription and subscription.renewal_date else None
     trial_ends = subscription.trial_ends_at.isoformat() if subscription and subscription.trial_ends_at else None
 
