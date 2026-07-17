@@ -11,6 +11,7 @@ class User(Base):
     email = Column(String(255), unique=True, index=True, nullable=False)
     phone_number = Column(String(50), nullable=True)
     hashed_password = Column(String(255), nullable=False)
+    role = Column(String(50), default="agent")  # agent, manager, admin
     org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     group_id = Column(Integer, ForeignKey("user_groups.id"), nullable=True, index=True)
     is_superadmin = Column(Boolean, default=False)  # platform-level admin only
