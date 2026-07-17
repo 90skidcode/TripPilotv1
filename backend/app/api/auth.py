@@ -50,6 +50,21 @@ class Token(BaseModel):
 
 def _user_with_permissions(user: User, db: Session = None) -> dict:
     """Helper to add permissions and org settings to user."""
+    # Determine permissions based on group assignment
+    permissions = user.group.permissions if user.group else {}
+
+    # Fallback: if user is admin/superadmin but has no group, grant full permissions
+    if not permissions and (user.role == "admin" or user.role == "superadmin"):
+        permissions = {
+            "leads": {"read": True, "write": True},
+            "itinerary": {"read": True, "write": True},
+            "vouchers": {"read": True, "write": True},
+            "inventory": {"read": True, "write": True},
+            "dashboard": {"read": True, "write": True},
+            "settings": {"read": True, "write": True},
+            "users": {"read": True, "write": True},
+        }
+
     user_dict = {
         "id": user.id,
         "name": user.name,
@@ -58,7 +73,7 @@ def _user_with_permissions(user: User, db: Session = None) -> dict:
         "avatar_url": user.avatar_url,
         "org_id": user.org_id,
         "group_id": user.group_id,
-        "permissions": user.group.permissions if user.group else {},
+        "permissions": permissions,
     }
     # Add organization settings
     if db:
