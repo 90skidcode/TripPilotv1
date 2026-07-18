@@ -53,8 +53,18 @@ def _user_with_permissions(user: User, db: Session = None) -> dict:
     # Determine permissions based on group assignment
     permissions = user.group.permissions if user.group else {}
 
-    # Fallback: if user is admin/superadmin but has no group, grant full permissions
-    if not permissions and (user.role == "admin" or user.role == "superadmin"):
+    # Fallback: grant full permissions if:
+    # 1. User is admin/superadmin but has no group, OR
+    # 2. User is the first/owner user in their organization (no group needed for org owners)
+    is_admin_role = user.role == "admin" or user.role == "superadmin"
+    is_org_owner = False
+
+    if db and not permissions and not user.group_id:
+        # Check if this is the first user (owner) of the organization
+        first_user = db.query(User).filter(User.org_id == user.org_id).order_by(User.id.asc()).first()
+        is_org_owner = first_user and first_user.id == user.id
+
+    if not permissions and (is_admin_role or is_org_owner):
         permissions = {
             "leads": {"read": True, "write": True},
             "itinerary": {"read": True, "write": True},
