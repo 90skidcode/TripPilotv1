@@ -20,7 +20,10 @@
       "Bash(DATABASE_URL=sqlite:////private/tmp/claude-1057998918/-Users-gandhisp-Personal-TripPilotv1/8b7d699d-ccbe-4611-9085-cca46fee1bbf/scratchpad/e2e.db .venv/bin/python /private/tmp/claude-1057998918/-Users-gandhisp-Personal-TripPilotv1/8b7d699d-ccbe-4611-9085-cca46fee1bbf/scratchpad/smoke_test.py)",
       "Bash(DATABASE_URL=sqlite:////private/tmp/claude-1057998918/-Users-gandhisp-Personal-TripPilotv1/8b7d699d-ccbe-4611-9085-cca46fee1bbf/scratchpad/e2e.db PYTHONPATH=/Users/gandhisp/Personal/TripPilotv1/backend .venv/bin/python /private/tmp/claude-1057998918/-Users-gandhisp-Personal-TripPilotv1/8b7d699d-ccbe-4611-9085-cca46fee1bbf/scratchpad/smoke_test.py)",
       "Bash(./node_modules/.bin/tsc --noEmit)",
-      "Bash(echo \"tsc exit: $?\")"
+      "Bash(echo \"tsc exit: $?\")",
+      "Bash(echo \"admin tsc: $?\")",
+      "Read(//Users/gandhisp/Personal/**)",
+      "Bash(echo \"frontend tsc: $?\")"
     ]
   }
 }

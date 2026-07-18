@@ -1,14 +1,28 @@
 "use client";
 
-import { useState, ReactNode } from "react";
+import { useState, useEffect, useRef, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { SuperAdminAPI } from "@/lib/api";
+import {
+  LayoutDashboard,
+  Building2,
+  Wallet,
+  CreditCard,
+  Database,
+  Users,
+  BarChart3,
+  Settings,
+  LogOut,
+  ChevronLeft,
+  ChevronRight,
+  type LucideIcon,
+} from "lucide-react";
 
 interface MenuItemType {
   label: string;
   href: string;
-  icon: string;
+  icon: LucideIcon;
   subItems?: MenuItemType[];
 }
 
@@ -16,50 +30,74 @@ const MENU_ITEMS: MenuItemType[] = [
   {
     label: "Dashboard",
     href: "/dashboard",
-    icon: "📊",
+    icon: LayoutDashboard,
   },
   {
     label: "Agencies",
     href: "/agencies",
-    icon: "🏢",
+    icon: Building2,
   },
   {
     label: "Pricing Plans",
     href: "/pricing-plans",
-    icon: "💰",
+    icon: Wallet,
   },
   {
     label: "Subscriptions",
     href: "/subscriptions",
-    icon: "💳",
+    icon: CreditCard,
   },
   {
     label: "Master Data",
     href: "/master-data",
-    icon: "📋",
+    icon: Database,
   },
   {
     label: "Users",
     href: "/users",
-    icon: "👥",
+    icon: Users,
   },
   {
     label: "Reports",
     href: "/reports",
-    icon: "📈",
+    icon: BarChart3,
   },
   {
     label: "Settings",
     href: "/settings",
-    icon: "⚙️",
+    icon: Settings,
   },
 ];
+
+function getInitials(name: string) {
+  return name?.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2) || "SA";
+}
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [expandedMenus, setExpandedMenus] = useState<string[]>([]);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [adminUser, setAdminUser] = useState<{ name?: string; email?: string } | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const router = useRouter();
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("superadmin_user");
+      if (stored) setAdminUser(JSON.parse(stored));
+    } catch {
+      // ignore malformed stored user
+    }
+  }, []);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const toggleSubmenu = (label: string) => {
     setExpandedMenus((prev) =>
@@ -89,8 +127,19 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           )}
         </div>
 
+        {/* Collapse toggle on the edge */}
+        <button
+          className="sidebar-edge-toggle"
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          id="sidebar-toggle-btn"
+          title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+        >
+          {sidebarOpen ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+        </button>
+
         {/* Navigation Menu */}
         <nav className="sidebar-nav">
+          {sidebarOpen && <div className="nav-section-label">Navigation</div>}
           {MENU_ITEMS.map((item) => (
             <div key={item.href}>
               <Link
@@ -105,7 +154,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                 title={!sidebarOpen ? item.label : ""}
                 id={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
               >
-                <span className="nav-icon">{item.icon}</span>
+                <span className="nav-icon"><item.icon size={20} /></span>
                 <span className="nav-label">{item.label}</span>
               </Link>
 
@@ -127,29 +176,19 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             </div>
           ))}
 
-          {/* Logout Nav Item at the bottom of navigation */}
-          <div style={{ marginTop: 8 }}>
+          {/* Logout at the bottom of navigation */}
+          <div style={{ marginTop: "24px", paddingTop: "16px", borderTop: "1px solid var(--border)" }}>
             <div
               className="nav-item"
               onClick={handleLogout}
               title={!sidebarOpen ? "Logout" : ""}
               id="nav-logout"
             >
-              <span className="nav-icon">🚪</span>
+              <span className="nav-icon"><LogOut size={20} /></span>
               <span className="nav-label">Logout</span>
             </div>
           </div>
         </nav>
-
-        {/* Toggle Sidebar Button at the bottom */}
-        <div
-          className="sidebar-toggle"
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          id="sidebar-toggle-btn"
-          title={!sidebarOpen ? "Expand" : "Collapse"}
-        >
-          {sidebarOpen ? "←" : "→"}
-        </div>
       </aside>
 
       {/* Top Bar */}
@@ -160,11 +199,35 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           </h2>
         </div>
         <div className="topbar-right">
-          <div style={{ textAlign: "right" }}>
-            <p style={{ fontSize: "14px", fontWeight: 500, color: "var(--text-primary)" }}>Superadmin</p>
-            <p style={{ fontSize: "12px", color: "var(--text-secondary)" }}>admin@trippilot.com</p>
+          <div className="relative" ref={menuRef} style={{ position: "relative" }}>
+            <button
+              className="avatar"
+              style={{ border: "none" }}
+              title={adminUser?.name || "Superadmin"}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((o) => !o)}
+            >
+              {getInitials(adminUser?.name || "Super Admin")}
+            </button>
+
+            {menuOpen && (
+              <div className="avatar-menu" role="menu">
+                <div className="avatar-menu-header">
+                  <p style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>
+                    {adminUser?.name || "Superadmin"}
+                  </p>
+                  <p style={{ fontSize: "12px", color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {adminUser?.email || ""}
+                  </p>
+                </div>
+                <button className="avatar-menu-item" role="menuitem" onClick={handleLogout}>
+                  <LogOut size={16} />
+                  Logout
+                </button>
+              </div>
+            )}
           </div>
-          <div className="avatar">A</div>
         </div>
       </header>
 

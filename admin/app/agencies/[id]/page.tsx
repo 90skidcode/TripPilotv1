@@ -238,7 +238,7 @@ function AgencyDetailContent() {
                       width: "44px",
                       height: "44px",
                       borderRadius: "50%",
-                      background: "linear-gradient(135deg, var(--brand) 0%, #a855f7 100%)",
+                      background: "linear-gradient(135deg, var(--brand) 0%, var(--brand-dark) 100%)",
                       color: "white",
                       fontWeight: 700,
                       fontSize: "16px",

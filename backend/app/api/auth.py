@@ -29,6 +29,7 @@ class UserOut(BaseModel):
     avatar_url: str | None
     org_id: int
     group_id: int | None
+    is_superadmin: bool = False
     permissions: dict = {}
     # Organization settings
     advisor_name: str | None = None
@@ -83,6 +84,7 @@ def _user_with_permissions(user: User, db: Session = None) -> dict:
         "avatar_url": user.avatar_url,
         "org_id": user.org_id,
         "group_id": user.group_id,
+        "is_superadmin": bool(user.is_superadmin),
         "permissions": permissions,
     }
     # Add organization settings
