@@ -20,7 +20,6 @@ def seed_pricing_plans(db: Session):
     plans = [
         {
             "name": "Free Trial",
-            "monthly_price": 0,
             "itineraries_limit": 5,
             "leads_limit": 10,
             "vouchers_limit": 3,
@@ -31,7 +30,6 @@ def seed_pricing_plans(db: Session):
         },
         {
             "name": "Starter",
-            "monthly_price": 299,
             "itineraries_limit": 50,
             "leads_limit": 100,
             "vouchers_limit": 50,
@@ -42,7 +40,6 @@ def seed_pricing_plans(db: Session):
         },
         {
             "name": "Pro",
-            "monthly_price": 399,
             "itineraries_limit": 500,
             "leads_limit": 1000,
             "vouchers_limit": 500,
@@ -53,7 +50,6 @@ def seed_pricing_plans(db: Session):
         },
         {
             "name": "Enterprise",
-            "monthly_price": 0,  # Custom pricing
             "itineraries_limit": 999999,
             "leads_limit": 999999,
             "vouchers_limit": 999999,

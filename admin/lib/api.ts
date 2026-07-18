@@ -409,6 +409,50 @@ export class SuperAdminAPI {
     }
   }
 
+  // ── Subscriptions ──
+
+  static async getSubscriptions(): Promise<any[]> {
+    const response = await fetch(`${API_URL}/superadmin/subscriptions`, {
+      headers: { Authorization: `Bearer ${this.getToken()}` },
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch subscriptions");
+    }
+
+    return response.json();
+  }
+
+  static async extendSubscription(agencyId: number, data: any): Promise<any> {
+    const response = await fetch(`${API_URL}/superadmin/agencies/${agencyId}/subscription/extend`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.getToken()}`,
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.detail || "Failed to extend subscription");
+    }
+
+    return response.json();
+  }
+
+  static async getSubscriptionHistory(agencyId: number): Promise<any[]> {
+    const response = await fetch(`${API_URL}/superadmin/agencies/${agencyId}/subscription/history`, {
+      headers: { Authorization: `Bearer ${this.getToken()}` },
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch subscription history");
+    }
+
+    return response.json();
+  }
+
   // ── Master Data ──
 
   static async getMasterDataCategories(): Promise<string[]> {

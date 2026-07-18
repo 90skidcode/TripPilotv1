@@ -9,6 +9,8 @@ from app.core.database import get_db
 from app.core.security import get_current_user, require_superadmin
 from app.models.user import User
 from app.models.pricing_plan import PricingPlan, Subscription, UsageTracking, PlanBillingCycle, BillingCycle
+from app.models.subscription_history import SubscriptionHistory
+from app.services.subscription_history import log_subscription_event
 from app.models.lead import Lead
 from app.models.itinerary import Itinerary
 from app.models.tools import HotelVoucher, Invoice
@@ -16,19 +18,31 @@ from app.models.tools import HotelVoucher, Invoice
 router = APIRouter()
 
 
+CYCLE_DAYS = {"monthly": 30, "quarterly": 90, "half_yearly": 180, "yearly": 365}
+
+
 def calculate_renewal_date(billing_cycle: str) -> datetime:
     """Calculate renewal date based on billing cycle."""
-    now = datetime.utcnow()
-    if billing_cycle == "monthly":
-        return now + timedelta(days=30)
-    elif billing_cycle == "quarterly":
-        return now + timedelta(days=90)
-    elif billing_cycle == "half_yearly":
-        return now + timedelta(days=180)
-    elif billing_cycle == "yearly":
-        return now + timedelta(days=365)
-    else:
-        return now + timedelta(days=30)
+    return datetime.utcnow() + timedelta(days=CYCLE_DAYS.get(billing_cycle, 30))
+
+
+def mark_expired(db: Session, subscription: Subscription) -> None:
+    """Flip a lapsed subscription to expired, logging the timeline event once."""
+    if subscription.status == "expired":
+        return
+    old = subscription.renewal_date or subscription.trial_ends_at
+    subscription.status = "expired"
+    db.commit()
+    log_subscription_event(
+        db,
+        org_id=subscription.org_id,
+        subscription_id=subscription.id,
+        action="expired",
+        old_renewal_date=old,
+        new_renewal_date=old,
+        actor_id=None,
+        actor_name="System",
+    )
 
 
 class PlanBillingCycleOut(BaseModel):
@@ -80,9 +94,9 @@ class SubscriptionOut(BaseModel):
     plan_id: int
     billing_cycle: str | None
     status: str
-    start_date: str
-    renewal_date: str | None
-    trial_ends_at: str | None
+    start_date: datetime
+    renewal_date: datetime | None
+    trial_ends_at: datetime | None
 
     class Config:
         from_attributes = True
@@ -167,9 +181,10 @@ def create_plan(
             detail="Plan name already exists"
         )
 
+    # Note: monthly_price is accepted for API compatibility but pricing
+    # actually lives on PlanBillingCycle rows, not the plan itself.
     plan = PricingPlan(
         name=payload.name,
-        monthly_price=payload.monthly_price,
         itineraries_limit=payload.itineraries_limit,
         leads_limit=payload.leads_limit,
         vouchers_limit=payload.vouchers_limit,
@@ -212,8 +227,6 @@ def update_plan(
     # Update fields
     if payload.name is not None:
         plan.name = payload.name
-    if payload.monthly_price is not None:
-        plan.monthly_price = payload.monthly_price
     if payload.itineraries_limit is not None:
         plan.itineraries_limit = payload.itineraries_limit
     if payload.leads_limit is not None:
@@ -353,13 +366,24 @@ def create_or_update_subscription(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Create or update organization subscription with billing cycle."""
+    """Create or update organization subscription with billing cycle.
+
+    Payments are collected offline — paid plans are activated and renewed
+    only by the TripPilot team from the admin panel. Self-serve is limited
+    to trial plans.
+    """
     org_id = current_user.org_id
 
     # Verify plan and billing cycle exist
     plan = db.query(PricingPlan).filter(PricingPlan.id == payload.plan_id).first()
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
+
+    if plan.trial_days == 0 and not current_user.is_superadmin:
+        raise HTTPException(
+            status_code=403,
+            detail="Paid plans are activated by the TripPilot team. Please contact support to renew or upgrade.",
+        )
 
     billing_cycle = db.query(PlanBillingCycle).filter(
         PlanBillingCycle.id == payload.plan_billing_cycle_id,
@@ -372,10 +396,13 @@ def create_or_update_subscription(
     existing = db.query(Subscription).filter(
         Subscription.org_id == org_id,
         Subscription.status.in_(["active", "trial"]),
-    ).first()
+    ).order_by(Subscription.id.desc()).first()
 
     now = datetime.utcnow()
     renewal_date = calculate_renewal_date(payload.billing_cycle)
+
+    old_plan_id = existing.plan_id if existing else None
+    old_renewal = (existing.renewal_date or existing.trial_ends_at) if existing else None
 
     if existing:
         # Update existing subscription
@@ -393,7 +420,7 @@ def create_or_update_subscription(
             existing.trial_ends_at = None
         db.commit()
         db.refresh(existing)
-        return existing
+        subscription = existing
     else:
         # Create new subscription
         subscription = Subscription(
@@ -412,7 +439,22 @@ def create_or_update_subscription(
         db.add(subscription)
         db.commit()
         db.refresh(subscription)
-        return subscription
+
+    log_subscription_event(
+        db,
+        org_id=org_id,
+        subscription_id=subscription.id,
+        action="activated",
+        old_plan_id=old_plan_id,
+        new_plan_id=plan.id,
+        plan_name=plan.name,
+        billing_cycle=subscription.billing_cycle,
+        old_renewal_date=old_renewal,
+        new_renewal_date=subscription.renewal_date or subscription.trial_ends_at,
+        actor_id=current_user.id,
+        actor_name=current_user.name,
+    )
+    return subscription
 
 
 @router.get("/subscriptions/current", response_model=SubscriptionOut)
@@ -426,12 +468,61 @@ def get_current_subscription(
     subscription = db.query(Subscription).filter(
         Subscription.org_id == org_id,
         Subscription.status.in_(["active", "trial", "expired"]),
-    ).first()
+    ).order_by(Subscription.id.desc()).first()
 
     if not subscription:
         raise HTTPException(status_code=404, detail="No subscription found")
 
     return subscription
+
+
+class BillingHistoryItemOut(BaseModel):
+    id: int
+    action: str
+    plan_name: str | None
+    billing_cycle: str | None
+    old_renewal_date: str | None
+    new_renewal_date: str | None
+    amount: float | None
+    payment_mode: str | None
+    payment_reference: str | None
+    note: str | None
+    created_at: str | None
+
+
+@router.get("/subscriptions/history", response_model=List[BillingHistoryItemOut])
+def get_billing_history(
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Billing timeline for the user's own organization.
+
+    Intentionally excludes actor details — admin actions are shown to
+    tenants as coming from the TripPilot team.
+    """
+    events = db.query(SubscriptionHistory).filter(
+        SubscriptionHistory.org_id == current_user.org_id
+    ).order_by(
+        SubscriptionHistory.created_at.desc(), SubscriptionHistory.id.desc()
+    ).limit(limit).all()
+
+    return [
+        {
+            "id": e.id,
+            "action": e.action,
+            "plan_name": e.plan_name,
+            "billing_cycle": e.billing_cycle,
+            "old_renewal_date": e.old_renewal_date.isoformat() if e.old_renewal_date else None,
+            "new_renewal_date": e.new_renewal_date.isoformat() if e.new_renewal_date else None,
+            "amount": e.amount,
+            "payment_mode": e.payment_mode,
+            "payment_reference": e.payment_reference,
+            "note": e.note,
+            "created_at": e.created_at.isoformat() if e.created_at else None,
+        }
+        for e in events
+    ]
 
 
 @router.get("/usage", response_model=UsageOut)
@@ -463,16 +554,14 @@ def get_usage(
         if billing_cycle:
             monthly_price = billing_cycle.monthly_price
 
-    # Check trial expiry and update status if needed
+    # Check trial/renewal expiry and update status if needed
     now = datetime.utcnow()
     if subscription.trial_ends_at and subscription.trial_ends_at <= now:
-        subscription.status = "expired"
-        db.commit()
+        mark_expired(db, subscription)
 
     # Check paid plan renewal date expiry
     if subscription.renewal_date and subscription.renewal_date <= now:
-        subscription.status = "expired"
-        db.commit()
+        mark_expired(db, subscription)
 
     # Count actual records — source of truth, always accurate regardless of deletes/imports
     leads_used = db.query(func.count(Lead.id)).filter(Lead.org_id == org_id).scalar() or 0
@@ -545,16 +634,12 @@ def get_subscription_status(
     # Check trial expiry
     if subscription.trial_ends_at and subscription.trial_ends_at <= now:
         is_expired = True
-        if subscription.status != "expired":
-            subscription.status = "expired"
-            db.commit()
+        mark_expired(db, subscription)
 
     # Check paid plan renewal date expiry
     if subscription.renewal_date and subscription.renewal_date <= now:
         is_expired = True
-        if subscription.status != "expired":
-            subscription.status = "expired"
-            db.commit()
+        mark_expired(db, subscription)
 
     # Check explicit expired status
     if subscription.status == "expired":
@@ -589,14 +674,12 @@ def check_write_access(db: Session, org_id: int) -> tuple[bool, str | None]:
 
     # Check trial expiry
     if subscription.trial_ends_at and subscription.trial_ends_at <= now:
-        subscription.status = "expired"
-        db.commit()
+        mark_expired(db, subscription)
         return False, "Trial period has expired. You can only read existing data. Please upgrade your plan."
 
     # Check paid plan renewal date expiry
     if subscription.renewal_date and subscription.renewal_date <= now:
-        subscription.status = "expired"
-        db.commit()
+        mark_expired(db, subscription)
         return False, "Subscription has expired. You can only read existing data. Please renew your plan."
 
     # Check explicit expired status

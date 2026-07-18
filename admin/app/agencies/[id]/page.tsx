@@ -8,6 +8,8 @@ import { DataTable, DataTableColumn } from "@/components/DataTable";
 import { usePagination } from "@/components/DataTable/usePagination";
 import { TableSkeleton } from "@/components/SkeletonLoaders";
 import { LogIn } from "lucide-react";
+import ExtendSubscriptionModal from "@/components/ExtendSubscriptionModal";
+import SubscriptionTimeline from "@/components/SubscriptionTimeline";
 
 interface Agency {
   id: number;
@@ -65,6 +67,8 @@ function AgencyDetailContent() {
     userName: "",
   });
   const [impersonating, setImpersonating] = useState(false);
+  const [showExtendModal, setShowExtendModal] = useState(false);
+  const [historyRefresh, setHistoryRefresh] = useState(0);
   const [logoBroken, setLogoBroken] = useState(false);
   const [uploadingDetail, setUploadingDetail] = useState(false);
   const [uploadErrorDetail, setUploadErrorDetail] = useState("");
@@ -392,8 +396,15 @@ function AgencyDetailContent() {
 
         {/* Subscription Info Card */}
         <div className="card">
-          <div className="card-header">
-            <h2 className="card-title">Subscription & Billing</h2>
+          <div className="card-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px" }}>
+            <h2 className="card-title" style={{ margin: 0 }}>Subscription & Billing</h2>
+            <button
+              onClick={() => setShowExtendModal(true)}
+              className="btn btn-primary btn-sm"
+              style={{ fontWeight: 600 }}
+            >
+              Extend / Record Payment
+            </button>
           </div>
           <div className="card-body">
             <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
@@ -444,6 +455,16 @@ function AgencyDetailContent() {
           <p style={{ color: "var(--text-secondary)", fontSize: "13px", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em" }}>Total Leads Managed</p>
           <p style={{ fontSize: "36px", fontWeight: 800, color: "var(--text-primary)", marginTop: "8px" }}>{agency.lead_count}</p>
           <div style={{ position: "absolute", right: "24px", bottom: "24px", fontSize: "28px" }}>📈</div>
+        </div>
+      </div>
+
+      {/* Subscription Timeline */}
+      <div className="card" style={{ marginBottom: "24px" }}>
+        <div className="card-header">
+          <h2 className="card-title">Subscription History</h2>
+        </div>
+        <div className="card-body">
+          <SubscriptionTimeline agencyId={agencyId} refreshKey={historyRefresh} />
         </div>
       </div>
 
@@ -501,6 +522,22 @@ function AgencyDetailContent() {
           })()}
         </div>
       </div>
+
+      {/* Extend Subscription Modal */}
+      {showExtendModal && (
+        <ExtendSubscriptionModal
+          agencyId={agencyId}
+          agencyName={agency.name}
+          currentPlanId={agency.plan_id}
+          renewalDate={agency.renewal_date}
+          trialEndsAt={agency.trial_ends_at}
+          onClose={() => setShowExtendModal(false)}
+          onSuccess={() => {
+            loadData();
+            setHistoryRefresh((n) => n + 1);
+          }}
+        />
+      )}
 
       {/* Impersonate Token Modal */}
       {impersonateModal.show && (

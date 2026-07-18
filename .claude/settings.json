@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/bin/python migrate_assign_admin_group.py)",
+      "Bash(timeout 30 .venv/bin/python migrate_assign_admin_group.py)",
+      "Bash(.venv/bin/python -u migrate_assign_admin_group.py)",
+      "Bash(.venv/bin/python fix_admin_role.py)",
+      "Bash(.venv/bin/python -c \"import ast; ast.parse\\(open\\('app/api/user_groups.py'\\).read\\(\\)\\); ast.parse\\(open\\('app/api/auth.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(python -m alembic heads)",
+      "Bash(.venv/bin/python -m alembic current)",
+      "Bash(.venv/bin/python -m alembic upgrade head)",
+      "Bash(DATABASE_URL=\"sqlite:////private/tmp/claude-1057998918/-Users-gandhisp-Personal-TripPilotv1/8b7d699d-ccbe-4611-9085-cca46fee1bbf/scratchpad/test_migrate.db\" .venv/bin/python -m alembic upgrade head)",
+      "Bash(rm -f mig_test.db)",
+      "Bash(sqlite3 mig_test.db \"CREATE TABLE subscriptions \\(id INTEGER PRIMARY KEY\\);\")",
+      "Bash(export DATABASE_URL=\"sqlite:////private/tmp/claude-1057998918/-Users-gandhisp-Personal-TripPilotv1/8b7d699d-ccbe-4611-9085-cca46fee1bbf/scratchpad/mig_test.db\")",
+      "Bash(.venv/bin/python -m alembic stamp g0h1i2j3k4l5)",
+      "Bash(.venv/bin/python -m alembic downgrade -1)",
+      "Bash(sqlite3 /private/tmp/claude-1057998918/-Users-gandhisp-Personal-TripPilotv1/8b7d699d-ccbe-4611-9085-cca46fee1bbf/scratchpad/mig_test.db \".schema subscription_history\")",
+      "Bash(DATABASE_URL=sqlite:///:memory: .venv/bin/python -c ' *)",
+      "Bash(DATABASE_URL=sqlite:////private/tmp/claude-1057998918/-Users-gandhisp-Personal-TripPilotv1/8b7d699d-ccbe-4611-9085-cca46fee1bbf/scratchpad/e2e.db .venv/bin/python /private/tmp/claude-1057998918/-Users-gandhisp-Personal-TripPilotv1/8b7d699d-ccbe-4611-9085-cca46fee1bbf/scratchpad/smoke_test.py)",
+      "Bash(DATABASE_URL=sqlite:////private/tmp/claude-1057998918/-Users-gandhisp-Personal-TripPilotv1/8b7d699d-ccbe-4611-9085-cca46fee1bbf/scratchpad/e2e.db PYTHONPATH=/Users/gandhisp/Personal/TripPilotv1/backend .venv/bin/python /private/tmp/claude-1057998918/-Users-gandhisp-Personal-TripPilotv1/8b7d699d-ccbe-4611-9085-cca46fee1bbf/scratchpad/smoke_test.py)",
+      "Bash(./node_modules/.bin/tsc --noEmit)",
+      "Bash(echo \"tsc exit: $?\")"
+    ]
+  }
+}

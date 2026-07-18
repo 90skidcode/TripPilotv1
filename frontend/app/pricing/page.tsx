@@ -29,6 +29,7 @@ interface Plan {
   bills_limit: number;
   team_members_limit: number;
   storage_gb: number;
+  trial_days: number;
   is_active: boolean;
   billing_cycles?: BillingCycle[];
 }
@@ -204,22 +205,35 @@ export default function PricingPage() {
                     )}
                   </div>
 
-                  {/* CTA Button */}
-                  <Button
-                    variant={plan.name === "Starter" ? "primary" : "outline"}
-                    disabled={
-                      !selectedCycle ||
-                      selectedCycle.plan_id !== plan.id ||
-                      subscribing
-                    }
-                    onClick={() =>
-                      selectedCycle &&
-                      handleSelectPlan(plan, selectedCycle)
-                    }
-                    className="w-full mt-6"
-                  >
-                    {subscribing ? "Processing..." : "Choose Plan"}
-                  </Button>
+                  {/* CTA Button — paid plans are activated manually by the
+                      TripPilot team (payments are collected offline) */}
+                  {plan.trial_days > 0 ? (
+                    <Button
+                      variant={plan.name === "Starter" ? "primary" : "outline"}
+                      disabled={
+                        !selectedCycle ||
+                        selectedCycle.plan_id !== plan.id ||
+                        subscribing
+                      }
+                      onClick={() =>
+                        selectedCycle &&
+                        handleSelectPlan(plan, selectedCycle)
+                      }
+                      className="w-full mt-6"
+                    >
+                      {subscribing ? "Processing..." : "Start Free Trial"}
+                    </Button>
+                  ) : (
+                    <Button
+                      variant={plan.name === "Starter" ? "primary" : "outline"}
+                      onClick={() => {
+                        window.location.href = `mailto:sales@trippilot.com?subject=Activate ${plan.name} plan`;
+                      }}
+                      className="w-full mt-6"
+                    >
+                      Contact us to activate
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             ))}

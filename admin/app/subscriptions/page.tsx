@@ -7,18 +7,22 @@ import { SuperAdminAPI } from "@/lib/api";
 import { DataTable, DataTableColumn } from "@/components/DataTable";
 import { usePagination } from "@/components/DataTable/usePagination";
 import { TableSkeleton } from "@/components/SkeletonLoaders";
+import ExtendSubscriptionModal from "@/components/ExtendSubscriptionModal";
 
 interface Subscription {
-  id: number;
+  subscription_id: number | null;
   org_id: number;
-  plan_id: number;
-  billing_cycle: string;
+  org_name: string;
+  plan_id: number | null;
+  plan_name: string | null;
+  billing_cycle: string | null;
   status: string;
-  start_date: string;
-  renewal_date: string;
+  effective_status: string;
+  start_date: string | null;
+  renewal_date: string | null;
   trial_ends_at: string | null;
-  plan_name?: string;
-  org_name?: string;
+  days_left: number | null;
+  last_extended_at: string | null;
 }
 
 export default function SubscriptionsPage() {
@@ -26,6 +30,7 @@ export default function SubscriptionsPage() {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "active" | "expired" | "trial">("all");
+  const [extending, setExtending] = useState<Subscription | null>(null);
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error" | "info";
@@ -57,10 +62,8 @@ export default function SubscriptionsPage() {
 
   async function loadSubscriptions() {
     try {
-      const plans = await SuperAdminAPI.getAllPricingPlans();
-      const agencies = await SuperAdminAPI.getAgencies();
-
-      setSubscriptions([]);
+      const data = await SuperAdminAPI.getSubscriptions();
+      setSubscriptions(data);
     } catch (error) {
       console.error("Failed to load subscriptions:", error);
       showToast("Failed to load subscriptions", "error");
@@ -85,6 +88,8 @@ export default function SubscriptionsPage() {
         return { bg: "#E0F2FE", color: "#0369a1", text: "Trial" };
       case "expired":
         return { bg: "var(--error-light)", color: "var(--error)", text: "Expired" };
+      case "no_subscription":
+        return { bg: "var(--bg-hover)", color: "var(--text-secondary)", text: "No Subscription" };
       default:
         return { bg: "var(--bg-hover)", color: "var(--text-secondary)", text: status };
     }
@@ -92,7 +97,7 @@ export default function SubscriptionsPage() {
 
   const filteredSubscriptions = subscriptions.filter(sub => {
     if (filter === "all") return true;
-    return sub.status === filter;
+    return sub.effective_status === filter;
   });
 
   if (loading) {
@@ -112,7 +117,7 @@ export default function SubscriptionsPage() {
             Subscriptions
           </h1>
           <p style={{ color: "var(--text-secondary)", fontSize: "14px" }}>
-            View and manage all organization subscriptions
+            Extend subscriptions manually after collecting payment — there is no auto-pay
           </p>
         </div>
         <Link href="/pricing-plans" className="btn btn-outline" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
@@ -142,7 +147,7 @@ export default function SubscriptionsPage() {
           >
             {status === "all" ? "All" : status.charAt(0).toUpperCase() + status.slice(1)}
             <span style={{ marginLeft: "6px", opacity: 0.6 }}>
-              ({subscriptions.filter(s => status === "all" || s.status === status).length})
+              ({subscriptions.filter(s => status === "all" || s.effective_status === status).length})
             </span>
           </button>
         ))}
@@ -171,24 +176,22 @@ export default function SubscriptionsPage() {
           {
             key: "org_name",
             header: "Organization",
-            render: (value, sub) => value || `Org #${sub.org_id}`,
+            render: (value, sub) => (
+              <Link href={`/agencies/${sub.org_id}`} style={{ color: "var(--brand)", fontWeight: 600 }}>
+                {value || `Org #${sub.org_id}`}
+              </Link>
+            ),
           },
           {
             key: "plan_name",
             header: "Plan",
-            render: (value, sub) => value || `Plan #${sub.plan_id}`,
+            render: (value, sub) => value || (sub.plan_id ? `Plan #${sub.plan_id}` : "—"),
           },
           {
             key: "billing_cycle",
             header: "Billing Cycle",
             align: "center",
-            render: (value) => value ? value.charAt(0).toUpperCase() + value.slice(1) : "—",
-          },
-          {
-            key: "start_date",
-            header: "Started",
-            align: "center",
-            render: (value) => formatDate(value),
+            render: (value) => value ? value.replace("_", "-").charAt(0).toUpperCase() + value.replace("_", "-").slice(1) : "—",
           },
           {
             key: "renewal_date",
@@ -197,7 +200,27 @@ export default function SubscriptionsPage() {
             render: (value, sub) => value ? formatDate(value) : sub.trial_ends_at ? formatDate(sub.trial_ends_at) : "—",
           },
           {
-            key: "status",
+            key: "days_left",
+            header: "Days Left",
+            align: "center",
+            render: (value, sub) => {
+              if (value == null) return "—";
+              const critical = sub.effective_status === "expired" || value <= 3;
+              return (
+                <span style={{ fontWeight: 600, color: critical ? "var(--error)" : "var(--text-primary)" }}>
+                  {sub.effective_status === "expired" ? "0" : value}
+                </span>
+              );
+            },
+          },
+          {
+            key: "last_extended_at",
+            header: "Last Extended",
+            align: "center",
+            render: (value) => value ? formatDate(value) : "—",
+          },
+          {
+            key: "effective_status",
             header: "Status",
             align: "center",
             render: (value) => {
@@ -214,6 +237,28 @@ export default function SubscriptionsPage() {
                 </span>
               );
             },
+          },
+          {
+            key: "org_id",
+            header: "Actions",
+            align: "center",
+            render: (_value, sub) => (
+              <button
+                onClick={() => setExtending(sub)}
+                style={{
+                  padding: "6px 14px",
+                  background: "var(--brand)",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                }}
+              >
+                Extend
+              </button>
+            ),
           },
         ];
 
@@ -249,22 +294,39 @@ export default function SubscriptionsPage() {
           <div style={{ background: "white", padding: "16px", borderRadius: "8px", border: "1px solid var(--border)" }}>
             <p style={{ color: "var(--text-secondary)", fontSize: "12px", margin: 0 }}>Active</p>
             <p style={{ fontSize: "24px", fontWeight: 700, color: "var(--success)", margin: "8px 0 0 0" }}>
-              {subscriptions.filter(s => s.status === "active").length}
+              {subscriptions.filter(s => s.effective_status === "active").length}
             </p>
           </div>
           <div style={{ background: "white", padding: "16px", borderRadius: "8px", border: "1px solid var(--border)" }}>
             <p style={{ color: "var(--text-secondary)", fontSize: "12px", margin: 0 }}>Expired</p>
             <p style={{ fontSize: "24px", fontWeight: 700, color: "var(--error)", margin: "8px 0 0 0" }}>
-              {subscriptions.filter(s => s.status === "expired").length}
+              {subscriptions.filter(s => s.effective_status === "expired").length}
             </p>
           </div>
           <div style={{ background: "white", padding: "16px", borderRadius: "8px", border: "1px solid var(--border)" }}>
             <p style={{ color: "var(--text-secondary)", fontSize: "12px", margin: 0 }}>Trial</p>
             <p style={{ fontSize: "24px", fontWeight: 700, color: "#0369a1", margin: "8px 0 0 0" }}>
-              {subscriptions.filter(s => s.status === "trial").length}
+              {subscriptions.filter(s => s.effective_status === "trial").length}
             </p>
           </div>
         </div>
+      )}
+
+      {/* Extend Modal */}
+      {extending && (
+        <ExtendSubscriptionModal
+          agencyId={extending.org_id}
+          agencyName={extending.org_name}
+          currentPlanId={extending.plan_id}
+          currentBillingCycle={extending.billing_cycle}
+          renewalDate={extending.renewal_date}
+          trialEndsAt={extending.trial_ends_at}
+          onClose={() => setExtending(null)}
+          onSuccess={() => {
+            showToast(`Subscription extended for ${extending.org_name}`);
+            loadSubscriptions();
+          }}
+        />
       )}
     </div>
   );

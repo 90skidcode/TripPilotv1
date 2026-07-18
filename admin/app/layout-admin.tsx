@@ -29,6 +29,11 @@ const MENU_ITEMS: MenuItemType[] = [
     icon: "💰",
   },
   {
+    label: "Subscriptions",
+    href: "/subscriptions",
+    icon: "💳",
+  },
+  {
     label: "Master Data",
     href: "/master-data",
     icon: "📋",

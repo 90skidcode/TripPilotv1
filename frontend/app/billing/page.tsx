@@ -9,13 +9,31 @@ import { Badge } from "@/components/ui/badge";
 import { pricingApi } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/Toast";
-import { CreditCard, Calendar, AlertCircle, CheckCircle } from "lucide-react";
+import { CreditCard, Calendar, AlertCircle, CheckCircle, History } from "lucide-react";
+
+const HISTORY_ACTION_LABELS: Record<string, string> = {
+  extended: "Subscription extended",
+  created: "Subscription started",
+  plan_changed: "Plan changed",
+  activated: "Plan activated",
+  expired: "Subscription expired",
+  cancelled: "Subscription cancelled",
+};
+
+const PAYMENT_MODE_LABELS: Record<string, string> = {
+  upi: "UPI",
+  bank_transfer: "Bank Transfer",
+  cash: "Cash",
+  cheque: "Cheque",
+  other: "Other",
+};
 
 export default function BillingPage() {
   const router = useRouter();
   const { showToast } = useToast();
   const [usage, setUsage] = useState<any>(null);
   const [subscription, setSubscription] = useState<any>(null);
+  const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -37,6 +55,13 @@ export default function BillingPage() {
       });
     } finally {
       setLoading(false);
+    }
+
+    // History is supplementary — a failure here must not blank the page
+    try {
+      setHistory(await pricingApi.billingHistory());
+    } catch {
+      setHistory([]);
     }
   }
 
@@ -99,15 +124,16 @@ export default function BillingPage() {
               <div>
                 <p className="font-semibold text-destructive">Subscription Expired</p>
                 <p className="text-sm text-destructive/80 mt-1">
-                  Your subscription has expired. You have read-only access. Please renew to continue.
+                  Your subscription has expired and you have read-only access. Renewals are
+                  handled by the TripPilot team — contact us to renew.
                 </p>
                 <Button
                   variant="primary"
                   size="sm"
-                  onClick={() => router.push("/pricing")}
+                  onClick={() => { window.location.href = "mailto:support@trippilot.com?subject=Subscription renewal"; }}
                   className="mt-3"
                 >
-                  Renew Subscription
+                  Contact us to renew
                 </Button>
               </div>
             </div>
@@ -349,6 +375,76 @@ export default function BillingPage() {
                   </div>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Billing History */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <History className="h-4 w-4" />
+                Billing History
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {history.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No billing events yet.</p>
+              ) : (
+                <div className="space-y-4">
+                  {history.map((event) => (
+                    <div
+                      key={event.id}
+                      className="flex items-start gap-3 border-b border-border pb-4 last:border-b-0 last:pb-0"
+                    >
+                      <div
+                        className={`mt-1.5 h-2.5 w-2.5 rounded-full flex-shrink-0 ${
+                          event.action === "expired"
+                            ? "bg-destructive"
+                            : event.action === "extended"
+                              ? "bg-green-600"
+                              : "bg-primary"
+                        }`}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <p className="text-sm font-semibold">
+                            {HISTORY_ACTION_LABELS[event.action] || event.action}
+                            {event.plan_name && (
+                              <span className="font-normal text-muted-foreground">
+                                {" "}— {event.plan_name}
+                                {event.billing_cycle && ` (${event.billing_cycle.replace("_", "-")})`}
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-xs text-muted-foreground">{formatDate(event.created_at)}</p>
+                        </div>
+                        {event.new_renewal_date && event.action !== "expired" && (
+                          <p className="text-sm text-muted-foreground mt-0.5">
+                            Valid until {formatDate(event.new_renewal_date)}
+                          </p>
+                        )}
+                        {(event.amount != null || event.payment_mode || event.payment_reference) && (
+                          <p className="text-sm text-green-700 mt-0.5">
+                            {event.amount != null && (
+                              <span className="font-semibold">₹{event.amount.toLocaleString("en-IN")}</span>
+                            )}
+                            {event.payment_mode && (
+                              <> · {PAYMENT_MODE_LABELS[event.payment_mode] || event.payment_mode}</>
+                            )}
+                            {event.payment_reference && <> · Ref: {event.payment_reference}</>}
+                          </p>
+                        )}
+                        {event.note && (
+                          <p className="text-sm text-muted-foreground italic mt-0.5">{event.note}</p>
+                        )}
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {event.action === "expired" ? "System" : "TripPilot team"}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 

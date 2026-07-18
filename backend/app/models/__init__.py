@@ -17,3 +17,4 @@ from app.models.activity import LeadActivity  # noqa: F401
 from app.models.lead_partner import LeadPartner  # noqa: F401
 from app.models.lead_payment import LeadPayment  # noqa: F401
 from app.models.master_data import MasterData  # noqa: F401
+from app.models.subscription_history import SubscriptionHistory  # noqa: F401
