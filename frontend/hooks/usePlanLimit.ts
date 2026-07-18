@@ -24,7 +24,10 @@ export interface SubscriptionStatus {
   is_expired: boolean;
   days_left_in_trial: number | null;
   trial_ends_at: string | null;
-  status: string;
+  status: string; // trialing | active | past_due | expired | cancelled | no_subscription
+  renewal_date?: string | null;
+  grace_ends_at?: string | null;
+  due_amount?: number | null;
 }
 
 export function usePlanLimit() {

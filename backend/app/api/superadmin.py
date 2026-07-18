@@ -13,8 +13,34 @@ from app.models.organization import Organization
 from app.models.lead import Lead
 from app.models.pricing_plan import PricingPlan, Subscription, PlanBillingCycle
 from app.models.subscription_history import SubscriptionHistory
+from app.models.subscription_invoice import SubscriptionInvoice
 from app.services.subscription_history import log_subscription_event
-from app.api.pricing import CYCLE_DAYS, calculate_renewal_date
+from app.api.pricing import (
+    CYCLE_DAYS,
+    CYCLE_MONTHS,
+    TRIAL_DAYS,
+    GRACE_DAYS,
+    calculate_renewal_date,
+    compute_period_amount,
+    sync_subscription,
+)
+
+TRIAL_PLAN_NAME = "Pro"  # new agencies trial with Pro-level limits
+
+
+def _trial_plan(db: Session) -> PricingPlan | None:
+    plan = db.query(PricingPlan).filter(PricingPlan.name == TRIAL_PLAN_NAME).first()
+    if not plan:
+        plan = db.query(PricingPlan).filter(
+            PricingPlan.is_active == True  # noqa: E712
+        ).order_by(PricingPlan.leads_limit.desc()).first()
+    return plan
+
+
+def _plan_name_of(subscription: Subscription | None) -> str:
+    if subscription and subscription.plan:
+        return subscription.plan.name
+    return "—"
 
 router = APIRouter()
 
@@ -28,7 +54,7 @@ class AgencyCreate(BaseModel):
     user_phone: str | None = None
     user_email: str
     user_password: str
-    plan_id: int  # PricingPlan.id
+    plan_id: int | None = None  # omit for the default 14-day trial
     billing_cycle: str | None = None  # monthly, quarterly, half_yearly, yearly
     plan_billing_cycle_id: int | None = None
 
@@ -91,15 +117,14 @@ def list_agencies(
         user_count = db.query(func.count(User.id)).filter(User.org_id == org.id).scalar()
         lead_count = db.query(func.count(Lead.id)).filter(Lead.org_id == org.id).scalar()
 
-        # Get subscription info
-        subscription = db.query(Subscription).filter(Subscription.org_id == org.id).first()
+        subscription = sync_subscription(db, _latest_subscription(db, org.id))
 
         result.append({
             "id": org.id,
             "name": org.name,
             "slug": org.slug,
-            "plan": org.plan,
-            "plan_id": subscription.plan_id if subscription else 1,  # Default to Free Trial plan
+            "plan": _plan_name_of(subscription),
+            "plan_id": subscription.plan_id if subscription else 1,
             "phone_number": org.phone_number,
             "logo_url": org.logo_url,
             "is_active": org.is_active,
@@ -120,7 +145,12 @@ def create_agency(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_superadmin),
 ):
-    """Create new agency organization with first admin user and subscription."""
+    """Create a new agency with its first admin user and subscription.
+
+    Without a plan_id the agency starts on the standard 14-day trial with
+    Pro-level limits (trials are a subscription state, not a plan). With a
+    plan_id it starts as an active paid subscription.
+    """
     # Check if slug already exists
     existing = db.query(Organization).filter(Organization.slug == payload.slug).first()
     if existing:
@@ -129,13 +159,18 @@ def create_agency(
             detail="Slug already exists"
         )
 
-    # Verify plan exists
-    plan = db.query(PricingPlan).filter(PricingPlan.id == payload.plan_id).first()
-    if not plan:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Pricing plan not found"
-        )
+    is_trial = payload.plan_id is None
+    if is_trial:
+        plan = _trial_plan(db)
+        if not plan:
+            raise HTTPException(status_code=400, detail="No pricing plan available for trials")
+    else:
+        plan = db.query(PricingPlan).filter(PricingPlan.id == payload.plan_id).first()
+        if not plan:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Pricing plan not found"
+            )
 
     # Check if user email already exists
     existing_user = db.query(User).filter(User.email == payload.user_email).first()
@@ -149,7 +184,6 @@ def create_agency(
     org = Organization(
         name=payload.name,
         slug=payload.slug,
-        plan=plan.name,  # Store plan name for reference
         phone_number=payload.phone_number,
         logo_url=payload.logo_url,
         is_active=True,
@@ -158,20 +192,20 @@ def create_agency(
     db.commit()
     db.refresh(org)
 
-    # Create subscription
+    # Create subscription: 14-day trial by default, active paid otherwise
+    now = datetime.utcnow()
     subscription = Subscription(
         org_id=org.id,
-        plan_id=payload.plan_id,
+        plan_id=plan.id,
         plan_billing_cycle_id=payload.plan_billing_cycle_id,
         billing_cycle=payload.billing_cycle,
-        status="active",
-        start_date=datetime.utcnow(),
+        start_date=now,
     )
-
-    # Set trial end date if it's a trial plan
-    if plan.trial_days > 0:
-        subscription.trial_ends_at = datetime.utcnow() + timedelta(days=plan.trial_days)
+    if is_trial:
+        subscription.status = "trialing"
+        subscription.trial_ends_at = now + timedelta(days=TRIAL_DAYS)
     else:
+        subscription.status = "active"
         subscription.renewal_date = calculate_renewal_date(payload.billing_cycle or "monthly")
 
     db.add(subscription)
@@ -187,6 +221,7 @@ def create_agency(
         plan_name=plan.name,
         billing_cycle=subscription.billing_cycle,
         new_renewal_date=subscription.renewal_date or subscription.trial_ends_at,
+        note=f"{TRIAL_DAYS}-day trial started" if is_trial else None,
         actor_id=current_user.id,
         actor_name=current_user.name,
     )
@@ -231,8 +266,8 @@ def create_agency(
         "id": org.id,
         "name": org.name,
         "slug": org.slug,
-        "plan": org.plan,
-        "plan_id": payload.plan_id,
+        "plan": plan.name,
+        "plan_id": plan.id,
         "phone_number": org.phone_number,
         "logo_url": org.logo_url,
         "is_active": org.is_active,
@@ -259,11 +294,7 @@ def get_agency(
             detail="Organization not found"
         )
 
-    # Get subscription
-    subscription = db.query(Subscription).filter(
-        Subscription.org_id == org.id,
-        Subscription.status == "active"
-    ).first()
+    subscription = sync_subscription(db, _latest_subscription(db, org.id))
 
     user_count = db.query(func.count(User.id)).filter(User.org_id == org.id).scalar()
     lead_count = db.query(func.count(Lead.id)).filter(Lead.org_id == org.id).scalar()
@@ -277,7 +308,7 @@ def get_agency(
         "id": org.id,
         "name": org.name,
         "slug": org.slug,
-        "plan": org.plan,
+        "plan": _plan_name_of(subscription),
         "plan_id": plan_id,
         "phone_number": org.phone_number,
         "logo_url": org.logo_url,
@@ -317,34 +348,22 @@ def update_agency(
     if payload.plan_id is not None:
         plan = db.query(PricingPlan).filter(PricingPlan.id == payload.plan_id).first()
         if plan:
-            org.plan = plan.name
-            # Update latest subscription if exists, or create a new one
-            subscription = db.query(Subscription).filter(
-                Subscription.org_id == org.id
-            ).order_by(Subscription.id.desc()).first()
+            # Direct plan swap: limits change immediately, billing dates and
+            # status are untouched (use the change-plan/extend endpoints for
+            # proration and renewals).
+            subscription = _latest_subscription(db, org.id)
             old_plan_id = subscription.plan_id if subscription else None
             old_renewal = (subscription.renewal_date or subscription.trial_ends_at) if subscription else None
             if subscription:
                 subscription.plan_id = payload.plan_id
-                # Update trial/renewal dates based on plan type
-                if plan.trial_days > 0:
-                    subscription.trial_ends_at = datetime.utcnow() + timedelta(days=plan.trial_days)
-                    subscription.renewal_date = None
-                else:
-                    subscription.renewal_date = calculate_renewal_date(subscription.billing_cycle or "monthly")
-                    subscription.trial_ends_at = None
             else:
                 subscription = Subscription(
                     org_id=org.id,
                     plan_id=payload.plan_id,
                     status="active",
-                    start_date=datetime.utcnow()
+                    start_date=datetime.utcnow(),
+                    renewal_date=calculate_renewal_date("monthly"),
                 )
-                # Set trial end date if it's a trial plan
-                if plan.trial_days > 0:
-                    subscription.trial_ends_at = datetime.utcnow() + timedelta(days=plan.trial_days)
-                else:
-                    subscription.renewal_date = calculate_renewal_date("monthly")
                 db.add(subscription)
 
             if old_plan_id != payload.plan_id:
@@ -381,7 +400,7 @@ def update_agency(
     lead_count = db.query(func.count(Lead.id)).filter(Lead.org_id == org.id).scalar()
 
     # Get subscription for response
-    subscription = db.query(Subscription).filter(Subscription.org_id == org.id).first()
+    subscription = _latest_subscription(db, org.id)
     plan_id = subscription.plan_id if subscription else 1
     sub_status = subscription.status if subscription else "no_subscription"
     renewal_date = subscription.renewal_date.isoformat() if subscription and subscription.renewal_date else None
@@ -391,7 +410,7 @@ def update_agency(
         "id": org.id,
         "name": org.name,
         "slug": org.slug,
-        "plan": org.plan,
+        "plan": _plan_name_of(subscription),
         "plan_id": plan_id,
         "phone_number": org.phone_number,
         "logo_url": org.logo_url,
@@ -695,6 +714,7 @@ class SubscriptionListItemOut(SubscriptionDetailOut):
     effective_status: str
     days_left: int | None = None
     last_extended_at: str | None = None
+    pending_plan_name: str | None = None
 
 
 class SubscriptionHistoryOut(BaseModel):
@@ -821,7 +841,13 @@ def extend_subscription(
         )
         db.add(subscription)
 
-    org.plan = plan.name  # keep denormalized plan name in sync
+    # A manual extension supersedes any open renewal invoice and clears a
+    # scheduled downgrade — the admin's explicit action wins.
+    subscription.pending_plan_id = None
+    db.query(SubscriptionInvoice).filter(
+        SubscriptionInvoice.org_id == agency_id,
+        SubscriptionInvoice.status == "due",
+    ).update({"status": "void"})
     db.commit()
     db.refresh(subscription)
 
@@ -863,19 +889,19 @@ def list_subscriptions(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_superadmin),
 ):
-    """List every organization's latest subscription with derived status."""
+    """List every organization's subscription with live lifecycle status."""
     now = datetime.utcnow()
     result = []
 
     for org in db.query(Organization).all():
-        subscription = _latest_subscription(db, org.id)
+        subscription = sync_subscription(db, _latest_subscription(db, org.id))
         if not subscription:
             result.append({
                 "subscription_id": None,
                 "org_id": org.id,
                 "org_name": org.name,
                 "plan_id": None,
-                "plan_name": org.plan,
+                "plan_name": None,
                 "billing_cycle": None,
                 "status": "no_subscription",
                 "effective_status": "no_subscription",
@@ -889,14 +915,6 @@ def list_subscriptions(
 
         plan = db.query(PricingPlan).filter(PricingPlan.id == subscription.plan_id).first()
         expiry = subscription.renewal_date or subscription.trial_ends_at
-
-        if expiry and expiry <= now:
-            effective_status = "expired"
-        elif subscription.trial_ends_at and subscription.trial_ends_at > now:
-            effective_status = "trial"
-        else:
-            effective_status = subscription.status
-
         days_left = max(0, (expiry - now).days) if expiry else None
 
         last_extended = db.query(SubscriptionHistory).filter(
@@ -904,20 +922,26 @@ def list_subscriptions(
             SubscriptionHistory.action.in_(["extended", "plan_changed"]),
         ).order_by(SubscriptionHistory.created_at.desc(), SubscriptionHistory.id.desc()).first()
 
+        pending_plan = None
+        if subscription.pending_plan_id:
+            pending = db.query(PricingPlan).filter(PricingPlan.id == subscription.pending_plan_id).first()
+            pending_plan = pending.name if pending else None
+
         result.append({
             "subscription_id": subscription.id,
             "org_id": org.id,
             "org_name": org.name,
             "plan_id": subscription.plan_id,
-            "plan_name": plan.name if plan else org.plan,
+            "plan_name": plan.name if plan else None,
             "billing_cycle": subscription.billing_cycle,
             "status": subscription.status,
-            "effective_status": effective_status,
+            "effective_status": subscription.status,
             "start_date": subscription.start_date.isoformat() if subscription.start_date else None,
             "renewal_date": subscription.renewal_date.isoformat() if subscription.renewal_date else None,
             "trial_ends_at": subscription.trial_ends_at.isoformat() if subscription.trial_ends_at else None,
             "days_left": days_left,
             "last_extended_at": last_extended.created_at.isoformat() if last_extended and last_extended.created_at else None,
+            "pending_plan_name": pending_plan,
         })
 
     return result
@@ -943,4 +967,342 @@ def get_subscription_history(
     ).offset(offset).limit(limit).all()
 
     return [_history_out(e) for e in events]
+
+
+# ── Invoices (offline renewal payments) ──────────────────────────────────────
+
+class AdminInvoiceOut(BaseModel):
+    id: int
+    org_id: int
+    org_name: str | None
+    subscription_id: int | None
+    invoice_type: str
+    plan_id: int | None
+    plan_name: str | None
+    billing_cycle: str | None
+    period_start: str | None
+    period_end: str | None
+    amount: float
+    status: str
+    due_date: str | None
+    paid_at: str | None
+    payment_mode: str | None
+    payment_reference: str | None
+    note: str | None
+    created_at: str | None
+
+
+class RecordPaymentPayload(BaseModel):
+    amount: float | None = Field(default=None, ge=0)  # override suggested amount
+    payment_mode: Literal["upi", "bank_transfer", "cash", "cheque", "other"] | None = None
+    payment_reference: str | None = Field(default=None, max_length=100)
+    note: str | None = None
+
+
+def _admin_invoice_out(inv: SubscriptionInvoice, org_name: str | None) -> dict:
+    return {
+        "id": inv.id,
+        "org_id": inv.org_id,
+        "org_name": org_name,
+        "subscription_id": inv.subscription_id,
+        "invoice_type": inv.invoice_type,
+        "plan_id": inv.plan_id,
+        "plan_name": inv.plan_name,
+        "billing_cycle": inv.billing_cycle,
+        "period_start": inv.period_start.isoformat() if inv.period_start else None,
+        "period_end": inv.period_end.isoformat() if inv.period_end else None,
+        "amount": inv.amount,
+        "status": inv.status,
+        "due_date": inv.due_date.isoformat() if inv.due_date else None,
+        "paid_at": inv.paid_at.isoformat() if inv.paid_at else None,
+        "payment_mode": inv.payment_mode,
+        "payment_reference": inv.payment_reference,
+        "note": inv.note,
+        "created_at": inv.created_at.isoformat() if inv.created_at else None,
+    }
+
+
+@router.get("/invoices", response_model=list[AdminInvoiceOut])
+def list_invoices(
+    invoice_status: str = "due",
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_superadmin),
+):
+    """Invoices across all agencies — the renewals-due collection queue.
+
+    Syncs every subscription first so upcoming renewal invoices exist even
+    for agencies that haven't logged in recently.
+    """
+    for org in db.query(Organization).all():
+        sync_subscription(db, _latest_subscription(db, org.id))
+
+    query = db.query(SubscriptionInvoice)
+    if invoice_status != "all":
+        query = query.filter(SubscriptionInvoice.status == invoice_status)
+    invoices = query.order_by(SubscriptionInvoice.due_date.asc()).limit(limit).all()
+
+    org_names = {o.id: o.name for o in db.query(Organization).all()}
+    return [_admin_invoice_out(i, org_names.get(i.org_id)) for i in invoices]
+
+
+@router.post("/invoices/{invoice_id}/pay", response_model=AdminInvoiceOut)
+def record_invoice_payment(
+    invoice_id: int,
+    payload: RecordPaymentPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_superadmin),
+):
+    """Record an offline payment against an invoice.
+
+    Marks it paid and advances the subscription period to the invoice's
+    period end; applies a scheduled downgrade if the invoice was priced
+    at the pending plan.
+    """
+    invoice = db.query(SubscriptionInvoice).filter(SubscriptionInvoice.id == invoice_id).first()
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    if invoice.status != "due":
+        raise HTTPException(status_code=400, detail=f"Invoice is already {invoice.status}")
+
+    now = datetime.utcnow()
+    if payload.amount is not None:
+        invoice.amount = payload.amount
+    invoice.status = "paid"
+    invoice.paid_at = now
+    invoice.payment_mode = payload.payment_mode
+    invoice.payment_reference = payload.payment_reference
+    invoice.note = payload.note
+    invoice.actor_id = current_user.id
+    invoice.actor_name = current_user.name
+
+    subscription = db.query(Subscription).filter(Subscription.id == invoice.subscription_id).first()
+    old_renewal = None
+    if subscription:
+        old_renewal = subscription.renewal_date or subscription.trial_ends_at
+        if invoice.period_end:
+            subscription.renewal_date = invoice.period_end
+        subscription.trial_ends_at = None
+        subscription.status = "active"
+        # Apply a scheduled downgrade the invoice was priced at
+        if subscription.pending_plan_id and invoice.plan_id == subscription.pending_plan_id:
+            subscription.plan_id = subscription.pending_plan_id
+            subscription.pending_plan_id = None
+        if invoice.billing_cycle:
+            subscription.billing_cycle = invoice.billing_cycle
+        subscription.updated_at = now
+
+    db.commit()
+
+    log_subscription_event(
+        db,
+        org_id=invoice.org_id,
+        subscription_id=invoice.subscription_id,
+        action="extended",
+        new_plan_id=invoice.plan_id,
+        plan_name=invoice.plan_name,
+        billing_cycle=invoice.billing_cycle,
+        old_renewal_date=old_renewal,
+        new_renewal_date=invoice.period_end,
+        amount=invoice.amount,
+        payment_mode=invoice.payment_mode,
+        payment_reference=invoice.payment_reference,
+        note=payload.note or f"Invoice #{invoice.id} paid",
+        actor_id=current_user.id,
+        actor_name=current_user.name,
+    )
+
+    org = db.query(Organization).filter(Organization.id == invoice.org_id).first()
+    return _admin_invoice_out(invoice, org.name if org else None)
+
+
+@router.post("/invoices/{invoice_id}/waive", response_model=AdminInvoiceOut)
+def waive_invoice(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_superadmin),
+):
+    """Waive an invoice: grant the period for free and advance the subscription."""
+    invoice = db.query(SubscriptionInvoice).filter(SubscriptionInvoice.id == invoice_id).first()
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    if invoice.status != "due":
+        raise HTTPException(status_code=400, detail=f"Invoice is already {invoice.status}")
+
+    now = datetime.utcnow()
+    invoice.status = "waived"
+    invoice.paid_at = now
+    invoice.actor_id = current_user.id
+    invoice.actor_name = current_user.name
+
+    subscription = db.query(Subscription).filter(Subscription.id == invoice.subscription_id).first()
+    old_renewal = None
+    if subscription:
+        old_renewal = subscription.renewal_date or subscription.trial_ends_at
+        if invoice.period_end:
+            subscription.renewal_date = invoice.period_end
+        subscription.trial_ends_at = None
+        subscription.status = "active"
+        if subscription.pending_plan_id and invoice.plan_id == subscription.pending_plan_id:
+            subscription.plan_id = subscription.pending_plan_id
+            subscription.pending_plan_id = None
+        subscription.updated_at = now
+
+    db.commit()
+
+    log_subscription_event(
+        db,
+        org_id=invoice.org_id,
+        subscription_id=invoice.subscription_id,
+        action="extended",
+        new_plan_id=invoice.plan_id,
+        plan_name=invoice.plan_name,
+        billing_cycle=invoice.billing_cycle,
+        old_renewal_date=old_renewal,
+        new_renewal_date=invoice.period_end,
+        amount=0,
+        note=f"Invoice #{invoice.id} waived",
+        actor_id=current_user.id,
+        actor_name=current_user.name,
+    )
+
+    org = db.query(Organization).filter(Organization.id == invoice.org_id).first()
+    return _admin_invoice_out(invoice, org.name if org else None)
+
+
+# ── Plan changes: upgrade now, downgrade at renewal ──────────────────────────
+
+class ChangePlanPayload(BaseModel):
+    plan_id: int
+    billing_cycle: str | None = None  # defaults to the subscription's cycle
+
+
+@router.post("/agencies/{agency_id}/subscription/change-plan")
+def change_plan(
+    agency_id: int,
+    payload: ChangePlanPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_superadmin),
+):
+    """Upgrade immediately (prorated upgrade invoice) or schedule a downgrade.
+
+    Upgrades: limits apply now; a prorated 'upgrade' invoice for the price
+    difference over the remaining period is generated for collection.
+    Downgrades: recorded as pending and applied at the next renewal, whose
+    invoice will already be priced at the lower plan.
+    """
+    org = db.query(Organization).filter(Organization.id == agency_id).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    subscription = sync_subscription(db, _latest_subscription(db, agency_id))
+    if not subscription:
+        raise HTTPException(status_code=404, detail="No subscription found — create one via extend")
+
+    new_plan = db.query(PricingPlan).filter(PricingPlan.id == payload.plan_id).first()
+    if not new_plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    if new_plan.id == subscription.plan_id:
+        raise HTTPException(status_code=400, detail="Agency is already on this plan")
+
+    cycle = payload.billing_cycle or subscription.billing_cycle or "monthly"
+    if cycle not in CYCLE_DAYS:
+        raise HTTPException(status_code=400, detail=f"Invalid billing cycle: {cycle}")
+
+    now = datetime.utcnow()
+    old_plan = db.query(PricingPlan).filter(PricingPlan.id == subscription.plan_id).first()
+    old_amount = compute_period_amount(db, subscription.plan_id, cycle)
+    new_amount = compute_period_amount(db, new_plan.id, cycle)
+    is_upgrade = new_amount >= old_amount
+
+    # Trialing/expired subscriptions have no period to prorate — direct switch
+    if subscription.status in ("trialing", "expired", "cancelled") or not subscription.renewal_date:
+        raise HTTPException(
+            status_code=400,
+            detail="Subscription has no active paid period — use extend to activate a plan instead",
+        )
+
+    if is_upgrade:
+        period_days = CYCLE_DAYS.get(cycle, 30)
+        remaining_days = max(0, (subscription.renewal_date - now).days)
+        prorated = round(max(0.0, (new_amount - old_amount)) * min(1, remaining_days / period_days), 2)
+
+        subscription.plan_id = new_plan.id
+        subscription.billing_cycle = cycle
+        subscription.pending_plan_id = None
+        subscription.updated_at = now
+
+        invoice = SubscriptionInvoice(
+            org_id=agency_id,
+            subscription_id=subscription.id,
+            invoice_type="upgrade",
+            plan_id=new_plan.id,
+            plan_name=new_plan.name,
+            billing_cycle=cycle,
+            period_start=now,
+            period_end=subscription.renewal_date,
+            amount=prorated,
+            status="due",
+            due_date=now + timedelta(days=GRACE_DAYS),
+        )
+        db.add(invoice)
+        db.commit()
+
+        log_subscription_event(
+            db,
+            org_id=agency_id,
+            subscription_id=subscription.id,
+            action="plan_changed",
+            old_plan_id=old_plan.id if old_plan else None,
+            new_plan_id=new_plan.id,
+            plan_name=new_plan.name,
+            billing_cycle=cycle,
+            old_renewal_date=subscription.renewal_date,
+            new_renewal_date=subscription.renewal_date,
+            amount=prorated,
+            note=f"Upgraded from {old_plan.name if old_plan else '—'}; prorated ₹{prorated} due",
+            actor_id=current_user.id,
+            actor_name=current_user.name,
+        )
+        return {
+            "result": "upgraded",
+            "plan_name": new_plan.name,
+            "prorated_amount": prorated,
+            "invoice_id": invoice.id,
+        }
+
+    # Downgrade: schedule for renewal; reprice any open renewal invoice
+    subscription.pending_plan_id = new_plan.id
+    subscription.updated_at = now
+    open_invoice = db.query(SubscriptionInvoice).filter(
+        SubscriptionInvoice.subscription_id == subscription.id,
+        SubscriptionInvoice.invoice_type == "renewal",
+        SubscriptionInvoice.status == "due",
+    ).first()
+    if open_invoice:
+        open_invoice.plan_id = new_plan.id
+        open_invoice.plan_name = new_plan.name
+        open_invoice.amount = compute_period_amount(db, new_plan.id, open_invoice.billing_cycle or cycle)
+    db.commit()
+
+    log_subscription_event(
+        db,
+        org_id=agency_id,
+        subscription_id=subscription.id,
+        action="downgrade_scheduled",
+        old_plan_id=old_plan.id if old_plan else None,
+        new_plan_id=new_plan.id,
+        plan_name=new_plan.name,
+        billing_cycle=cycle,
+        old_renewal_date=subscription.renewal_date,
+        new_renewal_date=subscription.renewal_date,
+        note=f"Changes to {new_plan.name} at the next renewal",
+        actor_id=current_user.id,
+        actor_name=current_user.name,
+    )
+    return {
+        "result": "downgrade_scheduled",
+        "plan_name": new_plan.name,
+        "effective_on": subscription.renewal_date.isoformat() if subscription.renewal_date else None,
+    }
 

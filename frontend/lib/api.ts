@@ -226,6 +226,7 @@ export const pricingApi = {
   subscribe: (data: any) => api.post<any>("/pricing/subscriptions", data),
   getCurrentSubscription: () => api.get<any>("/pricing/subscriptions/current"),
   billingHistory: () => api.get<any[]>("/pricing/subscriptions/history"),
+  openInvoices: () => api.get<any[]>("/pricing/invoices/current"),
   getPlanBillingCycles: (planId: number) =>
     api.get<any>(`/pricing/plans/${planId}/billing-cycles`),
 };

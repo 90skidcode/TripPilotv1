@@ -28,7 +28,7 @@ class PricingPlan(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     billing_cycles = relationship("PlanBillingCycle", back_populates="plan", cascade="all, delete-orphan")
-    subscriptions = relationship("Subscription", back_populates="plan")
+    subscriptions = relationship("Subscription", back_populates="plan", foreign_keys="Subscription.plan_id")
 
 
 class PlanBillingCycle(Base):
@@ -48,40 +48,29 @@ class PlanBillingCycle(Base):
 
 
 class Subscription(Base):
+    """One subscription per organization.
+
+    Lifecycle: trialing -> active -> past_due (grace period) -> expired.
+    Payments are offline; renewal invoices (SubscriptionInvoice) drive the
+    period advance. `pending_plan_id` holds a scheduled downgrade that takes
+    effect at the next renewal.
+    """
+
     __tablename__ = "subscriptions"
 
     id = Column(Integer, primary_key=True)
-    org_id = Column(Integer, nullable=False)  # Foreign key to Organization
+    org_id = Column(Integer, nullable=False, unique=True, index=True)
     plan_id = Column(Integer, ForeignKey("pricing_plans.id"), nullable=False)
+    pending_plan_id = Column(Integer, ForeignKey("pricing_plans.id"), nullable=True)  # downgrade applied at renewal
     plan_billing_cycle_id = Column(Integer, ForeignKey("plan_billing_cycles.id"), nullable=True)
     billing_cycle = Column(String(20), nullable=True)  # values from BillingCycle enum: monthly, quarterly, half_yearly, yearly
-    status = Column(String(20), default="active")  # active, expired, cancelled
+    status = Column(String(20), default="active")  # trialing, active, past_due, expired, cancelled
     start_date = Column(DateTime, default=datetime.utcnow)
-    renewal_date = Column(DateTime, nullable=True)  # Next billing date
+    renewal_date = Column(DateTime, nullable=True)  # current period end (next billing date)
     trial_ends_at = Column(DateTime, nullable=True)  # NULL for paid plans
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    plan = relationship("PricingPlan", back_populates="subscriptions")
+    plan = relationship("PricingPlan", back_populates="subscriptions", foreign_keys=[plan_id])
+    pending_plan = relationship("PricingPlan", foreign_keys=[pending_plan_id])
     plan_billing_cycle = relationship("PlanBillingCycle")
-
-
-class UsageTracking(Base):
-    __tablename__ = "usage_tracking"
-
-    id = Column(Integer, primary_key=True)
-    org_id = Column(Integer, nullable=False)  # Foreign key to Organization
-    month = Column(String(7), nullable=False)  # Format: "2026-05"
-    itineraries_used = Column(Integer, default=0)
-    leads_used = Column(Integer, default=0)
-    vouchers_used = Column(Integer, default=0)
-    bills_used = Column(Integer, default=0)
-    team_members_used = Column(Integer, default=0)
-    storage_used_mb = Column(Integer, default=0)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    __table_args__ = (
-        # Unique constraint: one tracking record per org per month
-        # This would need database-level unique(org_id, month)
-    )

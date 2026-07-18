@@ -42,6 +42,8 @@ export default function AppShell({ children, title }: { children: React.ReactNod
             daysLeft={subscription.days_left_in_trial}
             trialEndsAt={subscription.trial_ends_at}
             status={subscription.status}
+            graceEndsAt={subscription.grace_ends_at}
+            dueAmount={subscription.due_amount}
           />
         )}
         <main className="flex-1 overflow-y-auto p-6 lg:p-8">

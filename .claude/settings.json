@@ -23,7 +23,13 @@
       "Bash(echo \"tsc exit: $?\")",
       "Bash(echo \"admin tsc: $?\")",
       "Read(//Users/gandhisp/Personal/**)",
-      "Bash(echo \"frontend tsc: $?\")"
+      "Bash(echo \"frontend tsc: $?\")",
+      "Bash(cd /Users/gandhisp/Personal/TripPilotv1/backend && grep -rn \"org\\\\.plan\\\\|organization\\\\.plan\\\\|\\\\.plan =\" app/ --include=\"*.py\" | grep -v \"plan_id\\\\|plan_billing\\\\|plan\\\\.name\\\\|pricing_plan\" | head -20; echo \"=== status literals ===\"; grep -rn '\"trial\"\\\\|\"active\"\\\\|\"expired\"' app/api/pricing.py app/api/superadmin.py | wc -l; echo \"=== UsageTracking refs ===\"; grep -rln \"UsageTracking\\\\|usage_tracking\" app/ | head; echo \"=== frontend org plan refs ===\"; grep -rn '\\\\.plan\\\\b' ../admin/app/agencies/page.tsx ../admin/app/dashboard/page.tsx 2>/dev/null | head -8)",
+      "Read(//Users/gandhisp/Personal/admin/app/agencies/**)",
+      "Bash(sqlite3 /private/tmp/claude-1057998918/-Users-gandhisp-Personal-TripPilotv1/8b7d699d-ccbe-4611-9085-cca46fee1bbf/scratchpad/mig2.db 'CREATE TABLE subscriptions \\(id INTEGER PRIMARY KEY, org_id INTEGER, status TEXT, trial_ends_at DATETIME\\); CREATE TABLE organizations \\(id INTEGER PRIMARY KEY, plan VARCHAR\\(50\\)\\); CREATE TABLE usage_tracking \\(id INTEGER PRIMARY KEY\\); CREATE TABLE pricing_plans \\(id INTEGER PRIMARY KEY, is_active BOOLEAN, trial_days INTEGER\\); INSERT INTO subscriptions \\(org_id,status,trial_ends_at\\) VALUES \\(1,'\\\\''active'\\\\'','\\\\''2027-01-01'\\\\''\\),\\(1,'\\\\''active'\\\\'',NULL\\),\\(2,'\\\\''trial'\\\\'',NULL\\); INSERT INTO pricing_plans VALUES \\(1,1,7\\),\\(2,1,0\\);')",
+      "Bash(export DATABASE_URL=\"sqlite:///$SCRATCH/mig2.db\")",
+      "Bash(.venv/bin/python -m alembic stamp h1i2j3k4l5m6)",
+      "Bash(DATABASE_URL=sqlite:////private/tmp/claude-1057998918/-Users-gandhisp-Personal-TripPilotv1/8b7d699d-ccbe-4611-9085-cca46fee1bbf/scratchpad/lc.db PYTHONPATH=/Users/gandhisp/Personal/TripPilotv1/backend .venv/bin/python /private/tmp/claude-1057998918/-Users-gandhisp-Personal-TripPilotv1/8b7d699d-ccbe-4611-9085-cca46fee1bbf/scratchpad/lifecycle_test.py)"
     ]
   }
 }

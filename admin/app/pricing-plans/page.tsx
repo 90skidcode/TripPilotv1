@@ -10,10 +10,19 @@ import { TableSkeleton } from "@/components/SkeletonLoaders";
 import { Edit2, Settings, ToggleRight } from "lucide-react";
 import BillingCyclesManager from "@/components/BillingCyclesManager";
 
+interface BillingCycle {
+  id: number;
+  plan_id: number;
+  billing_cycle: string;
+  monthly_price: number;
+  discount_percent: number;
+  display_price: string;
+  is_active: boolean;
+}
+
 interface PricingPlan {
   id: number;
   name: string;
-  monthly_price: number;
   itineraries_limit: number;
   leads_limit: number;
   vouchers_limit: number;
@@ -22,6 +31,12 @@ interface PricingPlan {
   storage_gb: number;
   trial_days: number;
   is_active: boolean;
+  // Prices live on billing cycles, not on the plan itself
+  billing_cycles?: BillingCycle[];
+}
+
+function monthlyCycleOf(plan: PricingPlan): BillingCycle | undefined {
+  return plan.billing_cycles?.find((c) => c.billing_cycle === "monthly" && c.is_active);
 }
 
 const defaultFormData = {
@@ -121,7 +136,7 @@ export default function PricingPlansPage() {
     setEditingId(plan.id);
     setFormData({
       name: plan.name,
-      monthly_price: plan.monthly_price,
+      monthly_price: monthlyCycleOf(plan)?.monthly_price ?? 0,
       itineraries_limit: plan.itineraries_limit,
       leads_limit: plan.leads_limit,
       vouchers_limit: plan.vouchers_limit,
@@ -143,11 +158,36 @@ export default function PricingPlansPage() {
 
     setSaving(true);
     try {
+      // The price is stored on the plan's "monthly" billing cycle, not the
+      // plan row itself — keep that cycle in sync with the form's price.
+      const monthlyPayload = {
+        billing_cycle: "monthly",
+        monthly_price: formData.monthly_price,
+        discount_percent: 0,
+        display_price: `₹${formData.monthly_price.toLocaleString("en-IN")}/month`,
+      };
+
       if (drawerMode === "create") {
-        await SuperAdminAPI.createPricingPlan(formData);
+        const created = await SuperAdminAPI.createPricingPlan(formData);
+        if (formData.monthly_price > 0) {
+          await SuperAdminAPI.createBillingCycle(created.id, monthlyPayload);
+        }
         showToast("Pricing plan created successfully", "success");
       } else if (editingId) {
         await SuperAdminAPI.updatePricingPlan(editingId, formData);
+        const existingMonthly = plans
+          .find((p) => p.id === editingId)
+          ?.billing_cycles?.find((c) => c.billing_cycle === "monthly");
+        if (existingMonthly) {
+          if (existingMonthly.monthly_price !== formData.monthly_price) {
+            await SuperAdminAPI.updateBillingCycle(existingMonthly.id, {
+              ...monthlyPayload,
+              discount_percent: existingMonthly.discount_percent,
+            });
+          }
+        } else if (formData.monthly_price > 0) {
+          await SuperAdminAPI.createBillingCycle(editingId, monthlyPayload);
+        }
         showToast("Pricing plan updated successfully", "success");
       }
       setDrawerOpen(false);
@@ -505,19 +545,36 @@ export default function PricingPlansPage() {
         const columns: DataTableColumn<PricingPlan>[] = [
           { key: "name", header: "Plan Name" },
           {
-            key: "monthly_price",
+            key: "billing_cycles",
             header: "Monthly Price",
             align: "center",
-            render: (value) =>
-              value === 0 ? (
-                <span className="px-2 py-1 rounded text-xs font-semibold bg-teal-100 text-teal-800">
-                  Free
+            render: (_value, plan) => {
+              const monthly = monthlyCycleOf(plan);
+              if (monthly && monthly.monthly_price > 0) {
+                return (
+                  <span className="font-bold text-blue-600">
+                    ₹{monthly.monthly_price.toLocaleString("en-IN")}
+                    <span className="text-xs text-slate-600 font-normal">/mo</span>
+                  </span>
+                );
+              }
+              if (plan.trial_days > 0 || monthly?.monthly_price === 0) {
+                return (
+                  <span className="px-2 py-1 rounded text-xs font-semibold bg-teal-100 text-teal-800">
+                    Free
+                  </span>
+                );
+              }
+              const anyCycle = plan.billing_cycles?.find((c) => c.is_active);
+              if (anyCycle) {
+                return <span className="text-sm">{anyCycle.display_price}</span>;
+              }
+              return (
+                <span className="text-xs text-slate-400 italic" title="Set a price via the Billing Cycles action">
+                  Not set
                 </span>
-              ) : (
-                <span className="font-bold text-blue-600">
-                  ₹{value}<span className="text-xs text-slate-600 font-normal">/mo</span>
-                </span>
-              ),
+              );
+            },
           },
           {
             key: "itineraries_limit",

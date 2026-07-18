@@ -27,7 +27,6 @@ interface Agency {
 interface PricingPlan {
   id: number;
   name: string;
-  monthly_price: number;
   itineraries_limit: number;
   leads_limit: number;
   vouchers_limit: number;
@@ -35,6 +34,12 @@ interface PricingPlan {
   team_members_limit: number;
   storage_gb: number;
   trial_days: number;
+  billing_cycles?: {
+    id: number;
+    billing_cycle: string;
+    monthly_price: number;
+    is_active: boolean;
+  }[];
 }
 
 export default function AgenciesPage() {
@@ -63,7 +68,7 @@ export default function AgenciesPage() {
     user_phone: "",
     user_email: "",
     user_password: "",
-    plan_id: 1, // Default plan_id
+    plan_id: null as number | null, // null = start on the 14-day trial
   });
 
   useEffect(() => {
@@ -81,10 +86,6 @@ export default function AgenciesPage() {
     try {
       const data = await SuperAdminAPI.getPricingPlans();
       setPlans(data);
-      // Auto-set the first plan ID if available
-      if (data && data.length > 0) {
-        setFormData((prev) => ({ ...prev, plan_id: data[0].id }));
-      }
     } catch (err) {
       console.error("Failed to load plans", err);
     }
@@ -133,8 +134,7 @@ export default function AgenciesPage() {
       return null;
     }
     if (step === 3) {
-      if (!formData.plan_id) return "Please select a pricing plan";
-      return null;
+      return null; // no plan selected = 14-day trial
     }
     return null;
   }
@@ -161,7 +161,9 @@ export default function AgenciesPage() {
 
     setCreating(true);
     try {
-      await SuperAdminAPI.createAgency(formData);
+      const payload: any = { ...formData };
+      if (payload.plan_id == null) delete payload.plan_id; // omitted -> 14-day trial
+      await SuperAdminAPI.createAgency(payload);
       // Reset form & state
       setFormData({
         name: "",
@@ -172,7 +174,7 @@ export default function AgenciesPage() {
         user_phone: "",
         user_email: "",
         user_password: "",
-        plan_id: plans[0]?.id || 1,
+        plan_id: null,
       });
       setSlugModified(false);
       setCurrentStep(1);
@@ -447,6 +449,33 @@ export default function AgenciesPage() {
                 <div style={{ display: "flex", flexDirection: "column", gap: "16px", animation: "fadeIn 0.2s ease" }}>
                   <h4 style={{ fontSize: "14px", fontWeight: 700, color: "var(--brand)" }}>💳 Select Pricing & Limits Plan</h4>
                   <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                    {/* Default: 14-day trial, no plan commitment */}
+                    <div
+                      onClick={() => setFormData({ ...formData, plan_id: null })}
+                      style={{
+                        background: "white",
+                        border: formData.plan_id === null ? "2.5px solid var(--brand)" : "1px solid var(--border)",
+                        borderRadius: "12px",
+                        padding: "16px",
+                        cursor: "pointer",
+                        transition: "all var(--transition)",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                        <span style={{ fontWeight: 800, fontSize: "15px", color: "var(--text-primary)" }}>
+                          14-Day Free Trial <span style={{ fontWeight: 500, fontSize: "12px", color: "var(--text-muted)" }}>(recommended)</span>
+                        </span>
+                        <span style={{
+                          fontWeight: 800, fontSize: "16px", color: "var(--brand)",
+                          background: "var(--brand-light)", padding: "4px 10px", borderRadius: "20px"
+                        }}>
+                          Free
+                        </span>
+                      </div>
+                      <p style={{ fontSize: "12px", color: "var(--text-secondary)", margin: 0 }}>
+                        Full Pro-level access for 14 days. Assign a paid plan when the agency is ready to pay.
+                      </p>
+                    </div>
                     {plans.map((plan) => (
                       <div
                         key={plan.id}
@@ -467,7 +496,12 @@ export default function AgenciesPage() {
                             fontWeight: 800, fontSize: "16px", color: "var(--brand)",
                             background: "var(--brand-light)", padding: "4px 10px", borderRadius: "20px"
                           }}>
-                            {plan.monthly_price === 0 ? "Free" : `₹${plan.monthly_price}/mo`}
+                            {(() => {
+                              const monthly = plan.billing_cycles?.find((c: any) => c.billing_cycle === "monthly" && c.is_active);
+                              return monthly && monthly.monthly_price > 0
+                                ? `₹${monthly.monthly_price.toLocaleString("en-IN")}/mo`
+                                : "Custom";
+                            })()}
                           </span>
                         </div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", fontSize: "12px", color: "var(--text-secondary)" }}>

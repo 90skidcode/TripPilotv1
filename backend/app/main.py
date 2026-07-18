@@ -17,17 +17,8 @@ from app.models.master_data import MasterData
 
 def seed_pricing_plans(db: Session):
     """Create default pricing plans if none exist."""
+    # Trials are a subscription state (14 days of Pro), not a plan.
     plans = [
-        {
-            "name": "Free Trial",
-            "itineraries_limit": 5,
-            "leads_limit": 10,
-            "vouchers_limit": 3,
-            "bills_limit": 2,
-            "team_members_limit": 1,
-            "storage_gb": 1,
-            "trial_days": 7,
-        },
         {
             "name": "Starter",
             "itineraries_limit": 50,
@@ -70,6 +61,29 @@ def seed_pricing_plans(db: Session):
         else:
             print(f"[INFO] Pricing plan already exists: {plan_data['name']}")
 
+    # Prices live on billing cycles, not the plan row — seed a monthly cycle
+    # for the paid plans so they have a price out of the box.
+    from app.models.pricing_plan import PlanBillingCycle
+    monthly_prices = {"Starter": 299, "Pro": 399}
+    for plan_name, price in monthly_prices.items():
+        plan = db.query(PricingPlan).filter(PricingPlan.name == plan_name).first()
+        if not plan:
+            continue
+        existing_cycle = db.query(PlanBillingCycle).filter(
+            PlanBillingCycle.plan_id == plan.id,
+            PlanBillingCycle.billing_cycle == "monthly",
+        ).first()
+        if not existing_cycle:
+            db.add(PlanBillingCycle(
+                plan_id=plan.id,
+                billing_cycle="monthly",
+                monthly_price=price,
+                discount_percent=0,
+                display_price=f"₹{price}/month",
+            ))
+            db.commit()
+            print(f"[OK] Monthly billing cycle seeded for {plan_name} (₹{price}/mo)")
+
 
 def seed_admin(db: Session):
     """Create default organization and admin user if none exists."""
@@ -84,7 +98,6 @@ def seed_admin(db: Session):
         org = Organization(
             name="Default Organization",
             slug="default",
-            plan="trial",
             is_active=True,
         )
         db.add(org)
@@ -138,23 +151,24 @@ def seed_admin(db: Session):
     else:
         print("[INFO] Admin user already exists.")
 
-    # Assign Free Trial plan to default organization
+    # Start the default organization on the standard 14-day trial
     existing_sub = db.query(Subscription).filter(Subscription.org_id == org_id).first()
     if not existing_sub:
-        free_trial_plan = db.query(PricingPlan).filter(PricingPlan.name == "Free Trial").first()
-        if free_trial_plan:
+        from app.api.pricing import TRIAL_DAYS
+        trial_plan = db.query(PricingPlan).filter(PricingPlan.name == "Pro").first()
+        if trial_plan:
             subscription = Subscription(
                 org_id=org_id,
-                plan_id=free_trial_plan.id,
-                status="active",
+                plan_id=trial_plan.id,
+                status="trialing",
                 start_date=datetime.utcnow(),
-                trial_ends_at=datetime.utcnow() + timedelta(days=7),
+                trial_ends_at=datetime.utcnow() + timedelta(days=TRIAL_DAYS),
             )
             db.add(subscription)
             db.commit()
-            print("[OK] Free Trial subscription assigned to default organization")
+            print(f"[OK] {TRIAL_DAYS}-day trial subscription assigned to default organization")
         else:
-            print("[WARNING] Free Trial plan not found, skipping subscription creation")
+            print("[WARNING] Pro plan not found, skipping subscription creation")
     else:
         print("[INFO] Subscription already exists for default organization")
 

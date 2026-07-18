@@ -9,7 +9,6 @@ class Organization(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(200), nullable=False)
     slug = Column(String(100), unique=True, nullable=False, index=True)
-    plan = Column(String(50), default="trial")  # trial, starter, pro, enterprise
     phone_number = Column(String(50), nullable=True)
     logo_url = Column(String(500), nullable=True)
     is_active = Column(Boolean, default=True, index=True)

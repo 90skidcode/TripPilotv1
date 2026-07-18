@@ -8,8 +8,9 @@ from typing import List
 from app.core.database import get_db
 from app.core.security import get_current_user, require_superadmin
 from app.models.user import User
-from app.models.pricing_plan import PricingPlan, Subscription, UsageTracking, PlanBillingCycle, BillingCycle
+from app.models.pricing_plan import PricingPlan, Subscription, PlanBillingCycle, BillingCycle
 from app.models.subscription_history import SubscriptionHistory
+from app.models.subscription_invoice import SubscriptionInvoice
 from app.services.subscription_history import log_subscription_event
 from app.models.lead import Lead
 from app.models.itinerary import Itinerary
@@ -19,6 +20,14 @@ router = APIRouter()
 
 
 CYCLE_DAYS = {"monthly": 30, "quarterly": 90, "half_yearly": 180, "yearly": 365}
+CYCLE_MONTHS = {"monthly": 1, "quarterly": 3, "half_yearly": 6, "yearly": 12}
+
+TRIAL_DAYS = 14  # every new agency starts with a 14-day full-featured trial
+GRACE_DAYS = 7  # past_due grace window after the renewal date before access is cut
+RENEWAL_NOTICE_DAYS = 7  # renewal invoices are generated this many days early
+
+# Statuses that still have write access (past_due keeps access during grace)
+WRITE_STATUSES = ("trialing", "active", "past_due")
 
 
 def calculate_renewal_date(billing_cycle: str) -> datetime:
@@ -26,23 +35,137 @@ def calculate_renewal_date(billing_cycle: str) -> datetime:
     return datetime.utcnow() + timedelta(days=CYCLE_DAYS.get(billing_cycle, 30))
 
 
-def mark_expired(db: Session, subscription: Subscription) -> None:
-    """Flip a lapsed subscription to expired, logging the timeline event once."""
-    if subscription.status == "expired":
+def get_org_subscription(db: Session, org_id: int) -> Subscription | None:
+    """The organization's subscription (newest row wins if legacy duplicates exist)."""
+    return db.query(Subscription).filter(
+        Subscription.org_id == org_id
+    ).order_by(Subscription.id.desc()).first()
+
+
+def compute_period_amount(db: Session, plan_id: int, billing_cycle: str) -> float:
+    """Suggested charge for one period: per-month base x months x (1 - discount).
+
+    Falls back to the plan's monthly price row when the specific cycle has no
+    price configured; returns 0 when the plan has no prices (admin fills the
+    amount in when recording the payment).
+    """
+    months = CYCLE_MONTHS.get(billing_cycle, 1)
+    row = db.query(PlanBillingCycle).filter(
+        PlanBillingCycle.plan_id == plan_id,
+        PlanBillingCycle.billing_cycle == billing_cycle,
+        PlanBillingCycle.is_active == True,  # noqa: E712
+    ).first()
+    if not row:
+        row = db.query(PlanBillingCycle).filter(
+            PlanBillingCycle.plan_id == plan_id,
+            PlanBillingCycle.billing_cycle == "monthly",
+            PlanBillingCycle.is_active == True,  # noqa: E712
+        ).first()
+    if not row:
+        return 0.0
+    return round(row.monthly_price * months * (1 - (row.discount_percent or 0) / 100), 2)
+
+
+def ensure_renewal_invoice(db: Session, subscription: Subscription) -> None:
+    """Generate the next renewal invoice once we're inside the notice window.
+
+    Priced at the pending (downgrade) plan when one is scheduled. No-op if an
+    open renewal invoice already exists for this subscription.
+    """
+    if subscription.status not in ("active", "past_due") or not subscription.renewal_date:
         return
-    old = subscription.renewal_date or subscription.trial_ends_at
-    subscription.status = "expired"
-    db.commit()
-    log_subscription_event(
-        db,
+    now = datetime.utcnow()
+    if subscription.renewal_date - timedelta(days=RENEWAL_NOTICE_DAYS) > now:
+        return
+    open_invoice = db.query(SubscriptionInvoice).filter(
+        SubscriptionInvoice.subscription_id == subscription.id,
+        SubscriptionInvoice.invoice_type == "renewal",
+        SubscriptionInvoice.status == "due",
+    ).first()
+    if open_invoice:
+        return
+
+    cycle = subscription.billing_cycle or "monthly"
+    plan_id = subscription.pending_plan_id or subscription.plan_id
+    plan = db.query(PricingPlan).filter(PricingPlan.id == plan_id).first()
+    period_start = subscription.renewal_date
+    invoice = SubscriptionInvoice(
         org_id=subscription.org_id,
         subscription_id=subscription.id,
-        action="expired",
-        old_renewal_date=old,
-        new_renewal_date=old,
-        actor_id=None,
-        actor_name="System",
+        invoice_type="renewal",
+        plan_id=plan_id,
+        plan_name=plan.name if plan else None,
+        billing_cycle=cycle,
+        period_start=period_start,
+        period_end=period_start + timedelta(days=CYCLE_DAYS.get(cycle, 30)),
+        amount=compute_period_amount(db, plan_id, cycle),
+        status="due",
+        due_date=subscription.renewal_date,
     )
+    db.add(invoice)
+    db.commit()
+
+
+def sync_subscription(db: Session, subscription: Subscription | None) -> Subscription | None:
+    """Lazy lifecycle engine, run whenever a subscription is read.
+
+    trialing --(trial over)--> expired
+    active --(period over)--> past_due --(grace over)--> expired
+    Also generates the upcoming renewal invoice inside the notice window.
+    """
+    if subscription is None:
+        return None
+    now = datetime.utcnow()
+
+    if subscription.status == "trialing":
+        if subscription.trial_ends_at and subscription.trial_ends_at <= now:
+            subscription.status = "expired"
+            db.commit()
+            log_subscription_event(
+                db,
+                org_id=subscription.org_id,
+                subscription_id=subscription.id,
+                action="expired",
+                old_renewal_date=subscription.trial_ends_at,
+                new_renewal_date=subscription.trial_ends_at,
+                note="Trial ended",
+                actor_id=None,
+                actor_name="System",
+            )
+    elif subscription.status == "active":
+        if subscription.renewal_date and subscription.renewal_date <= now:
+            subscription.status = "past_due"
+            db.commit()
+            log_subscription_event(
+                db,
+                org_id=subscription.org_id,
+                subscription_id=subscription.id,
+                action="past_due",
+                old_renewal_date=subscription.renewal_date,
+                new_renewal_date=subscription.renewal_date,
+                note=f"Payment due — access continues until {(subscription.renewal_date + timedelta(days=GRACE_DAYS)).date().isoformat()}",
+                actor_id=None,
+                actor_name="System",
+            )
+
+    if subscription.status == "past_due":
+        if subscription.renewal_date and subscription.renewal_date + timedelta(days=GRACE_DAYS) <= now:
+            subscription.status = "expired"
+            db.commit()
+            log_subscription_event(
+                db,
+                org_id=subscription.org_id,
+                subscription_id=subscription.id,
+                action="expired",
+                old_renewal_date=subscription.renewal_date,
+                new_renewal_date=subscription.renewal_date,
+                note="Grace period ended",
+                actor_id=None,
+                actor_name="System",
+            )
+
+    ensure_renewal_invoice(db, subscription)
+    return subscription
 
 
 class PlanBillingCycleOut(BaseModel):
@@ -366,95 +489,15 @@ def create_or_update_subscription(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Create or update organization subscription with billing cycle.
+    """Legacy self-serve activation — disabled.
 
-    Payments are collected offline — paid plans are activated and renewed
-    only by the TripPilot team from the admin panel. Self-serve is limited
-    to trial plans.
+    Subscriptions are created with the agency (14-day trial) and managed by
+    the TripPilot team from the admin panel; payments are collected offline.
     """
-    org_id = current_user.org_id
-
-    # Verify plan and billing cycle exist
-    plan = db.query(PricingPlan).filter(PricingPlan.id == payload.plan_id).first()
-    if not plan:
-        raise HTTPException(status_code=404, detail="Plan not found")
-
-    if plan.trial_days == 0 and not current_user.is_superadmin:
-        raise HTTPException(
-            status_code=403,
-            detail="Paid plans are activated by the TripPilot team. Please contact support to renew or upgrade.",
-        )
-
-    billing_cycle = db.query(PlanBillingCycle).filter(
-        PlanBillingCycle.id == payload.plan_billing_cycle_id,
-        PlanBillingCycle.plan_id == payload.plan_id,
-    ).first()
-    if not billing_cycle:
-        raise HTTPException(status_code=404, detail="Billing cycle not found for this plan")
-
-    # Check if subscription already exists
-    existing = db.query(Subscription).filter(
-        Subscription.org_id == org_id,
-        Subscription.status.in_(["active", "trial"]),
-    ).order_by(Subscription.id.desc()).first()
-
-    now = datetime.utcnow()
-    renewal_date = calculate_renewal_date(payload.billing_cycle)
-
-    old_plan_id = existing.plan_id if existing else None
-    old_renewal = (existing.renewal_date or existing.trial_ends_at) if existing else None
-
-    if existing:
-        # Update existing subscription
-        existing.plan_id = payload.plan_id
-        existing.plan_billing_cycle_id = payload.plan_billing_cycle_id
-        existing.billing_cycle = payload.billing_cycle
-        existing.status = "active"
-        existing.start_date = now
-        # Only set renewal_date for paid plans (not trial)
-        if plan.trial_days > 0:
-            existing.trial_ends_at = now + timedelta(days=plan.trial_days)
-            existing.renewal_date = None
-        else:
-            existing.renewal_date = renewal_date
-            existing.trial_ends_at = None
-        db.commit()
-        db.refresh(existing)
-        subscription = existing
-    else:
-        # Create new subscription
-        subscription = Subscription(
-            org_id=org_id,
-            plan_id=payload.plan_id,
-            plan_billing_cycle_id=payload.plan_billing_cycle_id,
-            billing_cycle=payload.billing_cycle,
-            status="active",
-            start_date=now,
-        )
-        # Set trial/renewal dates based on plan type
-        if plan.trial_days > 0:
-            subscription.trial_ends_at = now + timedelta(days=plan.trial_days)
-        else:
-            subscription.renewal_date = renewal_date
-        db.add(subscription)
-        db.commit()
-        db.refresh(subscription)
-
-    log_subscription_event(
-        db,
-        org_id=org_id,
-        subscription_id=subscription.id,
-        action="activated",
-        old_plan_id=old_plan_id,
-        new_plan_id=plan.id,
-        plan_name=plan.name,
-        billing_cycle=subscription.billing_cycle,
-        old_renewal_date=old_renewal,
-        new_renewal_date=subscription.renewal_date or subscription.trial_ends_at,
-        actor_id=current_user.id,
-        actor_name=current_user.name,
+    raise HTTPException(
+        status_code=403,
+        detail="Plans are activated by the TripPilot team. Please contact support to upgrade or renew.",
     )
-    return subscription
 
 
 @router.get("/subscriptions/current", response_model=SubscriptionOut)
@@ -463,17 +506,62 @@ def get_current_subscription(
     current_user: User = Depends(get_current_user),
 ):
     """Get current organization subscription."""
-    org_id = current_user.org_id
-
-    subscription = db.query(Subscription).filter(
-        Subscription.org_id == org_id,
-        Subscription.status.in_(["active", "trial", "expired"]),
-    ).order_by(Subscription.id.desc()).first()
+    subscription = sync_subscription(db, get_org_subscription(db, current_user.org_id))
 
     if not subscription:
         raise HTTPException(status_code=404, detail="No subscription found")
 
     return subscription
+
+
+class InvoiceOut(BaseModel):
+    id: int
+    invoice_type: str
+    plan_name: str | None
+    billing_cycle: str | None
+    period_start: str | None
+    period_end: str | None
+    amount: float
+    status: str
+    due_date: str | None
+    paid_at: str | None
+    payment_mode: str | None
+    payment_reference: str | None
+    note: str | None
+    created_at: str | None
+
+
+def invoice_out(inv: SubscriptionInvoice) -> dict:
+    return {
+        "id": inv.id,
+        "invoice_type": inv.invoice_type,
+        "plan_name": inv.plan_name,
+        "billing_cycle": inv.billing_cycle,
+        "period_start": inv.period_start.isoformat() if inv.period_start else None,
+        "period_end": inv.period_end.isoformat() if inv.period_end else None,
+        "amount": inv.amount,
+        "status": inv.status,
+        "due_date": inv.due_date.isoformat() if inv.due_date else None,
+        "paid_at": inv.paid_at.isoformat() if inv.paid_at else None,
+        "payment_mode": inv.payment_mode,
+        "payment_reference": inv.payment_reference,
+        "note": inv.note,
+        "created_at": inv.created_at.isoformat() if inv.created_at else None,
+    }
+
+
+@router.get("/invoices/current", response_model=List[InvoiceOut])
+def get_open_invoices(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Open (due) invoices for the user's organization — what needs paying."""
+    sync_subscription(db, get_org_subscription(db, current_user.org_id))
+    invoices = db.query(SubscriptionInvoice).filter(
+        SubscriptionInvoice.org_id == current_user.org_id,
+        SubscriptionInvoice.status == "due",
+    ).order_by(SubscriptionInvoice.due_date.asc()).all()
+    return [invoice_out(i) for i in invoices]
 
 
 class BillingHistoryItemOut(BaseModel):
@@ -533,11 +621,7 @@ def get_usage(
     """Get current usage for the user's organization."""
     org_id = current_user.org_id
 
-    subscription = db.query(Subscription).filter(
-        Subscription.org_id == org_id,
-        Subscription.status.in_(["active", "trial"]),
-    ).first()
-
+    subscription = sync_subscription(db, get_org_subscription(db, org_id))
     if not subscription:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active subscription found")
 
@@ -554,14 +638,7 @@ def get_usage(
         if billing_cycle:
             monthly_price = billing_cycle.monthly_price
 
-    # Check trial/renewal expiry and update status if needed
     now = datetime.utcnow()
-    if subscription.trial_ends_at and subscription.trial_ends_at <= now:
-        mark_expired(db, subscription)
-
-    # Check paid plan renewal date expiry
-    if subscription.renewal_date and subscription.renewal_date <= now:
-        mark_expired(db, subscription)
 
     # Count actual records — source of truth, always accurate regardless of deletes/imports
     leads_used = db.query(func.count(Lead.id)).filter(Lead.org_id == org_id).scalar() or 0
@@ -570,14 +647,8 @@ def get_usage(
     bills_used = db.query(func.count(Invoice.id)).filter(Invoice.org_id == org_id).scalar() or 0
     team_members_used = db.query(func.count(User.id)).filter(User.org_id == org_id, User.is_active == True).scalar() or 0  # noqa: E712
 
-    # Determine effective status: show "trial" when trial_ends_at is in the future
-    if subscription.trial_ends_at and subscription.trial_ends_at > now:
-        effective_status = "trial"
-    else:
-        effective_status = subscription.status
-
     days_left_in_trial = None
-    if subscription.trial_ends_at:
+    if subscription.status == "trialing" and subscription.trial_ends_at:
         days_left_in_trial = max(0, (subscription.trial_ends_at - now).days)
 
     return {
@@ -593,7 +664,7 @@ def get_usage(
         "team_members_limit": plan.team_members_limit,
         "plan_name": plan.name,
         "monthly_price": monthly_price,
-        "subscription_status": effective_status,
+        "subscription_status": subscription.status,
         "renewal_date": subscription.renewal_date.isoformat() if subscription.renewal_date else None,
         "trial_ends_at": subscription.trial_ends_at.isoformat() if subscription.trial_ends_at else None,
         "days_left_in_trial": days_left_in_trial,
@@ -605,6 +676,9 @@ class SubscriptionStatusOut(BaseModel):
     days_left_in_trial: int | None
     trial_ends_at: str | None
     status: str
+    renewal_date: str | None = None
+    grace_ends_at: str | None = None
+    due_amount: float | None = None
 
 
 @router.get("/subscription-status", response_model=SubscriptionStatusOut)
@@ -612,14 +686,10 @@ def get_subscription_status(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get subscription status including trial & paid plan expiry."""
+    """Subscription lifecycle status for banners and access gating."""
     org_id = current_user.org_id
 
-    subscription = db.query(Subscription).filter(
-        Subscription.org_id == org_id,
-        Subscription.status.in_(["active", "trial", "expired"]),
-    ).first()
-
+    subscription = sync_subscription(db, get_org_subscription(db, org_id))
     if not subscription:
         return {
             "is_expired": True,
@@ -629,68 +699,46 @@ def get_subscription_status(
         }
 
     now = datetime.utcnow()
-    is_expired = False
-
-    # Check trial expiry
-    if subscription.trial_ends_at and subscription.trial_ends_at <= now:
-        is_expired = True
-        mark_expired(db, subscription)
-
-    # Check paid plan renewal date expiry
-    if subscription.renewal_date and subscription.renewal_date <= now:
-        is_expired = True
-        mark_expired(db, subscription)
-
-    # Check explicit expired status
-    if subscription.status == "expired":
-        is_expired = True
 
     days_left_in_trial = None
-    if subscription.trial_ends_at:
+    if subscription.status == "trialing" and subscription.trial_ends_at:
         days_left_in_trial = max(0, (subscription.trial_ends_at - now).days)
 
+    grace_ends_at = None
+    if subscription.status == "past_due" and subscription.renewal_date:
+        grace_ends_at = (subscription.renewal_date + timedelta(days=GRACE_DAYS)).isoformat()
+
+    due_invoice = db.query(SubscriptionInvoice).filter(
+        SubscriptionInvoice.org_id == org_id,
+        SubscriptionInvoice.status == "due",
+    ).order_by(SubscriptionInvoice.due_date.asc()).first()
+
     return {
-        "is_expired": is_expired,
+        "is_expired": subscription.status in ("expired", "cancelled"),
         "days_left_in_trial": days_left_in_trial,
         "trial_ends_at": subscription.trial_ends_at.isoformat() if subscription.trial_ends_at else None,
         "status": subscription.status,
+        "renewal_date": subscription.renewal_date.isoformat() if subscription.renewal_date else None,
+        "grace_ends_at": grace_ends_at,
+        "due_amount": due_invoice.amount if due_invoice else None,
     }
 
 
 def check_write_access(db: Session, org_id: int) -> tuple[bool, str | None]:
     """
-    Check if organization has write access (trial not expired & subscription active).
+    Check if organization has write access. trialing/active/past_due keep
+    full access (past_due is the grace window); expired/cancelled are read-only.
     Returns: (has_write_access: bool, expiration_message: str | None)
     """
-    subscription = db.query(Subscription).filter(
-        Subscription.org_id == org_id,
-        Subscription.status.in_(["active", "trial", "expired"]),
-    ).first()
+    subscription = sync_subscription(db, get_org_subscription(db, org_id))
 
     if not subscription:
         return False, "No active subscription found"
 
-    now = datetime.utcnow()
-
-    # Check trial expiry
-    if subscription.trial_ends_at and subscription.trial_ends_at <= now:
-        mark_expired(db, subscription)
-        return False, "Trial period has expired. You can only read existing data. Please upgrade your plan."
-
-    # Check paid plan renewal date expiry
-    if subscription.renewal_date and subscription.renewal_date <= now:
-        mark_expired(db, subscription)
-        return False, "Subscription has expired. You can only read existing data. Please renew your plan."
-
-    # Check explicit expired status
-    if subscription.status == "expired":
-        return False, "Subscription has expired. You can only read existing data. Please renew your plan."
-
-    # Active subscription with valid dates
-    if subscription.status in ["active", "trial"]:
+    if subscription.status in WRITE_STATUSES:
         return True, None
 
-    return False, "Subscription status is not active."
+    return False, "Your subscription has expired. You can only read existing data. Please contact the TripPilot team to renew."
 
 
 def check_plan_limit(
@@ -707,12 +755,7 @@ def check_plan_limit(
     if not has_write:
         return False, write_error or "No write access", 0, 0
 
-    # Get subscription
-    subscription = db.query(Subscription).filter(
-        Subscription.org_id == org_id,
-        Subscription.status.in_(["active", "trial"]),
-    ).first()
-
+    subscription = get_org_subscription(db, org_id)
     if not subscription:
         return False, "No active subscription found", 0, 0
 
@@ -748,67 +791,3 @@ def check_plan_limit(
         return False, f"You have reached the maximum {resource_name} ({limit}) allowed by your plan. Please upgrade.", current_usage, limit
 
     return True, "", current_usage, limit
-
-
-def increment_usage(
-    db: Session,
-    org_id: int,
-    usage_type: str,  # itineraries, leads, vouchers, bills, team_members
-) -> bool:
-    """
-    Increment usage counter. Returns True if successful, False if limit exceeded.
-    """
-    current_month = datetime.utcnow().strftime("%Y-%m")
-
-    # Get usage record
-    usage = db.query(UsageTracking).filter(
-        UsageTracking.org_id == org_id,
-        UsageTracking.month == current_month
-    ).first()
-
-    if not usage:
-        usage = UsageTracking(org_id=org_id, month=current_month)
-        db.add(usage)
-        db.commit()
-        db.refresh(usage)
-
-    # Get plan limit
-    subscription = db.query(Subscription).filter(
-        Subscription.org_id == org_id,
-        Subscription.status == "active"
-    ).first()
-
-    if not subscription:
-        return False
-
-    plan = db.query(PricingPlan).filter(PricingPlan.id == subscription.plan_id).first()
-
-    if not plan:
-        return False
-
-    # Check if subscription is expired
-    if subscription.status == "expired":
-        return False
-
-    # Check trial expiry
-    if subscription.trial_ends_at and datetime.utcnow() > subscription.trial_ends_at:
-        subscription.status = "expired"
-        db.commit()
-        return False
-
-    # Get current usage and limits
-    usage_field = f"{usage_type}_used"
-    limit_field = f"{usage_type}_limit"
-
-    current_usage = getattr(usage, usage_field, 0)
-    limit = getattr(plan, limit_field, float('inf'))
-
-    # Check if limit exceeded
-    if limit != float('inf') and current_usage >= limit:
-        return False
-
-    # Increment usage
-    setattr(usage, usage_field, current_usage + 1)
-    db.commit()
-
-    return True

@@ -453,6 +453,68 @@ export class SuperAdminAPI {
     return response.json();
   }
 
+  static async getInvoices(status: string = "due"): Promise<any[]> {
+    const response = await fetch(`${API_URL}/superadmin/invoices?invoice_status=${status}`, {
+      headers: { Authorization: `Bearer ${this.getToken()}` },
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch invoices");
+    }
+
+    return response.json();
+  }
+
+  static async payInvoice(invoiceId: number, data: any): Promise<any> {
+    const response = await fetch(`${API_URL}/superadmin/invoices/${invoiceId}/pay`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.getToken()}`,
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.detail || "Failed to record payment");
+    }
+
+    return response.json();
+  }
+
+  static async waiveInvoice(invoiceId: number): Promise<any> {
+    const response = await fetch(`${API_URL}/superadmin/invoices/${invoiceId}/waive`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${this.getToken()}` },
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.detail || "Failed to waive invoice");
+    }
+
+    return response.json();
+  }
+
+  static async changePlan(agencyId: number, data: { plan_id: number; billing_cycle?: string }): Promise<any> {
+    const response = await fetch(`${API_URL}/superadmin/agencies/${agencyId}/subscription/change-plan`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.getToken()}`,
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.detail || "Failed to change plan");
+    }
+
+    return response.json();
+  }
+
   // ── Master Data ──
 
   static async getMasterDataCategories(): Promise<string[]> {

@@ -24,10 +24,12 @@ interface SubscriptionTimelineProps {
 }
 
 const ACTION_STYLES: Record<string, { bg: string; color: string; label: string }> = {
-  extended: { bg: "#dcfce7", color: "#166534", label: "Extended" },
+  extended: { bg: "#dcfce7", color: "#166534", label: "Payment / Extended" },
   created: { bg: "#e0f2fe", color: "#0369a1", label: "Created" },
   plan_changed: { bg: "#ede9fe", color: "#6d28d9", label: "Plan Changed" },
+  downgrade_scheduled: { bg: "#ede9fe", color: "#6d28d9", label: "Downgrade Scheduled" },
   activated: { bg: "#e0f2fe", color: "#0369a1", label: "Activated" },
+  past_due: { bg: "#fef3c7", color: "#92400e", label: "Past Due" },
   expired: { bg: "#fee2e2", color: "#991b1b", label: "Expired" },
   cancelled: { bg: "#f1f5f9", color: "#475569", label: "Cancelled" },
 };

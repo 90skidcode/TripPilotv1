@@ -38,9 +38,7 @@ export default function PricingPage() {
   const { showToast } = useToast();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedPlan, setSelectedPlan] = useState<number | null>(null);
   const [selectedCycle, setSelectedCycle] = useState<BillingCycle | null>(null);
-  const [subscribing, setSubscribing] = useState(false);
 
   useEffect(() => {
     loadPlans();
@@ -57,30 +55,6 @@ export default function PricingPage() {
       showToast({ type: "error", message: "Failed to load pricing plans" });
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function handleSelectPlan(plan: Plan, cycle: BillingCycle) {
-    setSubscribing(true);
-    try {
-      await pricingApi.subscribe({
-        plan_id: plan.id,
-        plan_billing_cycle_id: cycle.id,
-        billing_cycle: cycle.billing_cycle,
-      });
-      showToast({
-        type: "success",
-        message: `Successfully subscribed to ${plan.name} (${cycle.billing_cycle})!`,
-      });
-      // Redirect to dashboard
-      window.location.href = "/dashboard";
-    } catch (e: any) {
-      showToast({
-        type: "error",
-        message: e.message || "Failed to subscribe",
-      });
-    } finally {
-      setSubscribing(false);
     }
   }
 
@@ -205,35 +179,18 @@ export default function PricingPage() {
                     )}
                   </div>
 
-                  {/* CTA Button — paid plans are activated manually by the
-                      TripPilot team (payments are collected offline) */}
-                  {plan.trial_days > 0 ? (
-                    <Button
-                      variant={plan.name === "Starter" ? "primary" : "outline"}
-                      disabled={
-                        !selectedCycle ||
-                        selectedCycle.plan_id !== plan.id ||
-                        subscribing
-                      }
-                      onClick={() =>
-                        selectedCycle &&
-                        handleSelectPlan(plan, selectedCycle)
-                      }
-                      className="w-full mt-6"
-                    >
-                      {subscribing ? "Processing..." : "Start Free Trial"}
-                    </Button>
-                  ) : (
-                    <Button
-                      variant={plan.name === "Starter" ? "primary" : "outline"}
-                      onClick={() => {
-                        window.location.href = `mailto:sales@trippilot.com?subject=Activate ${plan.name} plan`;
-                      }}
-                      className="w-full mt-6"
-                    >
-                      Contact us to activate
-                    </Button>
-                  )}
+                  {/* Plans are activated by the TripPilot team — payments
+                      are collected offline, so there is no self-checkout */}
+                  <Button
+                    variant={plan.name === "Starter" ? "primary" : "outline"}
+                    onClick={() => {
+                      const cycle = selectedCycle?.plan_id === plan.id ? ` (${selectedCycle.billing_cycle})` : "";
+                      window.location.href = `mailto:sales@trippilot.com?subject=Activate ${plan.name} plan${cycle}`;
+                    }}
+                    className="w-full mt-6"
+                  >
+                    Contact us to activate
+                  </Button>
                 </CardContent>
               </Card>
             ))}

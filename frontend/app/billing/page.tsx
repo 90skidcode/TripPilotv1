@@ -12,12 +12,22 @@ import { useToast } from "@/components/Toast";
 import { CreditCard, Calendar, AlertCircle, CheckCircle, History } from "lucide-react";
 
 const HISTORY_ACTION_LABELS: Record<string, string> = {
-  extended: "Subscription extended",
+  extended: "Payment received — subscription extended",
   created: "Subscription started",
   plan_changed: "Plan changed",
+  downgrade_scheduled: "Plan change scheduled",
   activated: "Plan activated",
+  past_due: "Payment due",
   expired: "Subscription expired",
   cancelled: "Subscription cancelled",
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  trialing: "Trial",
+  active: "Active",
+  past_due: "Past Due",
+  expired: "Expired",
+  cancelled: "Cancelled",
 };
 
 const PAYMENT_MODE_LABELS: Record<string, string> = {
@@ -34,6 +44,7 @@ export default function BillingPage() {
   const [usage, setUsage] = useState<any>(null);
   const [subscription, setSubscription] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
+  const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -57,11 +68,16 @@ export default function BillingPage() {
       setLoading(false);
     }
 
-    // History is supplementary — a failure here must not blank the page
+    // History/invoices are supplementary — a failure must not blank the page
     try {
       setHistory(await pricingApi.billingHistory());
     } catch {
       setHistory([]);
+    }
+    try {
+      setInvoices(await pricingApi.openInvoices());
+    } catch {
+      setInvoices([]);
     }
   }
 
@@ -118,45 +134,118 @@ export default function BillingPage() {
           </div>
 
           {/* Status Banner */}
-          {subscription.status === "expired" ? (
-            <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4 flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="font-semibold text-destructive">Subscription Expired</p>
-                <p className="text-sm text-destructive/80 mt-1">
-                  Your subscription has expired and you have read-only access. Renewals are
-                  handled by the TripPilot team — contact us to renew.
-                </p>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => { window.location.href = "mailto:support@trippilot.com?subject=Subscription renewal"; }}
-                  className="mt-3"
-                >
-                  Contact us to renew
-                </Button>
+          {(() => {
+            if (subscription.status === "expired" || subscription.status === "cancelled") {
+              return (
+                <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4 flex items-start gap-3">
+                  <AlertCircle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-destructive">Subscription Expired</p>
+                    <p className="text-sm text-destructive/80 mt-1">
+                      Your subscription has expired and you have read-only access. Renewals are
+                      handled by the TripPilot team — contact us to renew.
+                    </p>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => { window.location.href = "mailto:support@trippilot.com?subject=Subscription renewal"; }}
+                      className="mt-3"
+                    >
+                      Contact us to renew
+                    </Button>
+                  </div>
+                </div>
+              );
+            }
+            if (subscription.status === "past_due") {
+              return (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
+                  <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-amber-900">Payment Due</p>
+                    <p className="text-sm text-amber-800 mt-1">
+                      Your renewal payment is due. You keep full access during the grace period —
+                      see the invoice below for the amount and payment details.
+                    </p>
+                  </div>
+                </div>
+              );
+            }
+            if (subscription.status === "trialing") {
+              const trialDays = subscription.trial_ends_at
+                ? Math.max(0, Math.ceil((new Date(subscription.trial_ends_at).getTime() - Date.now()) / 86400000))
+                : null;
+              return (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
+                  <CheckCircle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-blue-900">Free Trial</p>
+                    <p className="text-sm text-blue-800 mt-1">
+                      You have full access{trialDays !== null ? ` for ${trialDays} more ${trialDays === 1 ? "day" : "days"}` : ""}.
+                      Contact the TripPilot team when you're ready to pick a plan.
+                    </p>
+                  </div>
+                </div>
+              );
+            }
+            if (daysUntilRenewal !== null && daysUntilRenewal <= 3) {
+              return (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
+                  <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-amber-900">Subscription Renewing Soon</p>
+                    <p className="text-sm text-amber-800 mt-1">
+                      Your subscription renews in {daysUntilRenewal} {daysUntilRenewal === 1 ? "day" : "days"}.
+                    </p>
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3">
+                <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-green-900">Subscription Active</p>
+                  <p className="text-sm text-green-800 mt-1">
+                    Your subscription is active and in good standing.
+                  </p>
+                </div>
               </div>
-            </div>
-          ) : daysUntilRenewal !== null && daysUntilRenewal <= 3 ? (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="font-semibold text-amber-900">Subscription Renewing Soon</p>
-                <p className="text-sm text-amber-800 mt-1">
-                  Your subscription renews in {daysUntilRenewal} {daysUntilRenewal === 1 ? "day" : "days"}. Manage your plan anytime.
+            );
+          })()}
+
+          {/* Due invoices — pay offline, the TripPilot team confirms */}
+          {invoices.length > 0 && (
+            <Card className="border-amber-200">
+              <CardHeader>
+                <CardTitle className="text-amber-900">Payment Due</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {invoices.map((inv) => (
+                  <div key={inv.id} className="flex flex-wrap items-center justify-between gap-3 border border-border rounded-lg p-4">
+                    <div>
+                      <p className="font-semibold">
+                        {inv.invoice_type === "upgrade" ? "Upgrade charge" : "Renewal"} — {inv.plan_name}
+                        {inv.billing_cycle && (
+                          <span className="text-muted-foreground font-normal"> ({inv.billing_cycle.replace("_", "-")})</span>
+                        )}
+                      </p>
+                      <p className="text-sm text-muted-foreground mt-0.5">
+                        Period {formatDate(inv.period_start)} – {formatDate(inv.period_end)} · Due {formatDate(inv.due_date)}
+                      </p>
+                    </div>
+                    <p className="text-2xl font-bold">₹{(inv.amount ?? 0).toLocaleString("en-IN")}</p>
+                  </div>
+                ))}
+                <p className="text-sm text-muted-foreground">
+                  Pay via bank transfer or UPI and share the reference with the TripPilot team —
+                  your subscription is extended as soon as the payment is confirmed.{" "}
+                  <Button variant="link" className="px-0" onClick={() => { window.location.href = "mailto:support@trippilot.com?subject=Renewal payment"; }}>
+                    Contact us
+                  </Button>
                 </p>
-              </div>
-            </div>
-          ) : (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3">
-              <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="font-semibold text-green-900">Subscription Active</p>
-                <p className="text-sm text-green-800 mt-1">
-                  Your subscription is active and in good standing.
-                </p>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           )}
 
           {/* Current Plan Card */}
@@ -184,14 +273,10 @@ export default function BillingPage() {
                   <div>
                     <p className="text-sm text-muted-foreground">Status</p>
                     <Badge
-                      variant={subscription.status === "expired" ? "destructive" : "default"}
+                      variant={["expired", "cancelled"].includes(subscription.status) ? "destructive" : "default"}
                       className="mt-1"
                     >
-                      {subscription.status === "trial"
-                        ? "Trial"
-                        : subscription.status === "expired"
-                          ? "Expired"
-                          : "Active"}
+                      {STATUS_LABELS[subscription.status] || subscription.status}
                     </Badge>
                   </div>
                 </div>
