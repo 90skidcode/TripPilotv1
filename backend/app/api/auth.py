@@ -104,7 +104,11 @@ def _user_with_permissions(user: User, db: Session = None) -> dict:
 @router.post("/register", response_model=UserOut, status_code=201)
 def register(payload: UserCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     from app.api.pricing import check_plan_limit
+    from app.api.user_groups import require_users_write
     from app.models.user_group import UserGroup
+
+    # Only users with users.write permission (admins/org owners) may add team members
+    require_users_write(current_user, db)
 
     existing = db.query(User).filter(User.email == payload.email).first()
     if existing:

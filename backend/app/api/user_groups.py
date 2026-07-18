@@ -11,6 +11,36 @@ from app.models.user_group import UserGroup
 router = APIRouter()
 
 
+def can_manage_users(current_user: User, db: Session) -> bool:
+    """Whether this user may manage users and user groups.
+
+    Allowed for superadmins, admin-role users, members of a group with
+    users.write permission, and organization owners (first user of the org,
+    consistent with the fallback in auth._user_with_permissions).
+    """
+    if current_user.is_superadmin or current_user.role in ("admin", "superadmin"):
+        return True
+    if current_user.group and current_user.group.permissions.get("users", {}).get("write", False):
+        return True
+    if not current_user.group_id:
+        first_user = (
+            db.query(User)
+            .filter(User.org_id == current_user.org_id)
+            .order_by(User.id.asc())
+            .first()
+        )
+        return bool(first_user and first_user.id == current_user.id)
+    return False
+
+
+def require_users_write(current_user: User, db: Session) -> None:
+    if not can_manage_users(current_user, db):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have permission to manage users and groups",
+        )
+
+
 class PermissionMatrix(BaseModel):
     leads: dict = {"read": False, "write": False}
     itinerary: dict = {"read": False, "write": False}
@@ -60,12 +90,7 @@ def create_user_group(
     current_user: User = Depends(get_current_user),
 ):
     """Create a new user group with permission matrix."""
-    if current_user.group and not current_user.group.permissions.get("users", {}).get("write", False):
-        if not current_user.is_superadmin:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only admins can create user groups"
-            )
+    require_users_write(current_user, db)
 
     group = UserGroup(
         org_id=current_user.org_id,
@@ -106,6 +131,8 @@ def update_user_group(
     current_user: User = Depends(get_current_user),
 ):
     """Update a user group."""
+    require_users_write(current_user, db)
+
     group = db.query(UserGroup).filter(
         UserGroup.id == group_id,
         UserGroup.org_id == current_user.org_id,
@@ -134,6 +161,8 @@ def delete_user_group(
     current_user: User = Depends(get_current_user),
 ):
     """Delete a user group."""
+    require_users_write(current_user, db)
+
     group = db.query(UserGroup).filter(
         UserGroup.id == group_id,
         UserGroup.org_id == current_user.org_id,

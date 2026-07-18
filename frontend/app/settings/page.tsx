@@ -13,9 +13,13 @@ import { Spinner } from "@/components/ui/spinner";
 import { authApi, orgApi, userGroupsApi } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import { cn } from "@/lib/cn";
+import { useAuth } from "@/context/AuthContext";
 
 export default function SettingsPage() {
   const { showToast } = useToast();
+  const { hasPermission } = useAuth();
+  const canViewTeam = hasPermission("users", "read");
+  const canManageTeam = hasPermission("users", "write");
   const [activeTab, setActiveTab] = useState<"profile" | "security" | "agency" | "team">("profile");
 
   const [user, setUser] = useState<any>(null);
@@ -278,12 +282,12 @@ export default function SettingsPage() {
     );
   }
 
-  const tabs = [
+  const tabs: { id: "profile" | "security" | "team" | "agency"; label: string }[] = [
     { id: "profile", label: "👤 User Profile" },
     { id: "security", label: "🔒 Security & Password" },
-    { id: "team", label: "👥 Team Members" },
+    ...(canViewTeam ? [{ id: "team" as const, label: "👥 Team Members" }] : []),
     { id: "agency", label: "🏢 Agency Defaults" },
-  ] as const;
+  ];
 
   return (
     <AppShell title="Settings">
@@ -424,19 +428,21 @@ export default function SettingsPage() {
             )}
 
             {/* Team Members Tab */}
-            {activeTab === "team" && (
+            {activeTab === "team" && canViewTeam && (
               <div className="space-y-6">
                 {/* User Groups Section */}
                 <Section
                   title="User Groups & Permissions"
-                  description="Create and manage user groups to control access permissions"
+                  description="User groups control which screens each team member can access. Screen permissions are configured by the platform admin."
                 >
                   {userGroups.length === 0 ? (
                     <div className="text-center py-8 border border-dashed border-border rounded-lg">
                       <p className="text-muted-foreground mb-4">No user groups yet</p>
-                      <Button variant="primary" size="sm" onClick={() => setShowGroupForm(true)}>
-                        Create First Group
-                      </Button>
+                      {canManageTeam && (
+                        <Button variant="primary" size="sm" onClick={() => setShowGroupForm(true)}>
+                          Create First Group
+                        </Button>
+                      )}
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -444,16 +450,23 @@ export default function SettingsPage() {
                         <div key={group.id} className="flex items-center justify-between p-3 border border-border rounded-lg hover:bg-muted/50">
                           <div>
                             <p className="font-medium text-sm">{group.name}</p>
-                            <p className="text-xs text-muted-foreground">ID: {group.id}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Access: {Object.entries(group.permissions || {})
+                                .filter(([, p]: [string, any]) => p?.read || p?.write)
+                                .map(([screen]) => screen)
+                                .join(", ") || "No screens"}
+                            </p>
                           </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDeleteGroup(group.id)}
-                            className="text-destructive hover:text-destructive"
-                          >
-                            Delete
-                          </Button>
+                          {canManageTeam && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDeleteGroup(group.id)}
+                              className="text-destructive hover:text-destructive"
+                            >
+                              Delete
+                            </Button>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -462,6 +475,7 @@ export default function SettingsPage() {
 
                 <Separator />
 
+                {canManageTeam && (
                 <div className="flex justify-between items-center">
                   <div>
                     <h3 className="font-semibold text-sm">Create New Group</h3>
@@ -474,8 +488,9 @@ export default function SettingsPage() {
                     {showGroupForm ? "Cancel" : "+ New Group"}
                   </Button>
                 </div>
+                )}
 
-                {showGroupForm && (
+                {canManageTeam && showGroupForm && (
                   <div className="border border-border rounded-lg p-4 space-y-4 bg-muted/30">
                     <div className="space-y-2">
                       <Label htmlFor="group_name">Group Name *</Label>
@@ -544,6 +559,7 @@ export default function SettingsPage() {
 
                 <Separator />
 
+                {canManageTeam && (
                 <div className="flex justify-between items-center">
                   <div>
                     <h3 className="font-semibold text-sm">Add New Team Member</h3>
@@ -557,14 +573,15 @@ export default function SettingsPage() {
                     {showAddMember ? "Cancel" : "+ Add Member"}
                   </Button>
                 </div>
+                )}
 
-                {userGroups.length === 0 && (
+                {canManageTeam && userGroups.length === 0 && (
                   <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
                     <p className="text-xs text-amber-800">Create at least one user group before adding team members</p>
                   </div>
                 )}
 
-                {showAddMember && userGroups.length > 0 && (
+                {canManageTeam && showAddMember && userGroups.length > 0 && (
                   <div className="border border-border rounded-lg p-4 space-y-4 bg-muted/30">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
