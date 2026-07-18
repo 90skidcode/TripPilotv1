@@ -7,9 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useAuth } from "@/context/AuthContext";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login } = useAuth();
   const [email, setEmail] = useState("admin@trippilot.com");
   const [password, setPassword] = useState("password123");
   const [loading, setLoading] = useState(false);
@@ -30,8 +32,7 @@ export default function LoginPage() {
       });
       if (!res.ok) throw new Error("Invalid credentials");
       const data = await res.json();
-      localStorage.setItem("trippilot_token", data.access_token);
-      localStorage.setItem("trippilot_user", JSON.stringify(data.user));
+      login(data.access_token, data.user);
       router.push("/dashboard");
     } catch (err: any) {
       setError(err.message || "Login failed");

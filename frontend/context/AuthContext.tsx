@@ -18,6 +18,7 @@ interface AuthContextType {
   loading: boolean;
   error: string | null;
   hasPermission: (screen: string, action: "read" | "write") => boolean;
+  login: (token: string, userData: User) => void;
   logout: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -41,6 +42,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Check group-based permissions
     if (!user.permissions) return false;
     return user.permissions[screen]?.[action] || false;
+  };
+
+  const login = (token: string, userData: User) => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("trippilot_token", token);
+      localStorage.setItem("trippilot_user", JSON.stringify(userData));
+    }
+    setUser(userData);
+    setError(null);
+    setLoading(false);
   };
 
   const logout = () => {
@@ -108,6 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loading,
     error,
     hasPermission,
+    login,
     logout,
     refreshUser,
   };
