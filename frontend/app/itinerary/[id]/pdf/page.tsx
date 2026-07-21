@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef, use } from "react";
-import { itineraryApi } from "@/lib/api";
+import { itineraryApi, authApi, resolveAssetUrl } from "@/lib/api";
 import Link from "next/link";
 
 const BRAND = "#0ea5e9";
@@ -106,11 +106,14 @@ function FlightRow({ leg, label }: { leg: any; label: string }) {
 export default function ItineraryPDFPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);   // Next.js 15: params is a Promise
   const [itin, setItin] = useState<any>(null);
+  const [me, setMe] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     itineraryApi.get(Number(id)).then(setItin).catch(console.error).finally(() => setLoading(false));
+    // Best-effort — agency branding just falls back to the TripPilot mark if this fails
+    authApi.me().then(setMe).catch(() => {});
   }, [id]);
 
   function handlePrint() {
@@ -124,6 +127,14 @@ export default function ItineraryPDFPage({ params }: { params: Promise<{ id: str
   const stays: any[] = itin.stay_options || [];
   const flights = itin.flights || {};
   const meals = itin.meals_summary || {};
+
+  // Agency branding shown at the top (cover) and bottom (footer) of the
+  // exported/shared document — falls back to the TripPilot mark when the
+  // agency hasn't set up its own name/logo yet.
+  const agencyName = itin.agency_name || me?.agency_name || "TripPilot";
+  const agencyLogoSrc = resolveAssetUrl(me?.logo_url);
+  const agencyAddress = itin.agency_office_address || me?.agency_office_address;
+  const agencyInitial = agencyName === "TripPilot" ? "P" : agencyName.charAt(0).toUpperCase();
 
   return (
     <>
@@ -167,8 +178,17 @@ export default function ItineraryPDFPage({ params }: { params: Promise<{ id: str
           
           {/* Agency branding */}
           <div style={{ position: "absolute", top: 36, left: 48, display: "flex", alignItems: "center", gap: 10, zIndex: 10 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 8, background: BRAND, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, color: "white", fontSize: 16 }}>P</div>
-            <span style={{ color: itin.cover_image_url ? "white" : DARK, fontWeight: 800, fontSize: 16, letterSpacing: "-0.5px" }}>TripPilot</span>
+            {agencyLogoSrc ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={agencyLogoSrc}
+                alt={agencyName}
+                style={{ height: 36, maxWidth: 150, objectFit: "contain", background: "white", borderRadius: 6, padding: 3 }}
+              />
+            ) : (
+              <div style={{ width: 36, height: 36, borderRadius: 8, background: BRAND, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, color: "white", fontSize: 16 }}>{agencyInitial}</div>
+            )}
+            <span style={{ color: itin.cover_image_url ? "white" : DARK, fontWeight: 800, fontSize: 16, letterSpacing: "-0.5px" }}>{agencyName}</span>
           </div>
           
           {/* Content */}
@@ -382,16 +402,21 @@ export default function ItineraryPDFPage({ params }: { params: Promise<{ id: str
         />
 
         {/* ══════ FOOTER ══════ */}
-        <div style={{ borderTop: `2px solid ${BRAND}20`, paddingTop: 24, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ borderTop: `2px solid ${BRAND}20`, paddingTop: 24, display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 28, height: 28, borderRadius: 6, background: BRAND, display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 900, fontSize: 13 }}>P</div>
+            {agencyLogoSrc ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={agencyLogoSrc} alt={agencyName} style={{ width: 28, height: 28, objectFit: "contain", borderRadius: 6 }} />
+            ) : (
+              <div style={{ width: 28, height: 28, borderRadius: 6, background: BRAND, display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 900, fontSize: 13 }}>{agencyInitial}</div>
+            )}
             <div>
-              <div style={{ fontWeight: 700, fontSize: 13 }}>TripPilot</div>
-              <div style={{ fontSize: 11, color: "#888" }}>AI-powered travel planning</div>
+              <div style={{ fontWeight: 700, fontSize: 13 }}>{agencyName}</div>
+              <div style={{ fontSize: 11, color: "#888" }}>{agencyAddress || "AI-powered travel planning"}</div>
             </div>
           </div>
           <div style={{ fontSize: 11, color: "#bbb" }}>
-            Generated · {new Date().toLocaleDateString("en-IN")}
+            Generated by TripPilot · {new Date().toLocaleDateString("en-IN")}
           </div>
         </div>
       </div>
