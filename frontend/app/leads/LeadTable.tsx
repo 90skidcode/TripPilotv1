@@ -287,7 +287,7 @@ export default function LeadTable({
                       wrapper (overflow-x-auto) can't clip it vertically */}
                   {openDropdown === lead.id && menuPos && typeof document !== "undefined" && createPortal(
                     <div
-                      className="fixed bg-white border border-border rounded-lg shadow-xl z-[9999] min-w-56 max-h-96 overflow-y-auto"
+                      className="fixed bg-white border border-border rounded-lg shadow-xl z-[9999] w-max min-w-56 max-h-96 overflow-y-auto"
                       style={{ top: menuPos.top, left: menuPos.left }}
                     >
                       <div className="p-1.5">
