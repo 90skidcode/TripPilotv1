@@ -427,6 +427,15 @@ export default function ItineraryPDFPage({ params }: { params: Promise<{ id: str
           .no-print { display: none !important; }
           body { background: white !important; }
           @page { margin: 15mm; size: A4; }
+          /* Browsers drop background-image/background-color from printed
+             output by default, which strips the cover photo and its dark
+             overlay — leaving the white cover title/subtitle invisible
+             against blank paper. Force backgrounds to print as shown. */
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
+          }
         }
       `}</style>
     </>
