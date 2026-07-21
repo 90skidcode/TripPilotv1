@@ -10,14 +10,15 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
-import { authApi, orgApi, userGroupsApi } from "@/lib/api";
+import { authApi, orgApi, userGroupsApi, uploadApi, resolveAssetUrl } from "@/lib/api";
+import { Building2, Upload } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import { cn } from "@/lib/cn";
 import { useAuth } from "@/context/AuthContext";
 
 export default function SettingsPage() {
   const { showToast } = useToast();
-  const { hasPermission } = useAuth();
+  const { hasPermission, refreshUser } = useAuth();
   const canViewTeam = hasPermission("users", "read");
   const canManageTeam = hasPermission("users", "write");
   const [activeTab, setActiveTab] = useState<"profile" | "security" | "agency" | "team">("profile");
@@ -36,13 +37,16 @@ export default function SettingsPage() {
   const [clearing, setClearing] = useState(false);
   const [showClearModal, setShowClearModal] = useState(false);
 
-  const [agencyName, setAgencyName] = useState("TripPilot Travel Solutions");
-  const [agencyAddress, setAgencyAddress] = useState("404 Silicon Tower, Sector 62, Noida, UP, 201301");
-  const [agencyGst, setAgencyGst] = useState("09AAACP4040N1ZX");
-  const [bankHolder, setBankHolder] = useState("PLAN NATRIP TOUR AND TRAVELS LTD");
-  const [bankAccount, setBankAccount] = useState("50200067891234");
-  const [bankName, setBankName] = useState("HDFC Bank");
-  const [bankIfsc, setBankIfsc] = useState("HDFC0001202");
+  const [agencyName, setAgencyName] = useState("");
+  const [agencyAddress, setAgencyAddress] = useState("");
+  const [agencyGst, setAgencyGst] = useState("");
+  const [bankHolder, setBankHolder] = useState("");
+  const [bankAccount, setBankAccount] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [bankIfsc, setBankIfsc] = useState("");
+  const [logoUrl, setLogoUrl] = useState("");
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [savingAgency, setSavingAgency] = useState(false);
 
   // Team Members state
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
@@ -68,23 +72,6 @@ export default function SettingsPage() {
     loadProfile();
     loadTeamMembers();
     loadUserGroups();
-    if (globalThis.window !== undefined) {
-      const storedName = localStorage.getItem("agency_name");
-      const storedAddr = localStorage.getItem("agency_address");
-      const storedGst = localStorage.getItem("agency_gst");
-      const storedHolder = localStorage.getItem("agency_bank_holder");
-      const storedAcc = localStorage.getItem("agency_bank_acc");
-      const storedBName = localStorage.getItem("agency_bank_name");
-      const storedIfsc = localStorage.getItem("agency_bank_ifsc");
-
-      if (storedName) setAgencyName(storedName);
-      if (storedAddr) setAgencyAddress(storedAddr);
-      if (storedGst) setAgencyGst(storedGst);
-      if (storedHolder) setBankHolder(storedHolder);
-      if (storedAcc) setBankAccount(storedAcc);
-      if (storedBName) setBankName(storedBName);
-      if (storedIfsc) setBankIfsc(storedIfsc);
-    }
   }, []);
 
   async function loadProfile() {
@@ -94,10 +81,46 @@ export default function SettingsPage() {
       setName(me.name || "");
       setEmail(me.email || "");
       setRole(me.role || "agent");
+      // Agency defaults live on the organization record — every agency sees
+      // its own values instead of shared hardcoded constants.
+      setAgencyName(me.agency_name || "");
+      setAgencyAddress(me.agency_office_address || "");
+      setAgencyGst(me.gstin || "");
+      setBankHolder(me.bank_holder_name || "");
+      setBankAccount(me.bank_account_number || "");
+      setBankName(me.bank_name || "");
+      setBankIfsc(me.bank_ifsc || "");
+      setLogoUrl(me.logo_url || "");
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleLogoSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      showToast({ type: "error", message: "Please select an image file" });
+      return;
+    }
+    setUploadingLogo(true);
+    try {
+      const url = await uploadApi.image(file);
+      // Persist immediately so the logo isn't lost if the agency doesn't
+      // also click "Save" for the other fields below.
+      const updated = await authApi.updateMe({ logo_url: url });
+      setLogoUrl(updated.logo_url || url);
+      setUser(updated);
+      // Refreshes the cached auth user so the sidebar logo updates right away
+      await refreshUser();
+      showToast({ type: "success", message: "Agency logo updated!" });
+    } catch (err: any) {
+      showToast({ type: "error", message: err.message || "Failed to upload logo" });
+    } finally {
+      setUploadingLogo(false);
+      e.target.value = "";
     }
   }
 
@@ -249,17 +272,25 @@ export default function SettingsPage() {
     }
   }
 
-  function handleSaveAgencyDefaults() {
-    if (globalThis.window !== undefined) {
-      localStorage.setItem("agency_name", agencyName);
-      localStorage.setItem("agency_address", agencyAddress);
-      localStorage.setItem("agency_gst", agencyGst);
-      localStorage.setItem("agency_bank_holder", bankHolder);
-      localStorage.setItem("agency_bank_acc", bankAccount);
-      localStorage.setItem("agency_bank_name", bankName);
-      localStorage.setItem("agency_bank_ifsc", bankIfsc);
+  async function handleSaveAgencyDefaults() {
+    setSavingAgency(true);
+    try {
+      const updated = await authApi.updateMe({
+        agency_name: agencyName,
+        agency_office_address: agencyAddress,
+        gstin: agencyGst,
+        bank_holder_name: bankHolder,
+        bank_account_number: bankAccount,
+        bank_name: bankName,
+        bank_ifsc: bankIfsc,
+      });
+      setUser(updated);
+      showToast({ type: "success", message: "Agency defaults and banking variables saved successfully!" });
+    } catch (err: any) {
+      showToast({ type: "error", message: err.message || "Failed to save agency defaults" });
+    } finally {
+      setSavingAgency(false);
     }
-    showToast({ type: "success", message: "Agency defaults and banking variables saved successfully!" });
   }
 
   if (loading) {
@@ -662,6 +693,40 @@ export default function SettingsPage() {
                   title="Agency Defaults & Template Constants"
                   description="Variables configured here will automatically populate headers inside newly generated Hotel Vouchers and Customer Billing Invoices."
                 >
+                  <div className="space-y-2">
+                    <Label>Agency Logo</Label>
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center justify-center w-16 h-16 rounded-lg border border-border bg-muted overflow-hidden shrink-0">
+                        {logoUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={resolveAssetUrl(logoUrl) || undefined} alt="Agency logo" className="w-full h-full object-contain" />
+                        ) : (
+                          <Building2 className="w-6 h-6 text-muted-foreground" />
+                        )}
+                      </div>
+                      <div>
+                        <label htmlFor="logoUpload">
+                          <span className={cn(
+                            "inline-flex items-center gap-2 px-3 py-2 rounded-md border border-border text-sm font-medium cursor-pointer hover:bg-muted transition-colors",
+                            uploadingLogo && "opacity-60 pointer-events-none"
+                          )}>
+                            <Upload className="w-4 h-4" />
+                            {uploadingLogo ? "Uploading..." : logoUrl ? "Replace Logo" : "Upload Logo"}
+                          </span>
+                        </label>
+                        <input
+                          id="logoUpload"
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleLogoSelected}
+                          disabled={uploadingLogo}
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">PNG or JPG. Appears on your itinerary, voucher, and invoice headers.</p>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="agencyName">Registered Agency Name</Label>
@@ -750,8 +815,8 @@ export default function SettingsPage() {
                 <Separator />
 
                 <div className="flex justify-end">
-                  <Button type="submit" variant="primary">
-                    Save Global Agency Defaults
+                  <Button type="submit" variant="primary" disabled={savingAgency}>
+                    {savingAgency ? "Saving..." : "Save Global Agency Defaults"}
                   </Button>
                 </div>
               </form>

@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   Eye,
   Pencil,
@@ -77,6 +78,36 @@ export default function LeadTable({
 }: Props) {
   const { data: stagesData } = useMasterDataByCategory("lead_stages");
   const [openDropdown, setOpenDropdown] = useState<number | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const triggerRefs = useRef<Record<number, HTMLButtonElement | null>>({});
+
+  function toggleStageMenu(leadId: number) {
+    if (openDropdown === leadId) {
+      setOpenDropdown(null);
+      return;
+    }
+    const btn = triggerRefs.current[leadId];
+    if (btn) {
+      const rect = btn.getBoundingClientRect();
+      setMenuPos({ top: rect.bottom + 4, left: rect.left });
+    }
+    setOpenDropdown(leadId);
+  }
+
+  // The table wrapper scrolls horizontally (overflow-x-auto), which makes
+  // browsers silently clip vertical overflow too — close the menu on scroll
+  // instead of letting it drift away from its trigger or get cut off.
+  useEffect(() => {
+    if (openDropdown == null) return;
+    const close = () => setOpenDropdown(null);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [openDropdown]);
+
   if (loading && leads.length === 0) {
     return (
       <div className="p-4">
@@ -241,42 +272,46 @@ export default function LeadTable({
                 </td>
 
                 {/* Stage */}
-                <td className="px-4 py-3 whitespace-nowrap relative">
-                  <div className="relative inline-block">
-                    <button
-                      onClick={() => setOpenDropdown(openDropdown === lead.id ? null : lead.id)}
-                      className={cn("font-medium px-3 py-1.5 rounded-md text-sm flex items-center gap-1 hover:shadow-md transition-shadow", stage.className)}
-                      title="Click to change stage"
-                    >
-                      {stage.label}
-                      <ChevronDown className="h-3 w-3" />
-                    </button>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <button
+                    ref={(el) => { triggerRefs.current[lead.id] = el; }}
+                    onClick={() => toggleStageMenu(lead.id)}
+                    className={cn("font-medium px-3 py-1.5 rounded-md text-sm flex items-center gap-1 hover:shadow-md transition-shadow", stage.className)}
+                    title="Click to change stage"
+                  >
+                    {stage.label}
+                    <ChevronDown className="h-3 w-3" />
+                  </button>
 
-                    {/* Dropdown Menu */}
-                    {openDropdown === lead.id && (
-                      <div className="absolute top-full left-0 mt-2 bg-white border border-border rounded-lg shadow-xl z-[9999] min-w-56 max-h-96 overflow-y-auto">
-                        <div className="p-1.5">
-                          {stagesData.map((stageOption) => (
-                            <button
-                              key={stageOption.key}
-                              onClick={() => {
-                                if (onChangeStage) {
-                                  onChangeStage(lead.id, stageOption.key);
-                                }
-                                setOpenDropdown(null);
-                              }}
-                              className={cn(
-                                "w-full text-left px-3 py-2.5 text-sm rounded hover:bg-muted transition-colors whitespace-nowrap",
-                                lead.stage === stageOption.key && "bg-primary/10 text-primary font-semibold"
-                              )}
-                            >
-                              {stageOption.label}
-                            </button>
-                          ))}
-                        </div>
+                  {/* Rendered in a portal so the table's horizontal-scroll
+                      wrapper (overflow-x-auto) can't clip it vertically */}
+                  {openDropdown === lead.id && menuPos && typeof document !== "undefined" && createPortal(
+                    <div
+                      className="fixed bg-white border border-border rounded-lg shadow-xl z-[9999] min-w-56 max-h-96 overflow-y-auto"
+                      style={{ top: menuPos.top, left: menuPos.left }}
+                    >
+                      <div className="p-1.5">
+                        {stagesData.map((stageOption) => (
+                          <button
+                            key={stageOption.key}
+                            onClick={() => {
+                              if (onChangeStage) {
+                                onChangeStage(lead.id, stageOption.key);
+                              }
+                              setOpenDropdown(null);
+                            }}
+                            className={cn(
+                              "w-full text-left px-3 py-2.5 text-sm rounded hover:bg-muted transition-colors whitespace-nowrap",
+                              lead.stage === stageOption.key && "bg-primary/10 text-primary font-semibold"
+                            )}
+                          >
+                            {stageOption.label}
+                          </button>
+                        ))}
                       </div>
-                    )}
-                  </div>
+                    </div>,
+                    document.body
+                  )}
                 </td>
 
                 {/* Assigned */}

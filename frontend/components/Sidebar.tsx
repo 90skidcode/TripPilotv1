@@ -3,6 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { resolveAssetUrl } from "@/lib/api";
 import {
   LayoutDashboard,
   Users,
@@ -80,7 +81,8 @@ export function sourceLabel(source: string) {
 export default function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { hasPermission, logout } = useAuth();
+  const { user, hasPermission, logout } = useAuth();
+  const logoSrc = resolveAssetUrl(user?.logo_url);
 
   // Auto-open any menu whose sub-item matches the current path
   const [openMenus, setOpenMenus] = useState<string[]>(() =>
@@ -111,10 +113,22 @@ export default function Sidebar({ collapsed, onToggle }: { collapsed: boolean; o
 
   return (
     <aside className={`flex flex-col border-r border-border bg-background transition-all duration-200 relative z-20 ${collapsed ? "w-16" : "w-64"}`}>
-      {/* Brand Header */}
+      {/* Brand Header — shows the agency's own logo once uploaded, falling
+          back to the TripPilot mark for agencies that haven't set one */}
       <div className="flex items-center h-16 px-4 border-b border-border">
-        <div className="flex items-center justify-center w-8 h-8 rounded bg-primary text-primary-foreground font-bold shrink-0 text-xl shadow-sm">P</div>
-        {!collapsed && <span className="ml-3 font-bold text-lg tracking-tight text-foreground whitespace-nowrap overflow-hidden">TripPilot</span>}
+        {logoSrc ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={logoSrc}
+            alt={user?.agency_name || "Agency logo"}
+            className={collapsed ? "w-8 h-8 object-contain shrink-0" : "h-8 max-w-[168px] object-contain shrink-0"}
+          />
+        ) : (
+          <>
+            <div className="flex items-center justify-center w-8 h-8 rounded bg-primary text-primary-foreground font-bold shrink-0 text-xl shadow-sm">P</div>
+            {!collapsed && <span className="ml-3 font-bold text-lg tracking-tight text-foreground whitespace-nowrap overflow-hidden">TripPilot</span>}
+          </>
+        )}
       </div>
 
       {/* Navigation */}

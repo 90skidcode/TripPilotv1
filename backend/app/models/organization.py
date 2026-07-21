@@ -28,5 +28,12 @@ class Organization(Base):
     agency_office_address = Column(Text, nullable=True)
     agency_highlights = Column(JSON, nullable=True)  # [{icon, label}, ...]
 
+    # Tax + banking defaults, used to prefill invoices/vouchers per agency
+    gstin = Column(String(20), nullable=True)
+    bank_holder_name = Column(String(200), nullable=True)
+    bank_account_number = Column(String(50), nullable=True)
+    bank_name = Column(String(200), nullable=True)
+    bank_ifsc = Column(String(20), nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

@@ -38,6 +38,12 @@ class UserOut(BaseModel):
     agency_name: str | None = None
     agency_office_address: str | None = None
     agency_highlights: list | None = None
+    logo_url: str | None = None
+    gstin: str | None = None
+    bank_holder_name: str | None = None
+    bank_account_number: str | None = None
+    bank_name: str | None = None
+    bank_ifsc: str | None = None
 
     class Config:
         from_attributes = True
@@ -99,6 +105,12 @@ def _user_with_permissions(user: User, db: Session = None) -> dict:
                 "agency_name": org.agency_name,
                 "agency_office_address": org.agency_office_address,
                 "agency_highlights": org.agency_highlights,
+                "logo_url": org.logo_url,
+                "gstin": org.gstin,
+                "bank_holder_name": org.bank_holder_name,
+                "bank_account_number": org.bank_account_number,
+                "bank_name": org.bank_name,
+                "bank_ifsc": org.bank_ifsc,
             })
     return user_dict
 
@@ -180,6 +192,12 @@ class UserUpdate(BaseModel):
     agency_name: str | None = None
     agency_office_address: str | None = None
     agency_highlights: list | None = None
+    logo_url: str | None = None
+    gstin: str | None = None
+    bank_holder_name: str | None = None
+    bank_account_number: str | None = None
+    bank_name: str | None = None
+    bank_ifsc: str | None = None
 
 
 @router.get("/users", response_model=list[UserOut])
@@ -227,6 +245,18 @@ def update_me(
             org.agency_office_address = payload.agency_office_address
         if payload.agency_highlights is not None:
             org.agency_highlights = payload.agency_highlights
+        if payload.logo_url is not None:
+            org.logo_url = payload.logo_url
+        if payload.gstin is not None:
+            org.gstin = payload.gstin
+        if payload.bank_holder_name is not None:
+            org.bank_holder_name = payload.bank_holder_name
+        if payload.bank_account_number is not None:
+            org.bank_account_number = payload.bank_account_number
+        if payload.bank_name is not None:
+            org.bank_name = payload.bank_name
+        if payload.bank_ifsc is not None:
+            org.bank_ifsc = payload.bank_ifsc
 
     db.commit()
     db.refresh(current_user)

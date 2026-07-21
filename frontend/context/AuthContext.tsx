@@ -11,6 +11,9 @@ export interface User {
   org_id: number;
   group_id?: number;
   permissions: Record<string, { read: boolean; write: boolean }>;
+  // Organization branding
+  logo_url?: string | null;
+  agency_name?: string | null;
 }
 
 interface AuthContextType {

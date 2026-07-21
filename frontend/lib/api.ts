@@ -51,6 +51,32 @@ export const orgApi = {
   clearData: () => api.delete("/org/clear-data"),
 };
 
+// Turns a relative "/uploads/xxx.png" path from the backend into a full URL
+export function resolveAssetUrl(url?: string | null): string | null {
+  if (!url) return null;
+  return url.startsWith("http") ? url : `${API_URL}${url}`;
+}
+
+// ── Uploads ──
+export const uploadApi = {
+  image: async (file: File): Promise<string> => {
+    const form = new FormData();
+    form.append("file", file);
+    const token = getToken();
+    const res = await fetch(`${API_URL}/upload/image`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: "Upload failed" }));
+      throw new Error(typeof err.detail === "string" ? err.detail : "Upload failed");
+    }
+    const data = await res.json();
+    return data.url as string;
+  },
+};
+
 // ── User Groups ──
 export const userGroupsApi = {
   list: () => api.get<any[]>("/user-groups"),

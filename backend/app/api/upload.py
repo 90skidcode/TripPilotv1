@@ -1,8 +1,11 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 import os
 import shutil
 import uuid
 from typing import Dict
+
+from app.core.security import get_current_user
+from app.models.user import User
 
 router = APIRouter()
 
@@ -12,8 +15,8 @@ UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @router.post("/image", response_model=Dict[str, str])
-async def upload_image(file: UploadFile = File(...)):
-    """Uploads an image and returns its URL."""
+async def upload_image(file: UploadFile = File(...), current_user: User = Depends(get_current_user)):
+    """Uploads an image and returns its URL. Requires a logged-in user."""
     try:
         # Generate a unique filename
         ext = os.path.splitext(file.filename)[1]
