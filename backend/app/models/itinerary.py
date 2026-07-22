@@ -41,6 +41,10 @@ class Itinerary(Base):
     stay_options = Column(JSON, nullable=True)     # [{option, hotel_name, city, nights, ...}]
     days = Column(JSON, nullable=True)             # [{day, city, summary, activities, meals}]
 
+    # Per-section show/hide toggles for the output (preview + PDF). A missing
+    # key or null column means "visible" — see sectionVisible() on the frontend.
+    section_visibility = Column(JSON, nullable=True)
+
     pdf_url = Column(String(500), nullable=True)
     share_url = Column(String(500), nullable=True)
 

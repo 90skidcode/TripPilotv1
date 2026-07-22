@@ -89,6 +89,12 @@ function formatDate(d?: string) {
   catch { return d; }
 }
 
+// Mirrors isSectionVisible() in ../page.tsx — sections default to visible;
+// a false entry in itin.section_visibility hides them from the PDF too.
+function isSectionVisible(itin: any, key: string): boolean {
+  return itin?.section_visibility?.[key] !== false;
+}
+
 function FlightRow({ leg, label }: { leg: any; label: string }) {
   if (!leg?.from && !leg?.airline) return null;
   return (
@@ -224,7 +230,7 @@ export default function ItineraryPDFPage({ params }: { params: Promise<{ id: str
         </div>
 
         {/* ══════ FLIGHTS ══════ */}
-        {(flights.onward?.from || flights.return?.from) && (
+        {isSectionVisible(itin, "flights") && (flights.onward?.from || flights.return?.from) && (
           <section style={{ marginBottom: 36 }}>
             <h2 style={{ fontSize: 20, fontWeight: 800, color: DARK, borderBottom: `3px solid ${BRAND}`, paddingBottom: 8, marginBottom: 16 }}>
               ✈️ Flight Details
@@ -251,13 +257,13 @@ export default function ItineraryPDFPage({ params }: { params: Promise<{ id: str
         <PdfSummarySection itin={itin} />
 
         {/* ══════ PACKAGE PRICING TABLE ══════ */}
-        <PdfPackagePricing stayOptions={itin.stay_options || []} />
+        {isSectionVisible(itin, "pricing") && <PdfPackagePricing stayOptions={itin.stay_options || []} />}
 
         {/* ══════ MEAL ══════ */}
-        <PdfMeal meals={meals} />
+        {isSectionVisible(itin, "meals") && <PdfMeal meals={meals} />}
 
         {/* ══════ HOTEL STAY ══════ */}
-        {stays.length > 0 && (
+        {isSectionVisible(itin, "stay") && stays.length > 0 && (
           <section style={{ marginBottom: 36 }}>
             <h2 style={{ fontSize: 20, fontWeight: 800, color: DARK, borderBottom: `3px solid ${BRAND}`, paddingBottom: 8, marginBottom: 16 }}>
               🏨 Premium Stay
@@ -386,20 +392,22 @@ export default function ItineraryPDFPage({ params }: { params: Promise<{ id: str
         )}
 
         {/* ══════ INCLUSIONS ══════ */}
-        <PdfInclusions inclusions={itin.inclusions} />
+        {isSectionVisible(itin, "inclusions") && <PdfInclusions inclusions={itin.inclusions} />}
 
         {/* ══════ EXCLUSIONS ══════ */}
-        <PdfExclusions exclusions={itin.exclusions} />
+        {isSectionVisible(itin, "exclusions") && <PdfExclusions exclusions={itin.exclusions} />}
 
         {/* ══════ PAYMENT POLICY & TERMS ══════ */}
-        <PdfPaymentPolicy terms={itin.payment_terms} />
+        {isSectionVisible(itin, "payment_terms") && <PdfPaymentPolicy terms={itin.payment_terms} />}
 
         {/* ══════ ABOUT US / WHY CHOOSE US / ADVISOR ══════ */}
-        <PdfAboutUs
-          highlights={Array.isArray(itin.agency_highlights) ? itin.agency_highlights : []}
-          advisor={{ name: itin.advisor_name, phone: itin.advisor_phone, email: itin.advisor_email }}
-          agency={{ name: itin.agency_name, office_address: itin.agency_office_address }}
-        />
+        {isSectionVisible(itin, "about_us") && (
+          <PdfAboutUs
+            highlights={Array.isArray(itin.agency_highlights) ? itin.agency_highlights : []}
+            advisor={{ name: itin.advisor_name, phone: itin.advisor_phone, email: itin.advisor_email }}
+            agency={{ name: itin.agency_name, office_address: itin.agency_office_address }}
+          />
+        )}
 
         {/* ══════ FOOTER ══════ */}
         <div style={{ borderTop: `2px solid ${BRAND}20`, paddingTop: 24, display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>

@@ -1,12 +1,30 @@
 "use client";
 import { useState, useEffect, use, useRef } from "react";
 import AppShell from "@/components/AppShell";
-import { itineraryApi, authApi } from "@/lib/api";
+import { itineraryApi, authApi, uploadApi, resolveAssetUrl } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import InlineText from "./InlineText";
 
 const BRAND = "#0ea5e9";
+
+// ── Section show/hide toggles ───────────────────────────────────────────────
+// Sections default to visible; a false entry in itin.section_visibility hides
+// them from the live preview and PDF even when they have data.
+const SECTION_TOGGLES: { key: string; icon: string; label: string }[] = [
+  { key: "flights", icon: "✈️", label: "Flights" },
+  { key: "stay", icon: "🏨", label: "Hotels" },
+  { key: "pricing", icon: "📦", label: "Pricing Table" },
+  { key: "meals", icon: "🍽️", label: "Meals" },
+  { key: "inclusions", icon: "✅", label: "Inclusions" },
+  { key: "exclusions", icon: "🚫", label: "Exclusions" },
+  { key: "payment_terms", icon: "📜", label: "Payment Policy" },
+  { key: "about_us", icon: "🤝", label: "About Us" },
+];
+
+function isSectionVisible(itin: any, key: string): boolean {
+  return itin?.section_visibility?.[key] !== false;
+}
 
 // ── Simple fallback image helper ────────────────────────────────────────────
 function getFallbackImage(url: string, seed: string = ""): string {
@@ -26,6 +44,36 @@ function getFallbackImage(url: string, seed: string = ""): string {
   }
   const idx = Math.abs(hash) % fallbacks.length;
   return fallbacks[idx];
+}
+
+// ── Regenerate image via Google (Places) ────────────────────────────────────
+function RegenerateImageButton({ query, onResult, canWrite, buttonStyle, className }: { query: string; onResult: (url: string) => void; canWrite: boolean; buttonStyle?: React.CSSProperties; className?: string }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  if (!canWrite) return null;
+
+  async function run() {
+    if (!query.trim()) { setError("Add a name first"); return; }
+    setLoading(true);
+    setError("");
+    try {
+      const { url } = await itineraryApi.imageSearch(query);
+      onResult(url);
+    } catch (e: any) {
+      setError(e.message || "No photo found");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
+      <button type="button" onClick={run} disabled={loading} className={className ?? "btn btn-outline btn-sm"} style={{ padding: "4px 8px", cursor: "pointer", ...buttonStyle }} title={`Regenerate via Google: "${query}"`}>
+        {loading ? "…" : "🔄 Google"}
+      </button>
+      {error && <span style={{ fontSize: 10, color: "#dc2626", maxWidth: 100 }}>{error}</span>}
+    </div>
+  );
 }
 
 // ── Inline activity row ──────────────────────────────────────────────────────
@@ -120,6 +168,13 @@ function DayPreviewCard({ day, index, onChange, onRemove, onMoveUp, onMoveDown, 
                         }
                       }} />
                     </label>
+                    <RegenerateImageButton
+                      query={[p.name, day.city].filter(Boolean).join(" ")}
+                      onResult={(url) => updatePlace(i, "image_url", url)}
+                      canWrite={canWrite}
+                      className=""
+                      buttonStyle={{ background: "white", border: "none", color: "#333", fontSize: 11, borderRadius: 6, boxShadow: "0 2px 4px rgba(0,0,0,.1)" }}
+                    />
                     <button onClick={() => removePlace(i)} style={{ background: "#fee2e2", color: "#ef4444", border: "none", padding: "4px 8px", borderRadius: 6, cursor: "pointer", fontSize: 11, boxShadow: "0 2px 4px rgba(0,0,0,.1)" }}>✕</button>
                   </div>
                 )}
@@ -286,6 +341,10 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
 
   function u(k: string, v: any) { setItin((p: any) => ({ ...p, [k]: v })); }
 
+  function toggleSection(key: string) {
+    u("section_visibility", { ...(itin.section_visibility || {}), [key]: !isSectionVisible(itin, key) });
+  }
+
   function uFlight(leg: string, k: string, v: string) {
     // Update local display immediately (keeping focus)
     setItin((p: any) => ({
@@ -333,12 +392,9 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
 
   async function uploadFile(file: File): Promise<string | null> {
     if (!file) return null;
-    const form = new FormData();
-    form.append("file", file);
     try {
-      const res = await fetch("http://localhost:8000/upload/image", { method: "POST", body: form });
-      const data = await res.json();
-      return "http://localhost:8000" + data.url;
+      const url = await uploadApi.image(file);
+      return resolveAssetUrl(url);
     } catch (e) {
       console.error(e);
       alert("Failed to upload image");
@@ -353,10 +409,29 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
     catch (e) { console.error(e); } finally { setChatLoading(false); }
   }
 
+  const fieldLabel: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 4 };
+
   // ── Left panel tab content ──────────────────────────────────────────────
-  function LeftContent() {
-    return (
+  // NOTE: intentionally a plain JSX value, not a nested component function —
+  // defining it as `function LeftContent() {...}` inside this component's
+  // body gave it a new identity every render, which made React unmount and
+  // remount the whole left panel (and its focused <input>) on every
+  // keystroke.
+  const leftContent = (
       <div>
+        {/* Visible Sections */}
+        <div style={{ marginBottom: 16, padding: 10, background: "#f8fafc", borderRadius: 10, border: "1px solid #e4e7ec" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8 }}>Visible Sections</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 8px" }}>
+            {SECTION_TOGGLES.map(({ key, icon, label }) => (
+              <label key={key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, cursor: canWrite ? "pointer" : "default", color: "#374151" }}>
+                <input type="checkbox" checked={isSectionVisible(itin, key)} onChange={() => toggleSection(key)} disabled={!canWrite} />
+                {icon} {label}
+              </label>
+            ))}
+          </div>
+        </div>
+
         {/* Tab switcher */}
         <div style={{ display: "flex", gap: 4, marginBottom: 16, flexWrap: "wrap" }}>
           {(["overview", "flights", "stay", "pricing", "policies", "advisor"] as const).map((t) => (
@@ -391,6 +466,11 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
                     }} />
                   </label>
                 )}
+                <RegenerateImageButton
+                  query={itin.destination ? `${itin.destination} iconic landmark scenery` : (itin.cover_title || itin.title || "")}
+                  onResult={(url) => u("cover_image_url", url)}
+                  canWrite={canWrite}
+                />
               </div>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
@@ -484,6 +564,11 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
                         }} />
                       </label>
                     )}
+                    <RegenerateImageButton
+                      query={[s.hotel_name, s.city, "hotel"].filter(Boolean).join(" ")}
+                      onResult={(url) => uHotel(i, "image_url", url)}
+                      canWrite={canWrite}
+                    />
                   </div>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 6 }}>
@@ -507,6 +592,10 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
                       {["","Room Only","Breakfast","Half Board","Full Board"].map((o) => <option key={o}>{o}</option>)}
                     </select>
                   </div>
+                </div>
+                <div style={{ marginTop: 8 }}>
+                  <div style={fieldLabel}>Total Cost for this option (₹) — shown in Package Pricing table</div>
+                  <input className="input" type="number" value={s.total_cost || ""} onChange={(e) => uHotel(i, "total_cost", e.target.value)} style={{ fontSize: 12 }} disabled={!canWrite} />
                 </div>
               </div>
             ))}
@@ -572,10 +661,7 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
           </div>
         )}
       </div>
-    );
-  }
-
-  const fieldLabel: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 4 };
+  );
 
   return (
     <AppShell title="Edit Itinerary">
@@ -610,7 +696,7 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
         {/* LEFT: Controls */}
         <div style={{ position: "sticky", top: 20, maxHeight: "calc(100vh - 140px)", overflowY: "auto", background: "white", border: "1.5px solid #e4e7ec", borderRadius: 16, padding: 18 }}>
           <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 12, color: BRAND }}>✏️ Edit Details</div>
-          <LeftContent />
+          {leftContent}
         </div>
 
         {/* RIGHT: Live preview */}
@@ -645,17 +731,20 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
               </div>
             </div>
 
+            {/* Flights */}
+            {isSectionVisible(itin, "flights") && <FlightsSection flights={itin.flights || {}} />}
+
             {/* Summary — top placement so it sits above stay details, pricing & meal */}
             <SummarySection itin={itin} style={{ marginBottom: 20 }} />
 
             {/* Package Pricing & Details */}
-            <PackagePricingSection stayOptions={itin.stay_options || []} />
+            {isSectionVisible(itin, "pricing") && <PackagePricingSection stayOptions={itin.stay_options || []} />}
 
             {/* Meal */}
-            <MealSection meals={itin.meals_summary || {}} />
+            {isSectionVisible(itin, "meals") && <MealSection meals={itin.meals_summary || {}} />}
 
             {/* Hotels summary */}
-            {(itin.stay_options || []).length > 0 && (
+            {isSectionVisible(itin, "stay") && (itin.stay_options || []).length > 0 && (
               <div style={{ marginBottom: 20, marginTop: 24 }}>
                 <SectionHeading>🏨 Premium Stay</SectionHeading>
                 {(itin.stay_options || []).map((s: any, i: number) => (
@@ -720,20 +809,22 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
             )}
 
             {/* Inclusions */}
-            <InclusionsSection inclusions={itin.inclusions} />
+            {isSectionVisible(itin, "inclusions") && <InclusionsSection inclusions={itin.inclusions} />}
 
             {/* Exclusions */}
-            <ExclusionsSection exclusions={itin.exclusions} />
+            {isSectionVisible(itin, "exclusions") && <ExclusionsSection exclusions={itin.exclusions} />}
 
             {/* Payment Policy & Important Notes */}
-            <PaymentPolicySection terms={itin.payment_terms} />
+            {isSectionVisible(itin, "payment_terms") && <PaymentPolicySection terms={itin.payment_terms} />}
 
             {/* About us / Why choose us + Holiday Advisor */}
-            <AboutUsSection
-              highlights={Array.isArray(itin.agency_highlights) ? itin.agency_highlights : []}
-              advisor={{ name: itin.advisor_name, phone: itin.advisor_phone, email: itin.advisor_email }}
-              agency={{ name: itin.agency_name, office_address: itin.agency_office_address }}
-            />
+            {isSectionVisible(itin, "about_us") && (
+              <AboutUsSection
+                highlights={Array.isArray(itin.agency_highlights) ? itin.agency_highlights : []}
+                advisor={{ name: itin.advisor_name, phone: itin.advisor_phone, email: itin.advisor_email }}
+                agency={{ name: itin.agency_name, office_address: itin.agency_office_address }}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -760,6 +851,42 @@ function fmtINR(n: any): string {
 function fmtDate(d: any): string {
   if (!d) return "—";
   try { return new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }); } catch { return String(d); }
+}
+
+function FlightRow({ leg, label }: { leg: any; label: string }) {
+  if (!leg?.from && !leg?.airline) return null;
+  return (
+    <tr style={{ borderBottom: "1px solid #e5e7eb" }}>
+      <td style={pricingTD}><strong style={{ color: BRAND }}>{label}</strong></td>
+      <td style={pricingTD}>{leg.airline || "—"}</td>
+      <td style={pricingTD}>{leg.from || "—"} → {leg.to || "—"}</td>
+      <td style={pricingTD}>{fmtDate(leg.date)}</td>
+      <td style={pricingTD}>{leg.departure_time || "—"} – {leg.arrival_time || "—"}</td>
+      <td style={pricingTD}>{leg.baggage || "—"}</td>
+    </tr>
+  );
+}
+
+function FlightsSection({ flights }: { flights: any }) {
+  if (!flights?.onward?.from && !flights?.return?.from) return null;
+  return (
+    <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 16, padding: "20px 24px", marginBottom: 20 }}>
+      <SectionCardHeader icon="✈️" title="Flight Details" />
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <thead>
+            <tr style={{ background: "#fef3c7" }}>
+              {["Sector", "Airline", "Route", "Date", "Timing", "Baggage"].map((h) => <th key={h} style={pricingTH}>{h}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            <FlightRow leg={flights.onward} label="Onward" />
+            <FlightRow leg={flights.return} label="Return" />
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }
 
 function SummarySection({ itin, style }: { itin: any; style?: React.CSSProperties }) {

@@ -189,6 +189,8 @@ export const itineraryApi = {
     api.post<any>("/itinerary/generate", data),
   chatEdit: (id: number, command: string) =>
     api.post<any>(`/itinerary/${id}/chat-edit`, { command }),
+  imageSearch: (query: string) =>
+    api.post<{ url: string }>("/itinerary/image-search", { query }),
 };
 
 // ── Vouchers ──

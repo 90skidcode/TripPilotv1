@@ -443,6 +443,10 @@ Return a valid JSON object with these exact keys:
   "total_days": 3,
   "total_nights": 2,
   "destination": "Primary Destination",
+  "package_cost": "Total package cost as a plain number string (e.g. \"80000\"), only if a budget/cost was mentioned in the trip description, else null",
+  "per_person_cost": "Per-person cost as a plain number string, only if derivable from a mentioned budget and traveller count, else null",
+  "inclusions": "One inclusion per line (e.g. hotel stays, transfers, meals, sightseeing as per itinerary) \\n-separated, based on what's actually in this itinerary",
+  "exclusions": "One exclusion per line (standard travel exclusions: airfare unless specified, personal expenses, tips, camera fees, anything not explicitly included) \\n-separated",
   "meals_summary": {{
     "breakfast": 0,
     "lunch": 0,
@@ -520,8 +524,10 @@ INSTRUCTIONS:
 7. `directions_url`: Always generate a valid Google Maps search URL for the hotel, like 'https://maps.google.com/?q=Hotel+Name+City'.
 8. `google_rating`: Assign a realistic star rating like '4.2' or '4.5' based on the hotel's class.
 9. `meal_plan`: Use standard travel meal plan terms (e.g. 'Breakfast Included', 'Breakfast & Dinner', 'Room Only').
+10. `package_cost` / `per_person_cost`: ONLY populate these if the trip description mentions a budget or cost figure — convert it to a plain digit string (e.g. "₹80,000" → "80000"). If no budget is mentioned, leave both null. Never invent a price.
+11. `inclusions` / `exclusions`: ALWAYS populate both, one item per line, tailored to what's actually in this itinerary (hotels, transfers, meals, sightseeing entries included; typically airfare, personal expenses, tips, camera fees excluded unless stated otherwise).
 
-10. CONCISENESS: All daily summaries, sightseeing descriptions, and cover descriptions MUST be extremely brief (max 15-20 words). Keep daily activities lists to a maximum of 3 short items. This is critical to prevent response truncation!
+12. CONCISENESS: All daily summaries, sightseeing descriptions, and cover descriptions MUST be extremely brief (max 15-20 words). Keep daily activities lists to a maximum of 3 short items. This is critical to prevent response truncation!
 
 Trip description:
 \"\"\"{raw_text}\"\"\"
@@ -598,6 +604,9 @@ The user wants to modify the following travel itinerary:
 Apply this edit command: "{command}"
 
 Return the COMPLETE updated itinerary JSON with the same structure. Only change what the command requests.
+IMPORTANT: if you change a hotel's `hotel_name` or a sightseeing place's `name` (e.g. swapping to a
+different hotel/place), you MUST clear that item's `image_url` to null and set a fresh `image_query`
+for it — its old photo no longer matches. Leave `image_url` untouched for anything you didn't rename.
 Respond ONLY with the updated JSON object."""
 
     try:

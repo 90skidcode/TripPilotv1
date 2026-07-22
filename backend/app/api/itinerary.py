@@ -46,6 +46,7 @@ class ItineraryCreate(BaseModel):
     flights: Optional[Any] = None
     stay_options: Optional[Any] = None
     days: Optional[Any] = None
+    section_visibility: Optional[Any] = None
 
 
 class ItineraryOut(BaseModel):
@@ -71,6 +72,7 @@ class ItineraryOut(BaseModel):
     flights: Optional[Any]
     stay_options: Optional[Any]
     days: Optional[Any]
+    section_visibility: Optional[Any]
     share_url: Optional[str]
     pdf_url: Optional[str]
     created_at: datetime
@@ -191,6 +193,10 @@ async def generate_itinerary(
         num_travellers=data.get("num_travellers"),
         total_days=data.get("total_days"),
         total_nights=data.get("total_nights"),
+        package_cost=data.get("package_cost"),
+        per_person_cost=data.get("per_person_cost"),
+        inclusions=data.get("inclusions"),
+        exclusions=data.get("exclusions"),
         meals_summary=data.get("meals_summary"),
         flights=data.get("flights"),
         stay_options=data.get("stay_options"),
@@ -202,6 +208,29 @@ async def generate_itinerary(
     db.refresh(itin)
     _log_itinerary(db, itin, current_user)
     return itin
+
+
+class ImageSearchRequest(BaseModel):
+    query: str
+
+
+@router.post("/image-search")
+async def search_itinerary_image(
+    payload: ImageSearchRequest,
+    current_user: User = Depends(require_permission("itinerary", "write")),
+):
+    """Look up a real photo for a free-text query (e.g. a hotel or sightseeing
+    place name + city) via Google Places, for the per-image "Regenerate" button."""
+    from app.services.ai_service import fetch_image_url
+
+    query = payload.query.strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="Search query is required")
+
+    url = await fetch_image_url(query)
+    if not url:
+        raise HTTPException(status_code=404, detail="No photo found for that search — try refining the name or city.")
+    return {"url": url}
 
 
 class ChatEditRequest(BaseModel):
@@ -225,11 +254,17 @@ async def chat_edit_itinerary(
 
     current = {
         "title": itin.title,
+        "cover_title": itin.cover_title,
+        "cover_subheading": itin.cover_subheading,
         "days": itin.days or [],
         "flights": itin.flights or {},
         "stay_options": itin.stay_options or [],
         "meals_summary": itin.meals_summary or {},
         "ferry_blocks": itin.ferry_blocks or [],
+        "package_cost": itin.package_cost,
+        "per_person_cost": itin.per_person_cost,
+        "inclusions": itin.inclusions,
+        "exclusions": itin.exclusions,
     }
 
     updated = await edit_itinerary_with_chat(current, payload.command)
@@ -237,6 +272,10 @@ async def chat_edit_itinerary(
     # Apply updates back
     if "title" in updated:
         itin.title = updated["title"]
+    if "cover_title" in updated:
+        itin.cover_title = updated["cover_title"]
+    if "cover_subheading" in updated:
+        itin.cover_subheading = updated["cover_subheading"]
     if "days" in updated:
         itin.days = updated["days"]
     if "flights" in updated:
@@ -247,6 +286,14 @@ async def chat_edit_itinerary(
         itin.meals_summary = updated["meals_summary"]
     if "ferry_blocks" in updated:
         itin.ferry_blocks = updated["ferry_blocks"]
+    if "package_cost" in updated:
+        itin.package_cost = updated["package_cost"]
+    if "per_person_cost" in updated:
+        itin.per_person_cost = updated["per_person_cost"]
+    if "inclusions" in updated:
+        itin.inclusions = updated["inclusions"]
+    if "exclusions" in updated:
+        itin.exclusions = updated["exclusions"]
 
     db.commit()
     db.refresh(itin)
