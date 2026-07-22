@@ -4,6 +4,7 @@ All AI calls go through this module.
 """
 import asyncio
 import json
+import random
 import re
 import httpx
 from app.core.config import settings
@@ -162,7 +163,7 @@ _SEARCH_CONFIG_ERROR: str | None = None
 _PLACES_BASE = "https://places.googleapis.com/v1"
 
 
-async def fetch_image_url(query: str) -> str | None:
+async def fetch_image_url(query: str, *, bypass_cache: bool = False, exclude_url: str | None = None) -> str | None:
     """Resolve a free-text phrase ("The Himalayan hotel Manali", "Solang Valley
     Manali") to a REAL photo of that exact place via Google Places API (New):
 
@@ -172,13 +173,20 @@ async def fetch_image_url(query: str) -> str | None:
 
     Photos come from Google Maps, so hotels/attractions get pictures of the
     actual property/site. Returns None if unconfigured, no match, no photos,
-    or on error — the caller then uses a generic fallback. Cached in-memory.
+    or on error — the caller then uses a generic fallback. Cached in-memory
+    (skip the cache with bypass_cache=True, e.g. for an explicit "regenerate").
+
+    A place on Google Maps usually has several photos, not just one — when
+    `exclude_url` is given (the photo currently shown), candidates are tried
+    in random order and the first one that DOESN'T match it is returned, so
+    "regenerate" actually surfaces a different shot instead of the same photo
+    every time.
     """
     global _SEARCH_CONFIG_ERROR
     if not query or not query.strip():
         return None
     key = query.strip().lower()
-    if key in _IMAGE_CACHE:
+    if not bypass_cache and key in _IMAGE_CACHE:
         return _IMAGE_CACHE[key]
 
     api_key = settings.GOOGLE_PLACES_API_KEY or settings.GOOGLE_SEARCH_API_KEY
@@ -215,23 +223,37 @@ async def fetch_image_url(query: str) -> str | None:
                 return None
 
             places = search.json().get("places") or []
-            photos = (places[0].get("photos") or []) if places else []
-            photo_name = photos[0].get("name") if photos else None
-            if not photo_name:
+            photos = list((places[0].get("photos") or []) if places else [])
+            if not photos:
                 return None  # no Maps photos for this place → generic fallback
 
-            media = await client.get(
-                f"{_PLACES_BASE}/{photo_name}/media",
-                params={"maxWidthPx": 1600, "skipHttpRedirect": "true", "key": api_key},
-            )
-            if media.status_code != 200:
-                print(f"Places photo fetch failed ({media.status_code}) for '{query}': {media.text[:200]}")
-                return None
+            random.shuffle(photos)
+            fallback_link: str | None = None
+            for photo in photos[:6]:  # cap media calls per lookup
+                photo_name = photo.get("name")
+                if not photo_name:
+                    continue
+                media = await client.get(
+                    f"{_PLACES_BASE}/{photo_name}/media",
+                    params={"maxWidthPx": 1600, "skipHttpRedirect": "true", "key": api_key},
+                )
+                if media.status_code != 200:
+                    continue
+                link = (media.json() or {}).get("photoUri")
+                if not link:
+                    continue
+                if fallback_link is None:
+                    fallback_link = link
+                if not exclude_url or link != exclude_url:
+                    if not bypass_cache:
+                        _IMAGE_CACHE[key] = link
+                    return link
 
-            link = (media.json() or {}).get("photoUri")
-            if link:
-                _IMAGE_CACHE[key] = link
-            return link
+            # Every candidate matched exclude_url (or only one photo exists) —
+            # this place genuinely only has that one Maps photo available.
+            if fallback_link and not bypass_cache:
+                _IMAGE_CACHE[key] = fallback_link
+            return fallback_link
     except Exception as e:
         print(f"Places image lookup error for '{query}': {e}")
         return None

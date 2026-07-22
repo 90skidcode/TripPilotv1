@@ -212,6 +212,7 @@ async def generate_itinerary(
 
 class ImageSearchRequest(BaseModel):
     query: str
+    exclude_url: Optional[str] = None
 
 
 @router.post("/image-search")
@@ -220,14 +221,19 @@ async def search_itinerary_image(
     current_user: User = Depends(require_permission("itinerary", "write")),
 ):
     """Look up a real photo for a free-text query (e.g. a hotel or sightseeing
-    place name + city) via Google Places, for the per-image "Regenerate" button."""
+    place name + city) via Google Places, for the per-image "Regenerate" button.
+
+    Bypasses the in-memory photo cache and, when `exclude_url` (the photo
+    currently shown) is given, prefers a different photo of the same place —
+    otherwise "Regenerate" would just hand back the identical cached photo.
+    """
     from app.services.ai_service import fetch_image_url
 
     query = payload.query.strip()
     if not query:
         raise HTTPException(status_code=400, detail="Search query is required")
 
-    url = await fetch_image_url(query)
+    url = await fetch_image_url(query, bypass_cache=True, exclude_url=payload.exclude_url)
     if not url:
         raise HTTPException(status_code=404, detail="No photo found for that search — try refining the name or city.")
     return {"url": url}

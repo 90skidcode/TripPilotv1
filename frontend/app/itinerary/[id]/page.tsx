@@ -47,7 +47,7 @@ function getFallbackImage(url: string, seed: string = ""): string {
 }
 
 // ── Regenerate image via Google (Places) ────────────────────────────────────
-function RegenerateImageButton({ query, onResult, canWrite, buttonStyle, className }: { query: string; onResult: (url: string) => void; canWrite: boolean; buttonStyle?: React.CSSProperties; className?: string }) {
+function RegenerateImageButton({ query, currentUrl, onResult, canWrite, buttonStyle, className }: { query: string; currentUrl?: string; onResult: (url: string) => void; canWrite: boolean; buttonStyle?: React.CSSProperties; className?: string }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   if (!canWrite) return null;
@@ -57,7 +57,7 @@ function RegenerateImageButton({ query, onResult, canWrite, buttonStyle, classNa
     setLoading(true);
     setError("");
     try {
-      const { url } = await itineraryApi.imageSearch(query);
+      const { url } = await itineraryApi.imageSearch(query, currentUrl);
       onResult(url);
     } catch (e: any) {
       setError(e.message || "No photo found");
@@ -170,6 +170,7 @@ function DayPreviewCard({ day, index, onChange, onRemove, onMoveUp, onMoveDown, 
                     </label>
                     <RegenerateImageButton
                       query={[p.name, day.city].filter(Boolean).join(" ")}
+                      currentUrl={p.image_url}
                       onResult={(url) => updatePlace(i, "image_url", url)}
                       canWrite={canWrite}
                       className=""
@@ -468,6 +469,7 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
                 )}
                 <RegenerateImageButton
                   query={itin.destination ? `${itin.destination} iconic landmark scenery` : (itin.cover_title || itin.title || "")}
+                  currentUrl={itin.cover_image_url}
                   onResult={(url) => u("cover_image_url", url)}
                   canWrite={canWrite}
                 />
@@ -566,6 +568,7 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
                     )}
                     <RegenerateImageButton
                       query={[s.hotel_name, s.city, "hotel"].filter(Boolean).join(" ")}
+                      currentUrl={s.image_url}
                       onResult={(url) => uHotel(i, "image_url", url)}
                       canWrite={canWrite}
                     />
