@@ -33,8 +33,13 @@ class ItineraryCreate(BaseModel):
     cover_subheading: Optional[str] = None
     destination: Optional[str] = None
     num_travellers: Optional[int] = None
+    num_adults: Optional[int] = None
+    num_children: Optional[int] = None
     total_days: Optional[int] = None
     total_nights: Optional[int] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    cab_type: Optional[str] = None
     package_cost: Optional[str] = None
     per_person_cost: Optional[str] = None
     gst_percent: Optional[int] = 5
@@ -59,8 +64,13 @@ class ItineraryOut(BaseModel):
     cover_subheading: Optional[str]
     destination: Optional[str]
     num_travellers: Optional[int]
+    num_adults: Optional[int]
+    num_children: Optional[int]
     total_days: Optional[int]
     total_nights: Optional[int]
+    start_date: Optional[str]
+    end_date: Optional[str]
+    cab_type: Optional[str]
     package_cost: Optional[str]
     per_person_cost: Optional[str]
     gst_percent: Optional[int]

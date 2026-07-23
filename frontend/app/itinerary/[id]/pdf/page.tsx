@@ -141,6 +141,9 @@ export default function ItineraryPDFPage({ params }: { params: Promise<{ id: str
   const agencyLogoSrc = resolveAssetUrl(me?.logo_url);
   const agencyAddress = itin.agency_office_address || me?.agency_office_address;
   const agencyInitial = agencyName === "TripPilot" ? "P" : agencyName.charAt(0).toUpperCase();
+  // The cover header only shows the agency's own branding — the generic
+  // "TripPilot" mark should appear just in the footer credit line, not here.
+  const hasAgencyBranding = Boolean(itin.agency_name || me?.agency_name || agencyLogoSrc);
 
   return (
     <>
@@ -182,21 +185,23 @@ export default function ItineraryPDFPage({ params }: { params: Promise<{ id: str
             </>
           )}
           
-          {/* Agency branding */}
-          <div style={{ position: "absolute", top: 36, left: 48, display: "flex", alignItems: "center", gap: 10, zIndex: 10 }}>
-            {agencyLogoSrc ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={agencyLogoSrc}
-                alt={agencyName}
-                style={{ height: 36, maxWidth: 150, objectFit: "contain", background: "white", borderRadius: 6, padding: 3 }}
-              />
-            ) : (
-              <div style={{ width: 36, height: 36, borderRadius: 8, background: BRAND, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, color: "white", fontSize: 16 }}>{agencyInitial}</div>
-            )}
-            <span style={{ color: itin.cover_image_url ? "white" : DARK, fontWeight: 800, fontSize: 16, letterSpacing: "-0.5px" }}>{agencyName}</span>
-          </div>
-          
+          {/* Agency branding — only shown once the agency has its own name/logo set up */}
+          {hasAgencyBranding && (
+            <div style={{ position: "absolute", top: 36, left: 48, display: "flex", alignItems: "center", gap: 10, zIndex: 10 }}>
+              {agencyLogoSrc ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={agencyLogoSrc}
+                  alt={agencyName}
+                  style={{ height: 36, maxWidth: 150, objectFit: "contain", background: "white", borderRadius: 6, padding: 3 }}
+                />
+              ) : (
+                <div style={{ width: 36, height: 36, borderRadius: 8, background: BRAND, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, color: "white", fontSize: 16 }}>{agencyInitial}</div>
+              )}
+              <span style={{ color: itin.cover_image_url ? "white" : DARK, fontWeight: 800, fontSize: 16, letterSpacing: "-0.5px" }}>{agencyName}</span>
+            </div>
+          )}
+
           {/* Content */}
           <div style={{ color: itin.cover_image_url ? "white" : DARK, zIndex: 10 }}>
             <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: itin.cover_image_url ? "white" : BRAND, marginBottom: 12, opacity: 0.9 }}>

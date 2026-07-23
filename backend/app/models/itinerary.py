@@ -23,8 +23,13 @@ class Itinerary(Base):
 
     # Meta
     num_travellers = Column(Integer, nullable=True)
+    num_adults = Column(Integer, nullable=True)
+    num_children = Column(Integer, nullable=True)
     total_days = Column(Integer, nullable=True)
     total_nights = Column(Integer, nullable=True)
+    start_date = Column(String(20), nullable=True)
+    end_date = Column(String(20), nullable=True)
+    cab_type = Column(String(100), nullable=True)
 
     # Pricing
     package_cost = Column(String(50), nullable=True)
