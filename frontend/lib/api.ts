@@ -53,8 +53,10 @@ export const orgApi = {
 
 // Turns a relative "/uploads/xxx.png" path from the backend into a full URL
 export function resolveAssetUrl(url?: string | null): string | null {
-  if (!url) return null;
-  return url.startsWith("http") ? url : `${API_URL}${url}`;
+  if (!url || typeof url !== "string") return null;
+  const trimmed = url.trim();
+  if (!trimmed || trimmed === "null" || trimmed === "undefined" || trimmed.toLowerCase() === "trippilot") return null;
+  return trimmed.startsWith("http") ? trimmed : `${API_URL}${trimmed.startsWith("/") ? "" : "/"}${trimmed}`;
 }
 
 // ── Uploads ──

@@ -114,11 +114,12 @@ export default function ItineraryPDFPage({ params }: { params: Promise<{ id: str
   const [itin, setItin] = useState<any>(null);
   const [me, setMe] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [imgError, setImgError] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     itineraryApi.get(Number(id)).then(setItin).catch(console.error).finally(() => setLoading(false));
-    // Best-effort — agency branding just falls back to the TripPilot mark if this fails
+    // Best-effort — agency branding falls back when unavailable
     authApi.me().then(setMe).catch(() => {});
   }, [id]);
 
@@ -135,15 +136,13 @@ export default function ItineraryPDFPage({ params }: { params: Promise<{ id: str
   const meals = itin.meals_summary || {};
 
   // Agency branding shown at the top (cover) and bottom (footer) of the
-  // exported/shared document — falls back to the TripPilot mark when the
-  // agency hasn't set up its own name/logo yet.
-  const agencyName = itin.agency_name || me?.agency_name || "TripPilot";
-  const agencyLogoSrc = resolveAssetUrl(me?.logo_url);
+  // exported/shared document — text "TripPilot" is hidden per configuration.
+  const rawAgencyName = itin.agency_name || me?.agency_name;
+  const agencyName = (rawAgencyName && rawAgencyName.trim().toLowerCase() !== "trippilot") ? rawAgencyName.trim() : "";
+  const agencyLogoSrc = resolveAssetUrl(itin.logo_url || me?.logo_url);
   const agencyAddress = itin.agency_office_address || me?.agency_office_address;
-  const agencyInitial = agencyName === "TripPilot" ? "P" : agencyName.charAt(0).toUpperCase();
-  // The cover header only shows the agency's own branding — the generic
-  // "TripPilot" mark should appear just in the footer credit line, not here.
-  const hasAgencyBranding = Boolean(itin.agency_name || me?.agency_name || agencyLogoSrc);
+  const agencyInitial = agencyName ? agencyName.charAt(0).toUpperCase() : "";
+  const hasAgencyBranding = Boolean((agencyName && agencyName.toLowerCase() !== "trippilot") || agencyLogoSrc);
 
   return (
     <>
@@ -185,20 +184,23 @@ export default function ItineraryPDFPage({ params }: { params: Promise<{ id: str
             </>
           )}
           
-          {/* Agency branding — only shown once the agency has its own name/logo set up */}
+          {/* Agency branding — only shown when valid agency name or logo is present */}
           {hasAgencyBranding && (
             <div style={{ position: "absolute", top: 36, left: 48, display: "flex", alignItems: "center", gap: 10, zIndex: 10 }}>
-              {agencyLogoSrc ? (
+              {agencyLogoSrc && !imgError ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={agencyLogoSrc}
-                  alt={agencyName}
+                  alt={agencyName || "Agency logo"}
                   style={{ height: 36, maxWidth: 150, objectFit: "contain", background: "white", borderRadius: 6, padding: 3 }}
+                  onError={() => setImgError(true)}
                 />
-              ) : (
+              ) : agencyInitial ? (
                 <div style={{ width: 36, height: 36, borderRadius: 8, background: BRAND, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, color: "white", fontSize: 16 }}>{agencyInitial}</div>
+              ) : null}
+              {agencyName && agencyName.toLowerCase() !== "trippilot" && (
+                <span style={{ color: itin.cover_image_url ? "white" : DARK, fontWeight: 800, fontSize: 16, letterSpacing: "-0.5px" }}>{agencyName}</span>
               )}
-              <span style={{ color: itin.cover_image_url ? "white" : DARK, fontWeight: 800, fontSize: 16, letterSpacing: "-0.5px" }}>{agencyName}</span>
             </div>
           )}
 
@@ -416,19 +418,26 @@ export default function ItineraryPDFPage({ params }: { params: Promise<{ id: str
 
         {/* ══════ FOOTER ══════ */}
         <div style={{ borderTop: `2px solid ${BRAND}20`, paddingTop: 24, display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {agencyLogoSrc ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={agencyLogoSrc} alt={agencyName} style={{ width: 28, height: 28, objectFit: "contain", borderRadius: 6 }} />
-            ) : (
-              <div style={{ width: 28, height: 28, borderRadius: 6, background: BRAND, display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 900, fontSize: 13 }}>{agencyInitial}</div>
-            )}
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 13 }}>{agencyName}</div>
-              <div style={{ fontSize: 11, color: "#888" }}>{agencyAddress || "AI-powered travel planning"}</div>
+          {hasAgencyBranding && (
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {agencyLogoSrc && !imgError ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={agencyLogoSrc}
+                  alt={agencyName || "Agency logo"}
+                  style={{ width: 28, height: 28, objectFit: "contain", borderRadius: 6 }}
+                  onError={() => setImgError(true)}
+                />
+              ) : agencyInitial ? (
+                <div style={{ width: 28, height: 28, borderRadius: 6, background: BRAND, display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 900, fontSize: 13 }}>{agencyInitial}</div>
+              ) : null}
+              <div>
+                {agencyName && agencyName.toLowerCase() !== "trippilot" && <div style={{ fontWeight: 700, fontSize: 13 }}>{agencyName}</div>}
+                {agencyAddress && <div style={{ fontSize: 11, color: "#888" }}>{agencyAddress}</div>}
+              </div>
             </div>
-          </div>
-          <div style={{ fontSize: 11, color: "#bbb" }}>
+          )}
+          <div style={{ fontSize: 11, color: "#bbb", marginLeft: "auto" }}>
             Generated by TripPilot · {new Date().toLocaleDateString("en-IN")}
           </div>
         </div>
