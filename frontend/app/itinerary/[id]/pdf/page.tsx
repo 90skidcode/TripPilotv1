@@ -866,9 +866,40 @@ function DarkTemplateView({ itin, me, printRef, handlePrint, id }: { itin: any; 
                   </a>
                 )}
                 {days.length > 0 && (
-                  <a href="#section-itinerary" style={{ textDecoration: "none", color: "#a0aec0", fontSize: 14, fontWeight: 500, display: "flex", alignItems: "center", gap: 10 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#00b4d8" }} /> Day-by-Day Plan
-                  </a>
+                  <div>
+                    <a href="#section-itinerary" style={{ textDecoration: "none", color: "#a0aec0", fontSize: 14, fontWeight: 500, display: "flex", alignItems: "center", gap: 10 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#00b4d8" }} /> Day-by-Day Plan
+                    </a>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingLeft: 18, marginTop: 10 }}>
+                      {days.map((day: any, i: number) => {
+                        const dayNum = day.day || i + 1;
+                        const dayLabel = `Day ${dayNum}${day.city ? ` - ${day.city}` : ""}`;
+                        return (
+                          <a
+                            key={i}
+                            href={`#day-${dayNum}`}
+                            style={{
+                              textDecoration: "none",
+                              color: "#8a9ba8",
+                              fontSize: 13,
+                              fontWeight: 500,
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 8,
+                              transition: "color 0.2s"
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.color = "#00b4d8")}
+                            onMouseLeave={(e) => (e.currentTarget.style.color = "#8a9ba8")}
+                          >
+                            <span style={{ width: 5, height: 5, borderRadius: "50%", background: "rgba(0, 180, 216, 0.5)", flexShrink: 0 }} />
+                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {dayLabel}
+                            </span>
+                          </a>
+                        );
+                      })}
+                    </div>
+                  </div>
                 )}
                 {(inclusionsList.length > 0 || exclusionsList.length > 0) && (
                   <a href="#section-inclusions" style={{ textDecoration: "none", color: "#a0aec0", fontSize: 14, fontWeight: 500, display: "flex", alignItems: "center", gap: 10 }}>
@@ -889,6 +920,7 @@ function DarkTemplateView({ itin, me, printRef, handlePrint, id }: { itin: any; 
 
             {/* ══════ SUMMARY CARD ══════ */}
             <div id="section-summary" style={{
+              scrollMarginTop: "100px",
               background: "#1a222c", border: "1px solid rgba(255, 255, 255, 0.08)",
               borderRadius: 20, padding: 32, marginBottom: 48, boxShadow: "0 4px 20px rgba(0,0,0,0.4)"
             }}>
@@ -920,6 +952,7 @@ function DarkTemplateView({ itin, me, printRef, handlePrint, id }: { itin: any; 
             {/* ══════ FLIGHTS ══════ */}
             {isSectionVisible(itin, "flights") && (flights.onward?.from || flights.return?.from) && (
               <div id="section-flights" style={{
+                scrollMarginTop: "100px",
                 background: "#1a222c", border: "1px solid rgba(255, 255, 255, 0.08)",
                 borderRadius: 20, padding: 32, marginBottom: 48, boxShadow: "0 4px 20px rgba(0,0,0,0.4)"
               }}>
@@ -964,7 +997,7 @@ function DarkTemplateView({ itin, me, printRef, handlePrint, id }: { itin: any; 
 
             {/* ══════ PACKAGE PRICING CARDS ══════ */}
             {isSectionVisible(itin, "pricing") && stays.length > 0 && (
-              <div id="section-stays" style={{ marginBottom: 48 }}>
+              <div id="section-stays" style={{ scrollMarginTop: "100px", marginBottom: 48 }}>
                 <h2 style={{ fontFamily: "Outfit, sans-serif", fontSize: "2rem", fontWeight: 700, color: "#fff", textAlign: "center", marginBottom: 8 }}>
                   Package Pricing Options
                 </h2>
@@ -1031,14 +1064,15 @@ function DarkTemplateView({ itin, me, printRef, handlePrint, id }: { itin: any; 
 
             {/* ══════ DAY BY DAY ITINERARY ══════ */}
             {days.length > 0 && (
-              <div id="section-itinerary" style={{ marginBottom: 48 }}>
+              <div id="section-itinerary" style={{ scrollMarginTop: "100px", marginBottom: 48 }}>
                 <h2 style={{ fontFamily: "Outfit, sans-serif", fontSize: "2rem", fontWeight: 700, color: "#fff", marginBottom: 32, display: "flex", alignItems: "center", gap: 12 }}>
                   <span style={{ color: "#00b4d8" }}>🗓️</span> Detailed Itinerary
                 </h2>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 36 }}>
                   {days.map((day: any, i: number) => (
-                    <div key={i} style={{
+                    <div key={i} id={`day-${day.day || i + 1}`} style={{
+                      scrollMarginTop: "100px",
                       background: "#1a222c", border: "1px solid rgba(255, 255, 255, 0.08)",
                       borderRadius: 20, padding: 32, boxShadow: "0 4px 20px rgba(0,0,0,0.4)"
                     }}>
@@ -1121,6 +1155,7 @@ function DarkTemplateView({ itin, me, printRef, handlePrint, id }: { itin: any; 
             {/* ══════ INCLUSIONS & EXCLUSIONS ══════ */}
             {(inclusionsList.length > 0 || exclusionsList.length > 0) && (
               <div id="section-inclusions" style={{
+                scrollMarginTop: "100px",
                 background: "#1a222c", border: "1px solid rgba(255, 255, 255, 0.08)",
                 borderRadius: 20, padding: 32, marginBottom: 48, boxShadow: "0 4px 20px rgba(0,0,0,0.4)"
               }}>
@@ -1171,6 +1206,7 @@ function DarkTemplateView({ itin, me, printRef, handlePrint, id }: { itin: any; 
             {/* ══════ PAYMENT TERMS & IMPORTANT NOTES ══════ */}
             {paymentTermsList.length > 0 && (
               <div id="section-policies" style={{
+                scrollMarginTop: "100px",
                 background: "rgba(0, 180, 216, 0.05)", border: "1px solid rgba(0, 180, 216, 0.2)",
                 borderRadius: 20, padding: 32, marginBottom: 48
               }}>
