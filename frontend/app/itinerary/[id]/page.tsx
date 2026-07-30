@@ -442,6 +442,21 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
 
         {leftTab === "overview" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div>
+              <div style={fieldLabel}>Layout Theme</div>
+              <select
+                className="input"
+                value={itin.layout || "dark_template"}
+                onChange={(e) => u("layout", e.target.value)}
+                style={{ fontSize: 13, fontWeight: 600 }}
+                disabled={!canWrite}
+              >
+                <option value="dark_template">🌙 Dark Template (Plannatrip Style)</option>
+                <option value="visual_experience">🖼️ Visual Experience</option>
+                <option value="daily_snapshot">📋 Daily Snapshot</option>
+                <option value="magazine_pro">✨ Magazine Pro</option>
+              </select>
+            </div>
             {[
               { label: "Cover Title", k: "cover_title" },
               { label: "Cover Subheading", k: "cover_subheading" },

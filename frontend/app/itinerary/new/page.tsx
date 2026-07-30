@@ -27,6 +27,13 @@ const LAYOUTS = [
     desc: "Bold typography, full-bleed layout. Best for premium & luxury clients.",
     preview: "linear-gradient(135deg, #f59e0b 0%, #7c2d12 100%)",
   },
+  {
+    id: "dark_template",
+    icon: "🌙",
+    name: "Dark Template",
+    desc: "Sleek dark mode layout with cyan accents, glowing timeline & glassmorphic cards.",
+    preview: "linear-gradient(135deg, #0a0e14 0%, #1a222c 50%, #00b4d8 100%)",
+  },
 ];
 
 function ItineraryForm() {
@@ -44,7 +51,7 @@ function ItineraryForm() {
   }, [canWrite, router]);
 
   const [step, setStep] = useState<1 | 2>(1);
-  const [layout, setLayout] = useState("visual_experience");
+  const [layout, setLayout] = useState("dark_template");
   const [rawText, setRawText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -109,7 +116,7 @@ function ItineraryForm() {
             <p style={{ color: "var(--text-muted)", marginBottom: 24, fontSize: 14 }}>
               Select how your itinerary will look when sent to clients.
             </p>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
               {LAYOUTS.map((l) => (
                 <div
                   key={l.id}
