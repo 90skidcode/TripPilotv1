@@ -89,10 +89,157 @@ function formatDate(d?: string) {
   catch { return d; }
 }
 
-// Mirrors isSectionVisible() in ../page.tsx — sections default to visible;
-// a false entry in itin.section_visibility hides them from the PDF too.
 function isSectionVisible(itin: any, key: string): boolean {
   return itin?.section_visibility?.[key] !== false;
+}
+
+// ── Print Pagination Engine Helper Hook ─────────────────────────────────────
+interface SplitInfo {
+  type: "card" | "activity";
+  index: number;
+}
+
+interface PaginationState {
+  headingBreakBefore: boolean;
+  dayBreakBefore: Record<number, boolean>;
+  daySplitMap: Record<number, SplitInfo>;
+}
+
+function usePdfPagination(containerRef: React.RefObject<HTMLDivElement | null>, itin: any) {
+  const [pagination, setPagination] = useState<PaginationState>({
+    headingBreakBefore: false,
+    dayBreakBefore: {},
+    daySplitMap: {},
+  });
+
+  useEffect(() => {
+    if (!containerRef.current || !itin) return;
+
+    const computePagination = () => {
+      const container = containerRef.current;
+      if (!container) return;
+
+      // Printable A4 height budget (approx 960px at 96 DPI for A4 with 12mm margins)
+      const A4_BUDGET = 960;
+
+      // 1. Measure preceding sections before Detailed Itinerary
+      const precedingEls = Array.from(container.querySelectorAll<HTMLElement>('[data-pdf-section="preceding"]'));
+      let cumulativeHeight = 0;
+      precedingEls.forEach((el) => {
+        cumulativeHeight += el.offsetHeight;
+      });
+
+      let currentPageUsed = cumulativeHeight % A4_BUDGET;
+      let remainingPageSpace = A4_BUDGET - currentPageUsed;
+
+      // 2. Measure Heading Element ("Detailed Itinerary" / "Day-by-Day Itinerary")
+      const headingEl = container.querySelector<HTMLElement>('[data-pdf-section="itinerary-heading"]');
+      const headingHeight = headingEl ? headingEl.offsetHeight : 50;
+
+      const dayEls = Array.from(container.querySelectorAll<HTMLElement>('[data-pdf-day]'));
+
+      let headingBreakBefore = false;
+      const dayBreakBefore: Record<number, boolean> = {};
+      const daySplitMap: Record<number, SplitInfo> = {};
+
+      dayEls.forEach((dayEl, index) => {
+        const dayHeaderEl = dayEl.querySelector<HTMLElement>('[data-pdf-part="header"]');
+        const summaryEl = dayEl.querySelector<HTMLElement>('[data-pdf-part="summary"]');
+        const cardEls = Array.from(dayEl.querySelectorAll<HTMLElement>('[data-pdf-part="card"]'));
+        const actEls = Array.from(dayEl.querySelectorAll<HTMLElement>('[data-pdf-part="activity"]'));
+
+        const dayHeaderH = dayHeaderEl ? dayHeaderEl.offsetHeight : 50;
+        const summaryH = summaryEl ? summaryEl.offsetHeight : 30;
+
+        let minItemsH = 0;
+        if (cardEls.length > 0) {
+          const minCardsCount = Math.min(2, cardEls.length);
+          for (let c = 0; c < minCardsCount; c++) {
+            minItemsH += cardEls[c].offsetHeight;
+          }
+        } else if (actEls.length > 0) {
+          const minActCount = Math.min(2, actEls.length);
+          for (let a = 0; a < minActCount; a++) {
+            minItemsH += actEls[a].offsetHeight;
+          }
+        }
+
+        const dayMinHeight = dayHeaderH + summaryH + minItemsH + 30;
+        const totalDayHeight = dayEl.offsetHeight;
+
+        if (index === 0) {
+          // Rule 1 & Rule 4: Heading + Day 1 minimal block
+          const totalStartHeight = headingHeight + dayMinHeight;
+          if (remainingPageSpace < totalStartHeight) {
+            headingBreakBefore = true;
+            currentPageUsed = 0;
+            remainingPageSpace = A4_BUDGET;
+          }
+          currentPageUsed = (currentPageUsed + headingHeight) % A4_BUDGET;
+          remainingPageSpace = A4_BUDGET - currentPageUsed;
+        } else {
+          // Rule 2 & Rule 4: Subsequent days
+          if (remainingPageSpace < dayMinHeight) {
+            dayBreakBefore[index] = true;
+            currentPageUsed = 0;
+            remainingPageSpace = A4_BUDGET;
+          }
+        }
+
+        // Rule 6 & 7: Multi-page Day Splitting & Continuation
+        if (totalDayHeight > A4_BUDGET) {
+          let accumulatedH = dayHeaderH + summaryH;
+          let splitFound = false;
+
+          if (cardEls.length > 2) {
+            for (let c = 0; c < cardEls.length; c++) {
+              const cardH = cardEls[c].offsetHeight;
+              if (accumulatedH + cardH > remainingPageSpace && c >= 2) {
+                daySplitMap[index] = { type: "card", index: c };
+                remainingPageSpace = A4_BUDGET - (accumulatedH + cardH - remainingPageSpace);
+                splitFound = true;
+                break;
+              }
+              accumulatedH += cardH;
+            }
+          }
+
+          if (!splitFound && actEls.length > 2) {
+            accumulatedH = dayHeaderH + summaryH;
+            for (let a = 0; a < actEls.length; a++) {
+              const actH = actEls[a].offsetHeight;
+              if (accumulatedH + actH > remainingPageSpace && a >= 2) {
+                daySplitMap[index] = { type: "activity", index: a };
+                remainingPageSpace = A4_BUDGET - (accumulatedH + actH - remainingPageSpace);
+                splitFound = true;
+                break;
+              }
+              accumulatedH += actH;
+            }
+          }
+
+          if (!splitFound) {
+            currentPageUsed = (currentPageUsed + totalDayHeight) % A4_BUDGET;
+            remainingPageSpace = A4_BUDGET - currentPageUsed;
+          }
+        } else {
+          currentPageUsed = (currentPageUsed + totalDayHeight) % A4_BUDGET;
+          remainingPageSpace = A4_BUDGET - currentPageUsed;
+        }
+      });
+
+      setPagination({ headingBreakBefore, dayBreakBefore, daySplitMap });
+    };
+
+    const timer = setTimeout(computePagination, 250);
+    window.addEventListener("resize", computePagination);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("resize", computePagination);
+    };
+  }, [containerRef, itin]);
+
+  return pagination;
 }
 
 function FlightRow({ leg, label }: { leg: any; label: string }) {
@@ -110,7 +257,7 @@ function FlightRow({ leg, label }: { leg: any; label: string }) {
 }
 
 export default function ItineraryPDFPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);   // Next.js 15: params is a Promise
+  const { id } = use(params);
   const [itin, setItin] = useState<any>(null);
   const [me, setMe] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -119,9 +266,10 @@ export default function ItineraryPDFPage({ params }: { params: Promise<{ id: str
 
   useEffect(() => {
     itineraryApi.get(Number(id)).then(setItin).catch(console.error).finally(() => setLoading(false));
-    // Best-effort — agency branding falls back when unavailable
     authApi.me().then(setMe).catch(() => {});
   }, [id]);
+
+  const pagination = usePdfPagination(printRef, itin);
 
   function handlePrint() {
     window.print();
@@ -135,8 +283,6 @@ export default function ItineraryPDFPage({ params }: { params: Promise<{ id: str
   const flights = itin.flights || {};
   const meals = itin.meals_summary || {};
 
-  // Agency branding shown at the top (cover) and bottom (footer) of the
-  // exported/shared document — text "TripPilot" is hidden per configuration.
   const rawAgencyName = itin.agency_name || me?.agency_name;
   const agencyName = (rawAgencyName && rawAgencyName.trim().toLowerCase() !== "trippilot") ? rawAgencyName.trim() : "";
   const agencyLogoSrc = resolveAssetUrl(itin.logo_url || me?.logo_url);
@@ -169,7 +315,7 @@ export default function ItineraryPDFPage({ params }: { params: Promise<{ id: str
       <div ref={printRef} style={{ maxWidth: 860, margin: "0 auto", fontFamily: "'Inter', sans-serif", color: "#1a1a1a", padding: "0 20px 60px" }}>
 
         {/* ══════ COVER PAGE ══════ */}
-        <div style={{
+        <div data-pdf-section="cover" style={{
           minHeight: "55vh", 
           background: itin.cover_image_url ? `url(${getFallbackImage(itin.cover_image_url, itin.title)}) center/cover no-repeat` : "#f8fafc",
           borderRadius: 24, marginBottom: 36, marginTop: 24,
@@ -182,13 +328,11 @@ export default function ItineraryPDFPage({ params }: { params: Promise<{ id: str
           
           {!itin.cover_image_url && (
             <>
-              {/* Decorative shapes */}
               <div style={{ position: "absolute", top: -60, right: -60, width: 300, height: 300, borderRadius: "50%", background: BRAND + "10" }} />
               <div style={{ position: "absolute", top: 60, right: 60, width: 150, height: 150, borderRadius: "50%", background: BRAND + "15" }} />
             </>
           )}
           
-          {/* Agency branding — only shown when valid agency name or logo is present */}
           {hasAgencyBranding && (
             <div style={{ position: "absolute", top: 36, left: 48, display: "flex", alignItems: "center", gap: 10, zIndex: 10 }}>
               {agencyLogoSrc && !imgError ? (
@@ -208,7 +352,6 @@ export default function ItineraryPDFPage({ params }: { params: Promise<{ id: str
             </div>
           )}
 
-          {/* Content */}
           <div style={{ color: itin.cover_image_url ? "white" : DARK, zIndex: 10 }}>
             <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: itin.cover_image_url ? "white" : BRAND, marginBottom: 12, opacity: 0.9 }}>
               {itin.destination || "Your Destination"} · {itin.total_days || "—"}D{itin.total_nights || ""}N
@@ -219,7 +362,6 @@ export default function ItineraryPDFPage({ params }: { params: Promise<{ id: str
             <p style={{ fontSize: 18, color: itin.cover_image_url ? "rgba(255,255,255,0.9)" : "#64748b", margin: "0 0 24px", fontWeight: 500, textShadow: itin.cover_image_url ? "0 1px 4px rgba(0,0,0,0.5)" : "none" }}>
               {itin.cover_subheading || "Your personalized travel experience"}
             </p>
-            {/* Tags */}
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               {itin.num_travellers && (
                 <div style={{ background: itin.cover_image_url ? "rgba(255,255,255,0.2)" : "white", color: itin.cover_image_url ? "white" : DARK, border: itin.cover_image_url ? "1px solid rgba(255,255,255,0.3)" : "1px solid #e2e8f0", borderRadius: 30, padding: "6px 16px", fontSize: 13, fontWeight: 600, backdropFilter: "blur(4px)" }}>
@@ -242,7 +384,7 @@ export default function ItineraryPDFPage({ params }: { params: Promise<{ id: str
 
         {/* ══════ FLIGHTS ══════ */}
         {isSectionVisible(itin, "flights") && (flights.onward?.from || flights.return?.from) && (
-          <section style={{ marginBottom: 36 }}>
+          <section data-pdf-section="preceding" style={{ marginBottom: 36 }}>
             <h2 style={{ fontSize: 20, fontWeight: 800, color: DARK, borderBottom: `3px solid ${BRAND}`, paddingBottom: 8, marginBottom: 16 }}>
               ✈️ Flight Details
             </h2>
@@ -264,18 +406,28 @@ export default function ItineraryPDFPage({ params }: { params: Promise<{ id: str
           </section>
         )}
 
-        {/* ══════ SUMMARY (top placement) ══════ */}
-        <PdfSummarySection itin={itin} />
+        {/* ══════ SUMMARY ══════ */}
+        <div data-pdf-section="preceding">
+          <PdfSummarySection itin={itin} />
+        </div>
 
         {/* ══════ PACKAGE PRICING TABLE ══════ */}
-        {isSectionVisible(itin, "pricing") && <PdfPackagePricing stayOptions={itin.stay_options || []} />}
+        {isSectionVisible(itin, "pricing") && (
+          <div data-pdf-section="preceding">
+            <PdfPackagePricing stayOptions={itin.stay_options || []} />
+          </div>
+        )}
 
         {/* ══════ MEAL ══════ */}
-        {isSectionVisible(itin, "meals") && <PdfMeal meals={meals} />}
+        {isSectionVisible(itin, "meals") && (
+          <div data-pdf-section="preceding">
+            <PdfMeal meals={meals} />
+          </div>
+        )}
 
         {/* ══════ HOTEL STAY ══════ */}
         {isSectionVisible(itin, "stay") && stays.length > 0 && (
-          <section style={{ marginBottom: 36 }}>
+          <section data-pdf-section="preceding" style={{ marginBottom: 36 }}>
             <h2 style={{ fontSize: 20, fontWeight: 800, color: DARK, borderBottom: `3px solid ${BRAND}`, paddingBottom: 8, marginBottom: 16 }}>
               🏨 Premium Stay
             </h2>
@@ -322,124 +474,185 @@ export default function ItineraryPDFPage({ params }: { params: Promise<{ id: str
         {/* ══════ DAY-BY-DAY ══════ */}
         {days.length > 0 && (
           <section style={{ marginBottom: 36 }}>
-            <h2 style={{ fontSize: 20, fontWeight: 800, color: DARK, borderBottom: `3px solid ${BRAND}`, paddingBottom: 8, marginBottom: 20, breakAfter: "avoid", pageBreakAfter: "avoid" }}>
+            <h2
+              data-pdf-section="itinerary-heading"
+              className={pagination.headingBreakBefore ? "pdf-page-break-before" : ""}
+              style={{
+                fontSize: 20, fontWeight: 800, color: DARK,
+                borderBottom: `3px solid ${BRAND}`, paddingBottom: 8, marginBottom: 20,
+                breakAfter: "avoid", pageBreakAfter: "avoid"
+              }}
+            >
               📅 Day-by-Day Itinerary
             </h2>
-            {days.map((day: any, i: number) => (
-              <div
-                key={i}
-                className="itinerary-day-block"
-                style={{
-                  marginBottom: 24,
-                  breakInside: "avoid",
-                  pageBreakInside: "avoid",
-                  breakBefore: "auto",
-                  pageBreakBefore: "auto",
-                  display: "block"
-                }}
-              >
-                <div style={{ display: "flex", gap: 20 }}>
-                  {/* Day number */}
-                  <div style={{ flexShrink: 0, textAlign: "center" }}>
-                    <div style={{
-                      width: 48, height: 48, borderRadius: "50%",
-                      background: BRAND, color: "white",
-                      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                      fontWeight: 900, lineHeight: 1,
-                    }}>
-                      <span style={{ fontSize: 10, fontWeight: 600, opacity: .8 }}>DAY</span>
-                      <span style={{ fontSize: 18 }}>{day.day || i + 1}</span>
+            {days.map((day: any, i: number) => {
+              const isBreakBefore = Boolean(pagination.dayBreakBefore[i]);
+              const splitInfo = pagination.daySplitMap[i];
+
+              return (
+                <div
+                  key={i}
+                  data-pdf-day={i}
+                  className={`itinerary-day-block ${isBreakBefore ? "pdf-page-break-before" : ""}`}
+                  style={{
+                    marginBottom: 24,
+                    breakInside: splitInfo ? "auto" : "avoid",
+                    pageBreakInside: splitInfo ? "auto" : "avoid",
+                    breakBefore: isBreakBefore ? "page" : "auto",
+                    pageBreakBefore: isBreakBefore ? "always" : "auto",
+                    display: "block"
+                  }}
+                >
+                  <div style={{ display: "flex", gap: 20 }}>
+                    {/* Day number badge */}
+                    <div style={{ flexShrink: 0, textAlign: "center" }}>
+                      <div style={{
+                        width: 48, height: 48, borderRadius: "50%",
+                        background: BRAND, color: "white",
+                        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                        fontWeight: 900, lineHeight: 1,
+                      }}>
+                        <span style={{ fontSize: 10, fontWeight: 600, opacity: .8 }}>DAY</span>
+                        <span style={{ fontSize: 18 }}>{day.day || i + 1}</span>
+                      </div>
+                      {i < days.length - 1 && (
+                        <div style={{ width: 2, height: 30, background: BRAND + "30", margin: "6px auto" }} />
+                      )}
                     </div>
-                    {i < days.length - 1 && (
-                      <div style={{ width: 2, height: 30, background: BRAND + "30", margin: "6px auto" }} />
-                    )}
-                  </div>
-                  {/* Content */}
-                  <div style={{ flex: 1, paddingTop: 4 }}>
-                    {/* 1. Day Header & 2. Destination */}
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-                      <div>
-                        <div style={{ fontWeight: 800, fontSize: 17, color: DARK }}>{day.city || `Day ${i + 1}`}</div>
+                    {/* Day Content */}
+                    <div style={{ flex: 1, paddingTop: 4 }}>
+                      {/* 1. Day Header & 2. Destination */}
+                      <div data-pdf-part="header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                        <div>
+                          <div style={{ fontWeight: 800, fontSize: 17, color: DARK }}>{day.city || `Day ${i + 1}`}</div>
+                        </div>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          {day.date && <span style={{ fontSize: 11, color: "#888", border: "1px solid #ddd", borderRadius: 20, padding: "2px 10px" }}>{formatDate(day.date)}</span>}
+                          {day.tour_type && <span style={{ fontSize: 11, background: BRAND + "15", color: BRAND, borderRadius: 20, padding: "2px 10px", fontWeight: 600 }}>{day.tour_type}</span>}
+                        </div>
                       </div>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        {day.date && <span style={{ fontSize: 11, color: "#888", border: "1px solid #ddd", borderRadius: 20, padding: "2px 10px" }}>{formatDate(day.date)}</span>}
-                        {day.tour_type && <span style={{ fontSize: 11, background: BRAND + "15", color: BRAND, borderRadius: 20, padding: "2px 10px", fontWeight: 600 }}>{day.tour_type}</span>}
-                      </div>
-                    </div>
 
-                    {/* 3. Meals */}
-                    {(day.meals?.breakfast || day.meals?.lunch || day.meals?.dinner) && (
-                      <div style={{ marginBottom: 8, fontSize: 12, color: "#666", display: "flex", gap: 8, alignItems: "center" }}>
-                        <span style={{ fontWeight: 600 }}>Meals:</span>
-                        {day.meals.breakfast && <span>🍳 Breakfast</span>}
-                        {day.meals.lunch && <span>🍽️ Lunch</span>}
-                        {day.meals.dinner && <span>🌙 Dinner</span>}
-                      </div>
-                    )}
+                      {/* 3. Meals */}
+                      {(day.meals?.breakfast || day.meals?.lunch || day.meals?.dinner) && (
+                        <div style={{ marginBottom: 8, fontSize: 12, color: "#666", display: "flex", gap: 8, alignItems: "center" }}>
+                          <span style={{ fontWeight: 600 }}>Meals:</span>
+                          {day.meals.breakfast && <span>🍳 Breakfast</span>}
+                          {day.meals.lunch && <span>🍽️ Lunch</span>}
+                          {day.meals.dinner && <span>🌙 Dinner</span>}
+                        </div>
+                      )}
 
-                    {/* 4. Description */}
-                    {day.summary && <div style={{ fontSize: 13, color: "#555", marginBottom: 12, lineHeight: 1.5 }}>{day.summary}</div>}
+                      {/* 4. Description */}
+                      {day.summary && <div data-pdf-part="summary" style={{ fontSize: 13, color: "#555", marginBottom: 12, lineHeight: 1.5 }}>{day.summary}</div>}
 
-                    {/* 5. Sightseeing */}
-                    {(day.places || []).length > 0 && (
-                      <div style={{ marginTop: 12, marginBottom: 12, display: "flex", flexDirection: "column", gap: 16 }}>
-                        {(day.places || []).map((p: any, pi: number) => (
-                          <div key={pi} className="sightseeing-card" style={{ border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden", breakInside: "avoid", pageBreakInside: "avoid", WebkitColumnBreakInside: "avoid", background: "white" }}>
-                            {p.image_url && (
-                              <div style={{ height: 180, background: "#f8fafc", position: "relative" }}>
-                                <img src={getFallbackImage(p.image_url, p.name)} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={(e) => { const t = e.currentTarget; const fb = "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=800&q=80"; if (t.src !== fb) t.src = fb; }} />
-                                <div style={{ position: "absolute", top: 12, left: 12, background: "white", padding: "3px 8px", borderRadius: 12, fontSize: 10, fontWeight: 700, color: "#334155", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
-                                  📍 Sightseeing
+                      {/* 5. Sightseeing Cards */}
+                      {(day.places || []).length > 0 && (
+                        <div style={{ marginTop: 12, marginBottom: 12, display: "flex", flexDirection: "column", gap: 16 }}>
+                          {(day.places || []).map((p: any, pi: number) => (
+                            <div key={pi}>
+                              {/* Day Continuation Header when splitting */}
+                              {splitInfo?.type === "card" && pi === splitInfo.index && (
+                                <div
+                                  className="pdf-page-break-before"
+                                  style={{
+                                    padding: "8px 14px",
+                                    marginBottom: 16,
+                                    background: BRAND + "15",
+                                    border: `1px solid ${BRAND}40`,
+                                    borderRadius: 10,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 8,
+                                    fontWeight: 700,
+                                    fontSize: 13,
+                                    color: BRAND,
+                                  }}
+                                >
+                                  <span>📅</span> DAY {day.day || i + 1} (Continued)
+                                  {day.city && <span style={{ color: "#666", fontWeight: 500, fontSize: 12 }}>· {day.city}</span>}
+                                </div>
+                              )}
+                              <div data-pdf-part="card" className="sightseeing-card" style={{ border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden", breakInside: "avoid", pageBreakInside: "avoid", background: "white" }}>
+                                {p.image_url && (
+                                  <div style={{ height: 180, background: "#f8fafc", position: "relative" }}>
+                                    <img src={getFallbackImage(p.image_url, p.name)} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={(e) => { const t = e.currentTarget; const fb = "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=800&q=80"; if (t.src !== fb) t.src = fb; }} />
+                                    <div style={{ position: "absolute", top: 12, left: 12, background: "white", padding: "3px 8px", borderRadius: 12, fontSize: 10, fontWeight: 700, color: "#334155", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
+                                      📍 Sightseeing
+                                    </div>
+                                  </div>
+                                )}
+                                <div style={{ padding: "14px", background: "white" }}>
+                                  <div style={{ fontWeight: 800, fontSize: 15, color: DARK, marginBottom: 6 }}>{p.name}</div>
+                                  {p.description && <div style={{ fontSize: 12.5, color: "#475569", lineHeight: 1.5 }}>{p.description}</div>}
                                 </div>
                               </div>
-                            )}
-                            <div style={{ padding: "14px", background: "white" }}>
-                              <div style={{ fontWeight: 800, fontSize: 15, color: DARK, marginBottom: 6 }}>{p.name}</div>
-                              {p.description && <div style={{ fontSize: 12.5, color: "#475569", lineHeight: 1.5 }}>{p.description}</div>}
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                          ))}
+                        </div>
+                      )}
 
-                    {/* 6. Hotel */}
-                    {(day.hotel || day.hotel_name || day.stay) && (
-                      <div style={{ marginTop: 10, marginBottom: 10, fontSize: 12.5, color: "#334155", background: "#f8fafc", padding: "8px 12px", borderRadius: 8, border: "1px solid #e2e8f0" }}>
-                        🏨 <strong>Hotel:</strong> {day.hotel || day.hotel_name || day.stay}
-                      </div>
-                    )}
+                      {/* 6. Hotel */}
+                      {(day.hotel || day.hotel_name || day.stay) && (
+                        <div style={{ marginTop: 10, marginBottom: 10, fontSize: 12.5, color: "#334155", background: "#f8fafc", padding: "8px 12px", borderRadius: 8, border: "1px solid #e2e8f0" }}>
+                          🏨 <strong>Hotel:</strong> {day.hotel || day.hotel_name || day.stay}
+                        </div>
+                      )}
 
-                    {/* 7. Transfers / Activities */}
-                    {((day.activities || []).filter(Boolean).length > 0 || day.transfers) && (
-                      <div style={{ marginTop: 10, marginBottom: 10 }}>
-                        {day.transfers && (
-                          <div style={{ fontSize: 12.5, color: "#334155", marginBottom: 6 }}>
-                            🚗 <strong>Transfers:</strong> {day.transfers}
-                          </div>
-                        )}
-                        {(day.activities || []).filter(Boolean).length > 0 && (
-                          <ul style={{ margin: "6px 0 0", padding: 0, listStyle: "none" }}>
-                            {(day.activities || []).filter(Boolean).map((act: string, ai: number) => (
-                              <li key={ai} style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13, marginBottom: 5, color: "#333" }}>
-                                <span style={{ color: BRAND, fontWeight: 700, flexShrink: 0 }}>›</span>
-                                {act}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                    )}
+                      {/* 7. Transfers / Activities */}
+                      {((day.activities || []).filter(Boolean).length > 0 || day.transfers) && (
+                        <div style={{ marginTop: 10, marginBottom: 10 }}>
+                          {day.transfers && (
+                            <div style={{ fontSize: 12.5, color: "#334155", marginBottom: 6 }}>
+                              🚗 <strong>Transfers:</strong> {day.transfers}
+                            </div>
+                          )}
+                          {(day.activities || []).filter(Boolean).length > 0 && (
+                            <ul style={{ margin: "6px 0 0", padding: 0, listStyle: "none" }}>
+                              {(day.activities || []).filter(Boolean).map((act: string, ai: number) => (
+                                <li key={ai} data-pdf-part="activity">
+                                  {splitInfo?.type === "activity" && ai === splitInfo.index && (
+                                    <div
+                                      className="pdf-page-break-before"
+                                      style={{
+                                        padding: "8px 14px",
+                                        marginBottom: 16,
+                                        background: BRAND + "15",
+                                        border: `1px solid ${BRAND}40`,
+                                        borderRadius: 10,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 8,
+                                        fontWeight: 700,
+                                        fontSize: 13,
+                                        color: BRAND,
+                                      }}
+                                    >
+                                      <span>📅</span> DAY {day.day || i + 1} (Continued)
+                                      {day.city && <span style={{ color: "#666", fontWeight: 500, fontSize: 12 }}>· {day.city}</span>}
+                                    </div>
+                                  )}
+                                  <div style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13, marginBottom: 5, color: "#333" }}>
+                                    <span style={{ color: BRAND, fontWeight: 700, flexShrink: 0 }}>›</span>
+                                    {act}
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      )}
 
-                    {/* 8. Notes */}
-                    {day.notes && (
-                      <div style={{ marginTop: 10, fontSize: 12, color: "#64748b", fontStyle: "italic", background: "#fffbeb", padding: "8px 12px", borderRadius: 8, border: "1px solid #fef3c7" }}>
-                        📌 <strong>Note:</strong> {day.notes}
-                      </div>
-                    )}
+                      {/* 8. Notes */}
+                      {day.notes && (
+                        <div style={{ marginTop: 10, fontSize: 12, color: "#64748b", fontStyle: "italic", background: "#fffbeb", padding: "8px 12px", borderRadius: 8, border: "1px solid #fef3c7" }}>
+                          📌 <strong>Note:</strong> {day.notes}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </section>
         )}
 
@@ -490,6 +703,10 @@ export default function ItineraryPDFPage({ params }: { params: Promise<{ id: str
 
       {/* Print styles */}
       <style>{`
+        .pdf-page-break-before {
+          break-before: page !important;
+          page-break-before: always !important;
+        }
         @media print {
           .no-print { display: none !important; }
           body { background: white !important; }
@@ -500,11 +717,8 @@ export default function ItineraryPDFPage({ params }: { params: Promise<{ id: str
             color-adjust: exact !important;
           }
           .itinerary-day-block {
-            break-inside: avoid !important;
-            page-break-inside: avoid !important;
-            -webkit-column-break-inside: avoid !important;
-            break-before: auto !important;
-            page-break-before: auto !important;
+            break-before: auto;
+            page-break-before: auto;
             display: block !important;
             overflow: visible !important;
             box-shadow: none !important;
@@ -518,6 +732,8 @@ export default function ItineraryPDFPage({ params }: { params: Promise<{ id: str
           h1, h2, h3, h4 {
             break-after: avoid !important;
             page-break-after: avoid !important;
+            orphans: 3 !important;
+            widows: 3 !important;
           }
         }
       `}</style>
@@ -788,6 +1004,8 @@ function DarkTemplateView({ itin, me, printRef, handlePrint, id }: { itin: any; 
   const exclusionsList = bulletList(itin.exclusions);
   const paymentTermsList = bulletList(itin.payment_terms);
 
+  const pagination = usePdfPagination(printRef, itin);
+
   return (
     <div style={{ background: "#0a0e14", color: "#f0f4f8", minHeight: "100vh", fontFamily: "'Inter', sans-serif" }}>
       {/* Google Fonts */}
@@ -816,7 +1034,7 @@ function DarkTemplateView({ itin, me, printRef, handlePrint, id }: { itin: any; 
       <div ref={printRef} style={{ maxWidth: 1100, margin: "0 auto", padding: "0 24px 64px" }}>
         
         {/* ══════ HERO BANNER ══════ */}
-        <div style={{
+        <div data-pdf-section="cover" style={{
           minHeight: "75vh",
           background: itin.cover_image_url 
             ? `linear-gradient(rgba(10, 14, 20, 0.4) 0%, rgba(10, 14, 20, 0.95) 100%), url(${getFallbackImage(itin.cover_image_url, itin.title)}) center/cover no-repeat`
@@ -828,7 +1046,6 @@ function DarkTemplateView({ itin, me, printRef, handlePrint, id }: { itin: any; 
           border: "1px solid rgba(255, 255, 255, 0.08)",
           boxShadow: "0 10px 40px rgba(0,0,0,0.6)"
         }}>
-          {/* Agency Logo Pill */}
           {hasAgencyBranding && (
             <div style={{
               background: "rgba(255, 255, 255, 0.92)", borderRadius: 16, padding: "10px 24px",
@@ -843,12 +1060,10 @@ function DarkTemplateView({ itin, me, printRef, handlePrint, id }: { itin: any; 
             </div>
           )}
 
-          {/* Subtitle Badge */}
           <div style={{ color: "#d4af37", letterSpacing: "3px", textTransform: "uppercase", fontSize: "1.2rem", fontWeight: 600, marginBottom: 12, textShadow: "0 4px 10px rgba(0,0,0,0.5)" }}>
             {itin.destination ? `EXPLORE ${itin.destination.toUpperCase()}` : "CUSTOMER BROCHURE"}
           </div>
 
-          {/* Main Title */}
           <h1 style={{
             fontFamily: "Outfit, sans-serif", fontSize: "3.5rem", fontWeight: 800,
             letterSpacing: "6px", textTransform: "uppercase", margin: "0 0 16px",
@@ -859,12 +1074,10 @@ function DarkTemplateView({ itin, me, printRef, handlePrint, id }: { itin: any; 
             {itin.cover_title || itin.title || "TRAVEL ITINERARY"}
           </h1>
 
-          {/* Subheading */}
           <p style={{ color: "#a0aec0", fontSize: "1.25rem", maxWidth: 650, margin: "0 0 32px", lineHeight: 1.6 }}>
             {itin.cover_subheading || "An exclusive hand-crafted journey designed for an unforgettable travel experience."}
           </p>
 
-          {/* Hero Meta Pill */}
           <div style={{
             background: "rgba(26, 34, 44, 0.75)", backdropFilter: "blur(12px)",
             border: "1px solid rgba(255, 255, 255, 0.1)", borderRadius: 20,
@@ -976,11 +1189,11 @@ function DarkTemplateView({ itin, me, printRef, handlePrint, id }: { itin: any; 
           <div style={{ minWidth: 0 }}>
 
             {/* ══════ SUMMARY CARD ══════ */}
-            <div id="section-summary" style={{
+            <div data-pdf-section="preceding" id="section-summary" style={{
               scrollMarginTop: "100px",
               background: "#1a222c", border: "1px solid rgba(255, 255, 255, 0.08)",
               borderRadius: 20, padding: 32, marginBottom: 48, boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
-              breakInside: "avoid", pageBreakInside: "avoid", WebkitColumnBreakInside: "avoid", breakBefore: "auto"
+              breakInside: "avoid", pageBreakInside: "avoid", breakBefore: "auto"
             }}>
               <h2 style={{ fontFamily: "Outfit, sans-serif", fontSize: "1.8rem", fontWeight: 700, color: "#fff", marginBottom: 20, display: "flex", alignItems: "center", gap: 12 }}>
                 <span style={{ color: "#00b4d8" }}>⚡</span> Trip Highlights & Overview
@@ -1009,11 +1222,11 @@ function DarkTemplateView({ itin, me, printRef, handlePrint, id }: { itin: any; 
 
             {/* ══════ FLIGHTS ══════ */}
             {isSectionVisible(itin, "flights") && (flights.onward?.from || flights.return?.from) && (
-              <div id="section-flights" style={{
+              <div data-pdf-section="preceding" id="section-flights" style={{
                 scrollMarginTop: "100px",
                 background: "#1a222c", border: "1px solid rgba(255, 255, 255, 0.08)",
                 borderRadius: 20, padding: 32, marginBottom: 48, boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
-                breakInside: "avoid", pageBreakInside: "avoid", WebkitColumnBreakInside: "avoid", breakBefore: "auto"
+                breakInside: "avoid", pageBreakInside: "avoid", breakBefore: "auto"
               }}>
                 <h2 style={{ fontFamily: "Outfit, sans-serif", fontSize: "1.8rem", fontWeight: 700, color: "#fff", marginBottom: 20, display: "flex", alignItems: "center", gap: 12 }}>
                   <span style={{ color: "#00b4d8" }}>✈️</span> Flight Details
@@ -1056,7 +1269,7 @@ function DarkTemplateView({ itin, me, printRef, handlePrint, id }: { itin: any; 
 
             {/* ══════ PACKAGE PRICING CARDS ══════ */}
             {isSectionVisible(itin, "pricing") && stays.length > 0 && (
-              <div id="section-stays" style={{ scrollMarginTop: "100px", marginBottom: 48, breakInside: "avoid", pageBreakInside: "avoid", WebkitColumnBreakInside: "avoid", breakBefore: "auto" }}>
+              <div data-pdf-section="preceding" id="section-stays" style={{ scrollMarginTop: "100px", marginBottom: 48, breakInside: "avoid", pageBreakInside: "avoid", breakBefore: "auto" }}>
                 <h2 style={{ fontFamily: "Outfit, sans-serif", fontSize: "2rem", fontWeight: 700, color: "#fff", textAlign: "center", marginBottom: 8 }}>
                   Package Pricing Options
                 </h2>
@@ -1124,121 +1337,180 @@ function DarkTemplateView({ itin, me, printRef, handlePrint, id }: { itin: any; 
             {/* ══════ DAY BY DAY ITINERARY ══════ */}
             {days.length > 0 && (
               <div id="section-itinerary" style={{ scrollMarginTop: "100px", marginBottom: 48 }}>
-                <h2 style={{ fontFamily: "Outfit, sans-serif", fontSize: "2rem", fontWeight: 700, color: "#fff", marginBottom: 32, display: "flex", alignItems: "center", gap: 12 }}>
+                <h2
+                  data-pdf-section="itinerary-heading"
+                  className={pagination.headingBreakBefore ? "pdf-page-break-before" : ""}
+                  style={{ fontFamily: "Outfit, sans-serif", fontSize: "2rem", fontWeight: 700, color: "#fff", marginBottom: 32, display: "flex", alignItems: "center", gap: 12, breakAfter: "avoid", pageBreakAfter: "avoid" }}
+                >
                   <span style={{ color: "#00b4d8" }}>🗓️</span> Detailed Itinerary
                 </h2>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 36 }} className="itinerary-days-container">
-                  {days.map((day: any, i: number) => (
-                    <div
-                      key={i}
-                      id={`day-${day.day || i + 1}`}
-                      className="itinerary-day-block"
-                      style={{
-                        scrollMarginTop: "100px",
-                        background: "#1a222c", border: "1px solid rgba(255, 255, 255, 0.08)",
-                        borderRadius: 20, padding: 32, boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
-                        breakInside: "avoid", pageBreakInside: "avoid", WebkitColumnBreakInside: "avoid",
-                        breakBefore: "auto", pageBreakBefore: "auto", display: "block"
-                      }}
-                    >
-                      {/* 1. Day Header & 2. Destination & 3. Meals */}
-                      <div style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.08)", paddingBottom: 16, marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                          <span style={{
-                            background: "rgba(0, 180, 216, 0.12)", color: "#00b4d8",
-                            border: "1px solid rgba(0, 180, 216, 0.3)", borderRadius: 12,
-                            padding: "6px 14px", fontSize: 13, fontWeight: 700
-                          }}>
-                            DAY {day.day || i + 1}
-                          </span>
-                          <span style={{ fontSize: 14, color: "#a0aec0", display: "flex", alignItems: "center", gap: 4 }}>
-                            📍 {day.city || `Day ${i + 1}`}
-                          </span>
-                          {day.date && <span style={{ fontSize: 12, color: "#718096" }}>({formatDate(day.date)})</span>}
+                  {days.map((day: any, i: number) => {
+                    const isBreakBefore = Boolean(pagination.dayBreakBefore[i]);
+                    const splitInfo = pagination.daySplitMap[i];
+
+                    return (
+                      <div
+                        key={i}
+                        id={`day-${day.day || i + 1}`}
+                        data-pdf-day={i}
+                        className={`itinerary-day-block ${isBreakBefore ? "pdf-page-break-before" : ""}`}
+                        style={{
+                          scrollMarginTop: "100px",
+                          background: "#1a222c", border: "1px solid rgba(255, 255, 255, 0.08)",
+                          borderRadius: 20, padding: 32, boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+                          breakInside: splitInfo ? "auto" : "avoid",
+                          pageBreakInside: splitInfo ? "auto" : "avoid",
+                          breakBefore: isBreakBefore ? "page" : "auto",
+                          pageBreakBefore: isBreakBefore ? "always" : "auto",
+                          display: "block"
+                        }}
+                      >
+                        {/* 1. Day Header & 2. Destination & 3. Meals */}
+                        <div data-pdf-part="header" style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.08)", paddingBottom: 16, marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                            <span style={{
+                              background: "rgba(0, 180, 216, 0.12)", color: "#00b4d8",
+                              border: "1px solid rgba(0, 180, 216, 0.3)", borderRadius: 12,
+                              padding: "6px 14px", fontSize: 13, fontWeight: 700
+                            }}>
+                              DAY {day.day || i + 1}
+                            </span>
+                            <span style={{ fontSize: 14, color: "#a0aec0", display: "flex", alignItems: "center", gap: 4 }}>
+                              📍 {day.city || `Day ${i + 1}`}
+                            </span>
+                            {day.date && <span style={{ fontSize: 12, color: "#718096" }}>({formatDate(day.date)})</span>}
+                          </div>
+                          {(day.meals?.breakfast || day.meals?.lunch || day.meals?.dinner) && (
+                            <div style={{ color: "#d4af37", fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                              🍳 {[day.meals.breakfast && "Breakfast", day.meals.lunch && "Lunch", day.meals.dinner && "Dinner"].filter(Boolean).join(" · ")}
+                            </div>
+                          )}
                         </div>
-                        {(day.meals?.breakfast || day.meals?.lunch || day.meals?.dinner) && (
-                          <div style={{ color: "#d4af37", fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
-                            🍳 {[day.meals.breakfast && "Breakfast", day.meals.lunch && "Lunch", day.meals.dinner && "Dinner"].filter(Boolean).join(" · ")}
+
+                        {/* 4. Description (Summary) */}
+                        {day.summary && (
+                          <p data-pdf-part="summary" style={{ color: "#a0aec0", fontSize: "1.1rem", lineHeight: 1.7, marginBottom: 24 }}>
+                            {day.summary}
+                          </p>
+                        )}
+
+                        {/* 5. Sightseeing Places */}
+                        {(day.places || []).length > 0 && (
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16, marginBottom: 24 }}>
+                            {(day.places || []).map((p: any, pi: number) => (
+                              <div key={pi}>
+                                {splitInfo?.type === "card" && pi === splitInfo.index && (
+                                  <div
+                                    className="pdf-page-break-before"
+                                    style={{
+                                      padding: "10px 16px",
+                                      marginBottom: 16,
+                                      background: "rgba(0, 180, 216, 0.12)",
+                                      border: "1px solid rgba(0, 180, 216, 0.3)",
+                                      borderRadius: 12,
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: 8,
+                                      fontWeight: 700,
+                                      fontSize: 13,
+                                      color: "#00b4d8",
+                                    }}
+                                  >
+                                    <span>🗓️</span> DAY {day.day || i + 1} (Continued)
+                                    {day.city && <span style={{ color: "#a0aec0", fontWeight: 500, fontSize: 12 }}>· {day.city}</span>}
+                                  </div>
+                                )}
+                                <div data-pdf-part="card" className="sightseeing-card" style={{
+                                  background: "rgba(10, 14, 20, 0.6)", border: "1px solid rgba(255, 255, 255, 0.06)",
+                                  borderRadius: 14, overflow: "hidden",
+                                  breakInside: "avoid", pageBreakInside: "avoid"
+                                }}>
+                                  {p.image_url && (
+                                    <div style={{ height: 160, overflow: "hidden", position: "relative" }}>
+                                      <img
+                                        src={getFallbackImage(p.image_url, p.name)}
+                                        alt={p.name}
+                                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                        onError={(e) => { const t = e.currentTarget; const fb = "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=800&q=80"; if (t.src !== fb) t.src = fb; }}
+                                      />
+                                    </div>
+                                  )}
+                                  <div style={{ padding: 16 }}>
+                                    <div style={{ fontWeight: 700, fontSize: 15, color: "#fff", marginBottom: 6 }}>{p.name}</div>
+                                    {p.description && <div style={{ fontSize: 13, color: "#a0aec0", lineHeight: 1.5 }}>{p.description}</div>}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* 6. Hotel */}
+                        {(day.hotel || day.hotel_name || day.stay) && (
+                          <div style={{ marginBottom: 20, padding: 14, background: "rgba(10, 14, 20, 0.4)", borderRadius: 12, border: "1px solid rgba(255, 255, 255, 0.05)", fontSize: 14, color: "#e2e8f0" }}>
+                            🏨 <strong style={{ color: "#00b4d8" }}>Hotel:</strong> {day.hotel || day.hotel_name || day.stay}
+                          </div>
+                        )}
+
+                        {/* 7. Transfers / Activities */}
+                        {((day.activities || []).filter(Boolean).length > 0 || day.transfers) && (
+                          <div style={{ marginBottom: 20 }}>
+                            {day.transfers && (
+                              <div style={{ marginBottom: 12, fontSize: 14, color: "#e2e8f0" }}>
+                                🚗 <strong style={{ color: "#00b4d8" }}>Transfers:</strong> {day.transfers}
+                              </div>
+                            )}
+                            {(day.activities || []).filter(Boolean).length > 0 && (
+                              <div style={{ position: "relative", paddingLeft: 24 }}>
+                                <div style={{ position: "absolute", top: 4, bottom: 4, left: 7, width: 2, background: "rgba(255, 255, 255, 0.1)" }} />
+                                {(day.activities || []).filter(Boolean).map((act: string, ai: number) => (
+                                  <div key={ai} data-pdf-part="activity">
+                                    {splitInfo?.type === "activity" && ai === splitInfo.index && (
+                                      <div
+                                        className="pdf-page-break-before"
+                                        style={{
+                                          padding: "10px 16px",
+                                          marginBottom: 16,
+                                          background: "rgba(0, 180, 216, 0.12)",
+                                          border: "1px solid rgba(0, 180, 216, 0.3)",
+                                          borderRadius: 12,
+                                          display: "flex",
+                                          alignItems: "center",
+                                          gap: 8,
+                                          fontWeight: 700,
+                                          fontSize: 13,
+                                          color: "#00b4d8",
+                                        }}
+                                      >
+                                        <span>🗓️</span> DAY {day.day || i + 1} (Continued)
+                                        {day.city && <span style={{ color: "#a0aec0", fontWeight: 500, fontSize: 12 }}>· {day.city}</span>}
+                                      </div>
+                                    )}
+                                    <div style={{ position: "relative", marginBottom: 14 }}>
+                                      <div style={{
+                                        position: "absolute", left: -24, top: 4, width: 12, height: 12,
+                                        borderRadius: "50%", background: "#1a222c", border: "2px solid #00b4d8"
+                                      }} />
+                                      <div style={{ color: "#f0f4f8", fontSize: 14, lineHeight: 1.6 }}>{act}</div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* 8. Notes */}
+                        {day.notes && (
+                          <div style={{ padding: 12, background: "rgba(212, 175, 55, 0.08)", borderRadius: 10, border: "1px solid rgba(212, 175, 55, 0.2)", fontSize: 13, color: "#d4af37" }}>
+                            📌 <strong>Note:</strong> {day.notes}
                           </div>
                         )}
                       </div>
-
-                      {/* 4. Description (Summary) */}
-                      {day.summary && (
-                        <p style={{ color: "#a0aec0", fontSize: "1.1rem", lineHeight: 1.7, marginBottom: 24 }}>
-                          {day.summary}
-                        </p>
-                      )}
-
-                      {/* 5. Sightseeing Places */}
-                      {(day.places || []).length > 0 && (
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16, marginBottom: 24 }}>
-                          {(day.places || []).map((p: any, pi: number) => (
-                            <div key={pi} className="sightseeing-card" style={{
-                              background: "rgba(10, 14, 20, 0.6)", border: "1px solid rgba(255, 255, 255, 0.06)",
-                              borderRadius: 14, overflow: "hidden",
-                              breakInside: "avoid", pageBreakInside: "avoid", WebkitColumnBreakInside: "avoid"
-                            }}>
-                              {p.image_url && (
-                                <div style={{ height: 160, overflow: "hidden", position: "relative" }}>
-                                  <img
-                                    src={getFallbackImage(p.image_url, p.name)}
-                                    alt={p.name}
-                                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                                    onError={(e) => { const t = e.currentTarget; const fb = "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=800&q=80"; if (t.src !== fb) t.src = fb; }}
-                                  />
-                                </div>
-                              )}
-                              <div style={{ padding: 16 }}>
-                                <div style={{ fontWeight: 700, fontSize: 15, color: "#fff", marginBottom: 6 }}>{p.name}</div>
-                                {p.description && <div style={{ fontSize: 13, color: "#a0aec0", lineHeight: 1.5 }}>{p.description}</div>}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* 6. Hotel */}
-                      {(day.hotel || day.hotel_name || day.stay) && (
-                        <div style={{ marginBottom: 20, padding: 14, background: "rgba(10, 14, 20, 0.4)", borderRadius: 12, border: "1px solid rgba(255, 255, 255, 0.05)", fontSize: 14, color: "#e2e8f0" }}>
-                          🏨 <strong style={{ color: "#00b4d8" }}>Hotel:</strong> {day.hotel || day.hotel_name || day.stay}
-                        </div>
-                      )}
-
-                      {/* 7. Transfers / Activities */}
-                      {((day.activities || []).filter(Boolean).length > 0 || day.transfers) && (
-                        <div style={{ marginBottom: 20 }}>
-                          {day.transfers && (
-                            <div style={{ marginBottom: 12, fontSize: 14, color: "#e2e8f0" }}>
-                              🚗 <strong style={{ color: "#00b4d8" }}>Transfers:</strong> {day.transfers}
-                            </div>
-                          )}
-                          {(day.activities || []).filter(Boolean).length > 0 && (
-                            <div style={{ position: "relative", paddingLeft: 24 }}>
-                              <div style={{ position: "absolute", top: 4, bottom: 4, left: 7, width: 2, background: "rgba(255, 255, 255, 0.1)" }} />
-                              {(day.activities || []).filter(Boolean).map((act: string, ai: number) => (
-                                <div key={ai} style={{ position: "relative", marginBottom: 14 }}>
-                                  <div style={{
-                                    position: "absolute", left: -24, top: 4, width: 12, height: 12,
-                                    borderRadius: "50%", background: "#1a222c", border: "2px solid #00b4d8"
-                                  }} />
-                                  <div style={{ color: "#f0f4f8", fontSize: 14, lineHeight: 1.6 }}>{act}</div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* 8. Notes */}
-                      {day.notes && (
-                        <div style={{ padding: 12, background: "rgba(212, 175, 55, 0.08)", borderRadius: 10, border: "1px solid rgba(212, 175, 55, 0.2)", fontSize: 13, color: "#d4af37" }}>
-                          📌 <strong>Note:</strong> {day.notes}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -1249,10 +1521,9 @@ function DarkTemplateView({ itin, me, printRef, handlePrint, id }: { itin: any; 
                 scrollMarginTop: "100px",
                 background: "#1a222c", border: "1px solid rgba(255, 255, 255, 0.08)",
                 borderRadius: 20, padding: 32, marginBottom: 48, boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
-                breakInside: "avoid", pageBreakInside: "avoid", WebkitColumnBreakInside: "avoid", breakBefore: "auto"
+                breakInside: "avoid", pageBreakInside: "avoid", breakBefore: "auto"
               }}>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 32 }} className="dark-inc-grid">
-                  {/* Inclusions */}
                   {inclusionsList.length > 0 && (
                     <div>
                       <h3 style={{ fontFamily: "Outfit, sans-serif", fontSize: "1.4rem", fontWeight: 700, color: "#fff", marginBottom: 20, display: "flex", alignItems: "center", gap: 10 }}>
@@ -1272,7 +1543,6 @@ function DarkTemplateView({ itin, me, printRef, handlePrint, id }: { itin: any; 
                     </div>
                   )}
 
-                  {/* Exclusions */}
                   {exclusionsList.length > 0 && (
                     <div>
                       <h3 style={{ fontFamily: "Outfit, sans-serif", fontSize: "1.4rem", fontWeight: 700, color: "#fff", marginBottom: 20, display: "flex", alignItems: "center", gap: 10 }}>
@@ -1301,7 +1571,7 @@ function DarkTemplateView({ itin, me, printRef, handlePrint, id }: { itin: any; 
                 scrollMarginTop: "100px",
                 background: "rgba(0, 180, 216, 0.05)", border: "1px solid rgba(0, 180, 216, 0.2)",
                 borderRadius: 20, padding: 32, marginBottom: 48,
-                breakInside: "avoid", pageBreakInside: "avoid", WebkitColumnBreakInside: "avoid", breakBefore: "auto"
+                breakInside: "avoid", pageBreakInside: "avoid", breakBefore: "auto"
               }}>
                 <h2 style={{ fontFamily: "Outfit, sans-serif", fontSize: "1.6rem", fontWeight: 700, color: "#fff", marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
                   <span style={{ color: "#00b4d8" }}>📜</span> Payment Terms & Important Notes
@@ -1336,6 +1606,10 @@ function DarkTemplateView({ itin, me, printRef, handlePrint, id }: { itin: any; 
       </div>
 
       <style>{`
+        .pdf-page-break-before {
+          break-before: page !important;
+          page-break-before: always !important;
+        }
         @media (max-width: 768px) {
           .dark-layout-grid { grid-template-columns: 1fr !important; }
           .dark-inc-grid { grid-template-columns: 1fr !important; }
@@ -1357,11 +1631,8 @@ function DarkTemplateView({ itin, me, printRef, handlePrint, id }: { itin: any; 
             display: block !important;
           }
           .itinerary-day-block {
-            break-inside: avoid !important;
-            page-break-inside: avoid !important;
-            -webkit-column-break-inside: avoid !important;
-            break-before: auto !important;
-            page-break-before: auto !important;
+            break-before: auto;
+            page-break-before: auto;
             display: block !important;
             overflow: visible !important;
             box-shadow: none !important;
@@ -1383,10 +1654,11 @@ function DarkTemplateView({ itin, me, printRef, handlePrint, id }: { itin: any; 
           h1, h2, h3, h4 {
             break-after: avoid !important;
             page-break-after: avoid !important;
+            orphans: 3 !important;
+            widows: 3 !important;
           }
         }
       `}</style>
     </div>
   );
 }
-
