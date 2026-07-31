@@ -26,6 +26,7 @@ class HotelVoucher(Base):
     special_requests = Column(Text, nullable=True)
     extra_data = Column(JSON, nullable=True)
 
+    guest_name = Column(String(250), nullable=True)
     pdf_url = Column(String(500), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

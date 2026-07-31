@@ -28,6 +28,7 @@ def _log_voucher(db, voucher, current_user):
 class VoucherCreate(BaseModel):
     lead_id: Optional[int] = None
     customer_id: Optional[int] = None
+    guest_name: Optional[str] = None
     hotel_name: str
     hotel_stars: Optional[int] = None
     hotel_address: Optional[str] = None
@@ -45,6 +46,7 @@ class VoucherCreate(BaseModel):
 
 class VoucherOut(BaseModel):
     id: int
+    guest_name: Optional[str] = None
     hotel_name: str
     hotel_stars: Optional[int]
     hotel_address: Optional[str]
@@ -71,6 +73,7 @@ class AIVoucherInput(BaseModel):
     description: str
     lead_id: Optional[int] = None
     customer_id: Optional[int] = None
+    guest_name: Optional[str] = None
 
 
 class PaginatedVouchers(BaseModel):
@@ -91,18 +94,17 @@ def list_vouchers(
 ):
     q = db.query(HotelVoucher).filter(HotelVoucher.org_id == current_user.org_id)
     if lead_id is not None:
-        # Lead workspace: all vouchers attached to this lead in the org
         q = q.filter(HotelVoucher.lead_id == lead_id)
-    else:
-        q = q.filter(HotelVoucher.created_by == current_user.id)
 
     total = q.count()
     vouchers = q.order_by(HotelVoucher.created_at.desc()).offset((page - 1) * per_page).limit(per_page).all()
 
     items = []
     for v in vouchers:
+        cust_name = v.customer.name if v.customer else None
         d = {
             "id": v.id,
+            "guest_name": v.guest_name or cust_name,
             "hotel_name": v.hotel_name,
             "hotel_stars": v.hotel_stars,
             "hotel_address": v.hotel_address,
@@ -117,7 +119,7 @@ def list_vouchers(
             "extra_data": v.extra_data,
             "pdf_url": v.pdf_url,
             "customer_id": v.customer_id,
-            "customer_name": v.customer.name if v.customer else None,
+            "customer_name": cust_name,
             "customer_phone": v.customer.phone if v.customer else None,
             "created_at": v.created_at,
         }
@@ -139,13 +141,20 @@ def create_voucher(
     current_user: User = Depends(require_permission("vouchers", "write")),
 ):
     from app.api.pricing import check_plan_limit
+    from app.models.lead import Lead
     from fastapi import HTTPException
 
     allowed, error_msg, _, _ = check_plan_limit(db, current_user.org_id, "vouchers")
     if not allowed:
         raise HTTPException(status_code=403, detail=error_msg)
 
-    voucher = HotelVoucher(**payload.dict(), created_by=current_user.id, org_id=current_user.org_id)
+    data = payload.dict()
+    if not data.get("guest_name") and data.get("lead_id"):
+        lead = db.query(Lead).filter(Lead.id == data["lead_id"], Lead.org_id == current_user.org_id).first()
+        if lead and lead.customer:
+            data["guest_name"] = lead.customer.name
+
+    voucher = HotelVoucher(**data, created_by=current_user.id, org_id=current_user.org_id)
     db.add(voucher)
     db.commit()
     db.refresh(voucher)
@@ -216,10 +225,18 @@ async def ai_voucher(
         except Exception:
             return None
 
+    from app.models.lead import Lead
+    guest_name = payload.guest_name
+    if not guest_name and payload.lead_id:
+        lead = db.query(Lead).filter(Lead.id == payload.lead_id, Lead.org_id == current_user.org_id).first()
+        if lead and lead.customer:
+            guest_name = lead.customer.name
+
     voucher = HotelVoucher(
         org_id=current_user.org_id,
         lead_id=payload.lead_id,
         customer_id=payload.customer_id,
+        guest_name=guest_name,
         hotel_name=parsed.get("hotel_name") or "Unknown Hotel",
         hotel_stars=parsed.get("hotel_stars"),
         hotel_address=parsed.get("hotel_address"),

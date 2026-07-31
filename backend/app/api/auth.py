@@ -37,6 +37,7 @@ class UserOut(BaseModel):
     advisor_email: str | None = None
     agency_name: str | None = None
     agency_office_address: str | None = None
+    website: str | None = None
     agency_highlights: list | None = None
     logo_url: str | None = None
     gstin: str | None = None
@@ -104,6 +105,7 @@ def _user_with_permissions(user: User, db: Session = None) -> dict:
                 "advisor_email": org.advisor_email,
                 "agency_name": org.agency_name,
                 "agency_office_address": org.agency_office_address,
+                "website": org.website,
                 "agency_highlights": org.agency_highlights,
                 "logo_url": org.logo_url,
                 "gstin": org.gstin,
@@ -191,6 +193,7 @@ class UserUpdate(BaseModel):
     advisor_email: str | None = None
     agency_name: str | None = None
     agency_office_address: str | None = None
+    website: str | None = None
     agency_highlights: list | None = None
     logo_url: str | None = None
     gstin: str | None = None
@@ -243,6 +246,8 @@ def update_me(
             org.agency_name = payload.agency_name
         if payload.agency_office_address is not None:
             org.agency_office_address = payload.agency_office_address
+        if payload.website is not None:
+            org.website = payload.website
         if payload.agency_highlights is not None:
             org.agency_highlights = payload.agency_highlights
         if payload.logo_url is not None:

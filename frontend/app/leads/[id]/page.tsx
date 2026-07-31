@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar } from "@/components/ui/avatar";
 import { Spinner } from "@/components/ui/spinner";
-import { leadsApi, followupsApi, leadCostingApi, b2bPartnersApi, leadPaymentsApi } from "@/lib/api";
+import { leadsApi, followupsApi, leadCostingApi, b2bPartnersApi, leadPaymentsApi, vouchersApi, flightsApi } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/cn";
 import AddFollowupModal from "../AddFollowupModal";
@@ -276,6 +276,28 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
       fetchPayments();
     } catch (err) {
       console.error("Failed to delete payment:", err);
+    }
+  }
+
+  async function handleDeleteVoucher(voucherId: number) {
+    if (!confirm("Delete this voucher?")) return;
+    try {
+      await vouchersApi.delete(voucherId);
+      fetchWorkspace();
+      fetchActivities();
+    } catch (err) {
+      console.error("Failed to delete voucher:", err);
+    }
+  }
+
+  async function handleDeleteFlight(flightId: number) {
+    if (!confirm("Delete this flight ticket?")) return;
+    try {
+      await flightsApi.delete(flightId);
+      fetchWorkspace();
+      fetchActivities();
+    } catch (err) {
+      console.error("Failed to delete flight:", err);
     }
   }
 
@@ -603,7 +625,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
                   </Button>
                 )}
               </CardHeader>
-              <CardContent className={cn(workspace?.vouchers?.length ? "space-y-2.5" : "p-0")}>
+              <CardContent className="p-0">
                 {!workspace?.vouchers?.length ? (
                   <EmptyTab
                     icon={Hotel}
@@ -615,21 +637,61 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
                     ) : undefined}
                   />
                 ) : (
-                  workspace.vouchers.map((v: any) => (
-                    <Link key={v.id} href={`/vouchers/${v.id}`} className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3.5 hover:border-primary/50 hover:bg-muted/60 transition-colors">
-                      <div className="min-w-0">
-                        <p className="font-semibold text-sm truncate">{v.hotel_name || "Hotel voucher"}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {v.room_type || "—"}
-                          {v.check_in ? ` • ${fmtDate(v.check_in)}${v.check_out ? ` → ${fmtDate(v.check_out)}` : ""}` : ""}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-3 shrink-0">
-                        <span className="text-xs text-muted-foreground">{fmtDate(v.created_at)}</span>
-                        <ExternalLink className="h-4 w-4 text-muted-foreground" />
-                      </div>
-                    </Link>
-                  ))
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border bg-muted/50">
+                          <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Voucher No.</th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Guest Name</th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Hotel</th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Check-in</th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Check-out</th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Created</th>
+                          <th className="px-6 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {workspace.vouchers.map((v: any) => (
+                          <tr key={v.id} className="hover:bg-muted/50 transition-colors">
+                            <td className="px-6 py-4 font-mono text-xs font-semibold">
+                              {v.voucher_number || `VCH-${v.id.toString().padStart(5, '0')}`}
+                            </td>
+                            <td className="px-6 py-4 font-medium text-foreground">
+                              {v.guest_name || customer?.name || "—"}
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="font-semibold text-foreground">{v.hotel_name || "—"}</div>
+                              {v.room_type && <div className="text-xs text-muted-foreground">{v.room_type}</div>}
+                            </td>
+                            <td className="px-6 py-4 text-sm">{fmtDate(v.check_in)}</td>
+                            <td className="px-6 py-4 text-sm">{fmtDate(v.check_out)}</td>
+                            <td className="px-6 py-4">
+                              <Badge variant="success" className="bg-green-50 text-green-700 border-green-200">
+                                {v.status || "Confirmed"}
+                              </Badge>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-muted-foreground">{fmtDate(v.created_at)}</td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <Button variant="outline" size="sm" onClick={() => router.push(`/vouchers/${v.id}`)}>
+                                  {canVoucher ? "Edit" : "View"}
+                                </Button>
+                                <Button variant="outline" size="sm" onClick={() => router.push(`/vouchers/${v.id}/pdf`)}>
+                                  PDF
+                                </Button>
+                                {canVoucher && (
+                                  <Button variant="ghost" size="sm" onClick={() => handleDeleteVoucher(v.id)} className="text-destructive hover:text-destructive">
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -646,7 +708,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
                   </Button>
                 )}
               </CardHeader>
-              <CardContent className={cn(workspace?.flights?.length ? "space-y-2.5" : "p-0")}>
+              <CardContent className="p-0">
                 {!workspace?.flights?.length ? (
                   <EmptyTab
                     icon={Plane}
@@ -658,23 +720,59 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
                     ) : undefined}
                   />
                 ) : (
-                  workspace.flights.map((f: any) => (
-                    <Link key={f.id} href={`/flights/${f.id}/pdf`} className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3.5 hover:border-primary/50 hover:bg-muted/60 transition-colors">
-                      <div className="min-w-0">
-                        <p className="font-semibold text-sm truncate">
-                          {f.airline}{f.flight_number ? ` • ${f.flight_number}` : ""}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {[f.origin, f.destination].filter(Boolean).join(" → ") || "—"}
-                          {f.pnr ? ` • PNR ${f.pnr}` : ""}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-3 shrink-0">
-                        <span className="text-xs text-muted-foreground">{fmtDate(f.depart_at || f.created_at)}</span>
-                        <ExternalLink className="h-4 w-4 text-muted-foreground" />
-                      </div>
-                    </Link>
-                  ))
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border bg-muted/50">
+                          <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Airline / Flight</th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Route</th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Departure</th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">PNR</th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Created</th>
+                          <th className="px-6 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {workspace.flights.map((f: any) => (
+                          <tr key={f.id} className="hover:bg-muted/50 transition-colors">
+                            <td className="px-6 py-4">
+                              <div className="font-semibold text-foreground">{f.airline}</div>
+                              {f.flight_number && <div className="text-xs text-muted-foreground mt-0.5">{f.flight_number}</div>}
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="font-medium">
+                                {[f.origin, f.destination].filter(Boolean).join(" → ") || "—"}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-sm">{fmtDateTime(f.depart_at)}</td>
+                            <td className="px-6 py-4">
+                              {f.pnr ? (
+                                <code className="text-xs bg-muted px-2 py-0.5 rounded font-mono">{f.pnr}</code>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-muted-foreground">{fmtDate(f.created_at)}</td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <Button variant="outline" size="sm" onClick={() => router.push(`/flights/${f.id}`)}>
+                                  {canFlight ? "Edit" : "View"}
+                                </Button>
+                                <Button variant="outline" size="sm" onClick={() => router.push(`/flights/${f.id}/pdf`)}>
+                                  PDF
+                                </Button>
+                                {canFlight && (
+                                  <Button variant="ghost" size="sm" onClick={() => handleDeleteFlight(f.id)} className="text-destructive hover:text-destructive">
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </CardContent>
             </Card>

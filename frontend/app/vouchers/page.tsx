@@ -107,7 +107,10 @@ export default function VouchersList() {
                   <thead>
                     <tr className="border-b border-border bg-muted/50">
                       <th className="px-6 py-3 font-semibold text-left text-muted-foreground uppercase tracking-wide text-xs">
-                        Hotel
+                        Voucher / Hotel
+                      </th>
+                      <th className="px-6 py-3 font-semibold text-left text-muted-foreground uppercase tracking-wide text-xs">
+                        Guest Name
                       </th>
                       <th className="px-6 py-3 font-semibold text-left text-muted-foreground uppercase tracking-wide text-xs">
                         Guests & Rooms
@@ -130,8 +133,13 @@ export default function VouchersList() {
                           <div className="font-semibold text-foreground">
                             {v.hotel_name || "Unknown"}
                           </div>
-                          <div className="text-xs text-muted-foreground mt-1">
-                            {v.hotel_stars ? `${v.hotel_stars} Star` : "N/A"}
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            {`VCH-${v.id.toString().padStart(5, '0')}`} {v.hotel_stars ? `• ${v.hotel_stars} Star` : ""}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="font-medium text-foreground">
+                            {v.guest_name || v.customer_name || "—"}
                           </div>
                         </td>
                         <td className="px-6 py-4">

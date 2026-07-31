@@ -51,13 +51,23 @@ export default function VoucherEditPage({ params }: { params: Promise<{ id: stri
     }
   }
 
+  async function handleDelete() {
+    if (!confirm("Are you sure you want to delete this voucher?")) return;
+    try {
+      await vouchersApi.delete(Number(id));
+      router.push(voucher.lead_id ? `/leads/${voucher.lead_id}` : "/vouchers");
+    } catch {
+      alert("Failed to delete voucher.");
+    }
+  }
+
   const labelStyle: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: "#4b5563", marginBottom: 6, display: "block" };
 
   return (
     <AppShell title="Edit Voucher">
       {/* Top Bar */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
-        <button className="btn btn-ghost btn-sm" onClick={() => router.push("/vouchers")}>← Back</button>
+        <button className="btn btn-ghost btn-sm" onClick={() => router.push(voucher.lead_id ? `/leads/${voucher.lead_id}` : "/vouchers")}>← Back</button>
         <div style={{ fontWeight: 800, fontSize: 24, color: "#1a1a1a", flex: 1 }}>
           Edit Voucher: {voucher.hotel_name || "Unknown Hotel"}
         </div>
@@ -66,9 +76,14 @@ export default function VoucherEditPage({ params }: { params: Promise<{ id: stri
             📄 Preview PDF
           </button>
           {canWrite && (
-            <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving} style={{ background: BRAND, border: "none", color: "white" }}>
-              {saving ? "Saving…" : saved ? "✅ Saved!" : "💾 Save"}
-            </button>
+            <>
+              <button className="btn btn-ghost btn-sm" onClick={handleDelete} style={{ color: "#dc2626" }}>
+                🗑️ Delete
+              </button>
+              <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving} style={{ background: BRAND, border: "none", color: "white" }}>
+                {saving ? "Saving…" : saved ? "✅ Saved!" : "💾 Save"}
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -104,6 +119,10 @@ export default function VoucherEditPage({ params }: { params: Promise<{ id: stri
           </h3>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+            <div style={{ gridColumn: "span 2" }}>
+              <label style={labelStyle}>Guest Name (Primary Traveller)</label>
+              <input className="input w-full" value={voucher.guest_name || ""} onChange={(e) => u("guest_name", e.target.value)} placeholder="e.g. John Doe" disabled={!canWrite} />
+            </div>
             <div>
               <label style={labelStyle}>Check In</label>
               <input className="input w-full" type="date" value={voucher.check_in ? new Date(voucher.check_in).toISOString().split('T')[0] : ""} onChange={(e) => u("check_in", e.target.value)} disabled={!canWrite} />

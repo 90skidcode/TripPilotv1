@@ -341,10 +341,14 @@ def get_lead_workspace(
         "vouchers": [
             {
                 "id": v.id,
+                "voucher_number": f"VCH-{v.id:05d}",
+                "guest_name": v.guest_name or (lead.customer.name if lead and lead.customer else None),
                 "hotel_name": v.hotel_name,
+                "hotel_stars": v.hotel_stars,
                 "check_in": v.check_in,
                 "check_out": v.check_out,
                 "room_type": v.room_type,
+                "status": "Confirmed",
                 "pdf_url": v.pdf_url,
                 "created_at": v.created_at,
             }

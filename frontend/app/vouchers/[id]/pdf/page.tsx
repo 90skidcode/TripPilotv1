@@ -1,16 +1,19 @@
 "use client";
 
 import { useEffect, useState, use } from "react";
-import { vouchersApi } from "@/lib/api";
+import { vouchersApi, authApi, resolveAssetUrl } from "@/lib/api";
 
 const BRAND = "#2D9B7A";
 
 export default function VoucherPdfPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [voucher, setVoucher] = useState<any>(null);
+  const [me, setMe] = useState<any>(null);
+  const [imgError, setImgError] = useState(false);
 
   useEffect(() => {
     vouchersApi.get(Number(id)).then(setVoucher).catch(console.error);
+    authApi.me().then(setMe).catch(console.error);
   }, [id]);
 
   if (!voucher) return <div style={{ padding: 40, textAlign: "center", fontFamily: "sans-serif" }}>Loading PDF...</div>;
@@ -28,6 +31,15 @@ export default function VoucherPdfPage({ params }: { params: Promise<{ id: strin
     if (nights <= 0) return "";
     return `(${nights} Nights / ${nights + 1} Days)`;
   };
+
+  const agencyName = me?.agency_name?.trim() || "TripPilot Travel";
+  const agencyLogoSrc = resolveAssetUrl(me?.logo_url);
+  const agencyAddress = me?.agency_office_address;
+  const agencyPhone = me?.advisor_phone;
+  const agencyEmail = me?.advisor_email;
+  const agencyWebsite = me?.website;
+
+  const guestName = voucher.guest_name || voucher.customer_name || "Guest Name TBA";
 
   return (
     <div style={{ background: "#f1f5f9", minHeight: "100vh", padding: "40px 0", fontFamily: "'Inter', sans-serif" }}>
@@ -67,10 +79,20 @@ export default function VoucherPdfPage({ params }: { params: Promise<{ id: strin
           <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(0,0,0,0.2), rgba(0,0,0,0.7))" }}></div>
           <div style={{ position: "absolute", top: 30, left: 40, right: 40, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 40, height: 40, background: BRAND, color: "white", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 24 }}>
-                P
-              </div>
-              <div style={{ color: "white", fontWeight: 800, fontSize: 22, letterSpacing: "1px" }}>TripPilot</div>
+              {agencyLogoSrc && !imgError ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={agencyLogoSrc}
+                  alt={agencyName}
+                  style={{ height: 44, maxWidth: 160, objectFit: "contain", background: "white", borderRadius: 6, padding: 3 }}
+                  onError={() => setImgError(true)}
+                />
+              ) : (
+                <div style={{ width: 40, height: 40, background: BRAND, color: "white", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 24 }}>
+                  {agencyName.charAt(0).toUpperCase()}
+                </div>
+              )}
+              <div style={{ color: "white", fontWeight: 800, fontSize: 22, letterSpacing: "1px" }}>{agencyName}</div>
             </div>
             <div style={{ textAlign: "right", color: "white" }}>
               <div style={{ fontWeight: 800, fontSize: 24, textTransform: "uppercase", letterSpacing: "2px", opacity: 0.9 }}>
@@ -142,7 +164,7 @@ export default function VoucherPdfPage({ params }: { params: Promise<{ id: strin
                 <tbody>
                   <tr style={{ borderBottom: "1px solid #f1f5f9" }}>
                     <td style={{ padding: "8px 0", ...labelStyle, border: "none" }}>Primary Guest</td>
-                    <td style={{ padding: "8px 0", ...valStyle, textAlign: "right" }}>Guest Name TBA</td>
+                    <td style={{ padding: "8px 0", ...valStyle, textAlign: "right" }}>{guestName}</td>
                   </tr>
                   <tr style={{ borderBottom: "1px solid #f1f5f9" }}>
                     <td style={{ padding: "8px 0", ...labelStyle, border: "none" }}>Total Guests</td>
@@ -192,8 +214,10 @@ export default function VoucherPdfPage({ params }: { params: Promise<{ id: strin
         {/* Footer */}
         <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "#f8fafc", borderTop: "1px solid #e2e8f0", padding: "20px 40px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ fontSize: 12, color: "#64748b" }}>
-            <strong>TripPilot Travel Solutions</strong><br/>
-            hello@trippilot.com | +91 98765 43210
+            <strong>{agencyName}</strong>
+            {agencyAddress ? ` • ${agencyAddress}` : ""}
+            <br/>
+            {[agencyEmail, agencyPhone, agencyWebsite].filter(Boolean).join(" | ") || "hello@trippilot.com"}
           </div>
           <div style={{ fontSize: 11, color: "#94a3b8" }}>
             Page 1 of 1

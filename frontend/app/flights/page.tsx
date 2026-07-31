@@ -148,6 +148,13 @@ export default function FlightsList() {
                               >
                                 {canWrite ? "✏️ Edit" : "👁️ View"}
                               </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => router.push(`/flights/${f.id}/pdf`)}
+                              >
+                                📄 PDF
+                              </Button>
                               {canWrite && (
                                 <Button
                                   variant="ghost"

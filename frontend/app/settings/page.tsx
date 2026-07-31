@@ -40,6 +40,7 @@ export default function SettingsPage() {
   const [agencyName, setAgencyName] = useState("");
   const [agencyAddress, setAgencyAddress] = useState("");
   const [agencyGst, setAgencyGst] = useState("");
+  const [website, setWebsite] = useState("");
   const [bankHolder, setBankHolder] = useState("");
   const [bankAccount, setBankAccount] = useState("");
   const [bankName, setBankName] = useState("");
@@ -86,6 +87,7 @@ export default function SettingsPage() {
       setAgencyName(me.agency_name || "");
       setAgencyAddress(me.agency_office_address || "");
       setAgencyGst(me.gstin || "");
+      setWebsite(me.website || "");
       setBankHolder(me.bank_holder_name || "");
       setBankAccount(me.bank_account_number || "");
       setBankName(me.bank_name || "");
@@ -279,6 +281,7 @@ export default function SettingsPage() {
         agency_name: agencyName,
         agency_office_address: agencyAddress,
         gstin: agencyGst,
+        website: website,
         bank_holder_name: bankHolder,
         bank_account_number: bankAccount,
         bank_name: bankName,
@@ -727,7 +730,7 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="agencyName">Registered Agency Name</Label>
                       <Input
@@ -743,9 +746,18 @@ export default function SettingsPage() {
                       <Input
                         id="agencyGst"
                         type="text"
-                        required
                         value={agencyGst}
                         onChange={(e) => setAgencyGst(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="website">Agency Website</Label>
+                      <Input
+                        id="website"
+                        type="text"
+                        placeholder="https://..."
+                        value={website}
+                        onChange={(e) => setWebsite(e.target.value)}
                       />
                     </div>
                   </div>

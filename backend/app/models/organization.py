@@ -26,6 +26,7 @@ class Organization(Base):
     advisor_email = Column(String(255), nullable=True)
     agency_name = Column(String(300), nullable=True)
     agency_office_address = Column(Text, nullable=True)
+    website = Column(String(255), nullable=True)
     agency_highlights = Column(JSON, nullable=True)  # [{icon, label}, ...]
 
     # Tax + banking defaults, used to prefill invoices/vouchers per agency
