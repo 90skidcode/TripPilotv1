@@ -151,6 +151,23 @@ export default function ItineraryListPage() {
                         📄 PDF
                       </Link>
                     </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => {
+                        if (itin.share_token) {
+                          const link = `${window.location.origin}/share/${itin.share_token}`;
+                          navigator.clipboard.writeText(link);
+                          alert(`Client Share Link Copied!\n\n${link}`);
+                        } else {
+                          router.push(`/itinerary/${itin.id}`);
+                        }
+                      }}
+                      title="Copy public client share link"
+                    >
+                      🌐 Share
+                    </Button>
                     {canWrite && (
                       <Button
                         variant="ghost"

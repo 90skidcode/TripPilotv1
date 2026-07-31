@@ -265,7 +265,20 @@ export default function ItineraryPDFPage({ params }: { params: Promise<{ id: str
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    itineraryApi.get(Number(id)).then(setItin).catch(console.error).finally(() => setLoading(false));
+    itineraryApi
+      .get(Number(id))
+      .then(setItin)
+      .catch(() => {
+        itineraryApi
+          .getShareSettings(Number(id))
+          .then((settings) => {
+            if (settings?.share_token) {
+              window.location.href = `/share/${settings.share_token}`;
+            }
+          })
+          .catch(console.error);
+      })
+      .finally(() => setLoading(false));
     authApi.me().then(setMe).catch(() => {});
   }, [id]);
 
@@ -306,6 +319,18 @@ export default function ItineraryPDFPage({ params }: { params: Promise<{ id: str
           <button className="btn btn-ghost">← Edit Itinerary</button>
         </Link>
         <div style={{ flex: 1 }} />
+        {itin.share_token && (
+          <button
+            className="btn btn-outline"
+            onClick={() => {
+              const link = `${window.location.origin}/share/${itin.share_token}`;
+              navigator.clipboard.writeText(link);
+              alert(`Client Share Link Copied!\n\n${link}`);
+            }}
+          >
+            🌐 Copy Client Share Link
+          </button>
+        )}
         <button id="download-pdf-btn" className="btn btn-primary" onClick={handlePrint}>
           🖨️ Print / Download PDF
         </button>

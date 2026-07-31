@@ -333,10 +333,20 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
   const [chatCmd, setChatCmd] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [leftTab, setLeftTab] = useState<"overview" | "flights" | "stay" | "pricing" | "policies" | "advisor">("overview");
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareToken, setShareToken] = useState<string>("");
+  const [shareEnabled, setShareEnabled] = useState<boolean>(true);
+  const [copied, setCopied] = useState(false);
 
   const debounceRef = useRef<any>({});
 
-  useEffect(() => { itineraryApi.get(Number(id)).then(setItin).catch(console.error); }, [id]);
+  useEffect(() => {
+    itineraryApi.get(Number(id)).then((data) => {
+      setItin(data);
+      if (data.share_token) setShareToken(data.share_token);
+      if (data.share_enabled !== undefined) setShareEnabled(data.share_enabled);
+    }).catch(console.error);
+  }, [id]);
 
   if (!itin) return <AppShell title="Loading…"><div style={{ padding: 80, textAlign: "center" }}>⏳ Loading…</div></AppShell>;
 
@@ -689,15 +699,11 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
         <InlineText value={itin.title || ""} onChange={(v) => canWrite && u("title", v)} placeholder="Itinerary Title" style={{ fontWeight: 700, fontSize: 20, flex: 1, maxWidth: 500, opacity: canWrite ? 1 : 0.6 }} />
         <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
           <button
-            className="btn btn-outline btn-sm"
-            onClick={() => {
-              const shareUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/itinerary/${itin.id}/pdf`;
-              navigator.clipboard.writeText(shareUrl);
-              alert(`Share link copied! You can send this to your customer:\n\n${shareUrl}`);
-            }}
-            title="Copy shareable link"
+            className="btn btn-primary btn-sm"
+            onClick={() => setShowShareModal(true)}
+            style={{ background: "linear-gradient(90deg, #00b4d8, #0077b6)", border: "none", color: "white", fontWeight: 700 }}
           >
-            🔗 Share
+            🌐 Share Client Link
           </button>
           <button className="btn btn-outline btn-sm" onClick={() => router.push(`/itinerary/${itin.id}/pdf`)}>📄 PDF</button>
           {canWrite && (
@@ -707,6 +713,124 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
           )}
         </div>
       </div>
+
+      {/* ══════ SHARE MANAGEMENT MODAL ══════ */}
+      {showShareModal && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 1000,
+          background: "rgba(0, 0, 0, 0.6)", backdropFilter: "blur(4px)",
+          display: "flex", alignItems: "center", justifyContent: "center", padding: 16
+        }}>
+          <div style={{
+            background: "#ffffff", borderRadius: 20, width: "100%", maxWidth: 520,
+            padding: 28, boxShadow: "0 20px 40px rgba(0,0,0,0.2)", position: "relative"
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, borderBottom: "1px solid #f1f5f9", paddingBottom: 12 }}>
+              <div style={{ fontWeight: 800, fontSize: 18, color: "#0f172a", display: "flex", alignItems: "center", gap: 8 }}>
+                <span>🌐</span> Share Itinerary with Client
+              </div>
+              <button
+                onClick={() => setShowShareModal(false)}
+                style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "#64748b" }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Sharing Toggle */}
+            <div style={{ background: shareEnabled ? "#f0fdf4" : "#fef2f2", border: `1px solid ${shareEnabled ? "#bbf7d0" : "#fecaca"}`, borderRadius: 14, padding: 16, marginBottom: 20, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: shareEnabled ? "#166534" : "#991b1b" }}>
+                  {shareEnabled ? "🟢 Sharing Enabled" : "🔴 Sharing Disabled"}
+                </div>
+                <div style={{ fontSize: 12, color: shareEnabled ? "#15803d" : "#b91c1c", marginTop: 2 }}>
+                  {shareEnabled ? "Clients can view this itinerary brochure via the share link." : "The share link is currently disabled. Clients will see a private notice."}
+                </div>
+              </div>
+              {canWrite && (
+                <button
+                  onClick={async () => {
+                    try {
+                      const res = await itineraryApi.toggleShare(itin.id, !shareEnabled);
+                      setShareEnabled(res.share_enabled);
+                    } catch (e: any) {
+                      alert("Failed to toggle sharing: " + e.message);
+                    }
+                  }}
+                  className={`btn btn-sm ${shareEnabled ? "btn-outline" : "btn-primary"}`}
+                  style={{ fontSize: 12, fontWeight: 700 }}
+                >
+                  {shareEnabled ? "Disable Sharing" : "Enable Sharing"}
+                </button>
+              )}
+            </div>
+
+            {/* Secure Token Link Input */}
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#475569", marginBottom: 6 }}>
+                Secure Public Share Link (Random Token)
+              </label>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  className="input"
+                  readOnly
+                  value={shareToken ? `${typeof window !== "undefined" ? window.location.origin : ""}/share/${shareToken}` : "Generating token..."}
+                  style={{ fontSize: 13, flex: 1, background: "#f8fafc", color: "#0f172a", fontFamily: "monospace" }}
+                />
+                <button
+                  className="btn btn-primary btn-sm"
+                  disabled={!shareToken}
+                  onClick={() => {
+                    const link = `${window.location.origin}/share/${shareToken}`;
+                    navigator.clipboard.writeText(link);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                  style={{ whiteSpace: "nowrap" }}
+                >
+                  {copied ? "✅ Copied!" : "📋 Copy Link"}
+                </button>
+              </div>
+              <div style={{ fontSize: 11, color: "#64748b", marginTop: 6 }}>
+                🔒 Secure token protects your itinerary ID from being exposed.
+              </div>
+            </div>
+
+            {/* Actions: Open & Regenerate */}
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", borderTop: "1px solid #f1f5f9", paddingTop: 16 }}>
+              <a
+                href={shareToken ? `/share/${shareToken}` : "#"}
+                target="_blank"
+                rel="noreferrer"
+                className="btn btn-outline btn-sm"
+                style={{ flex: 1, textDecoration: "none", textAlign: "center", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+              >
+                👁️ Open Client View
+              </a>
+              {canWrite && (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  style={{ color: "#dc2626", border: "1px solid #fca5a5" }}
+                  onClick={async () => {
+                    if (confirm("Regenerating the link will revoke the old token. Anyone with the old link will no longer be able to view the itinerary. Continue?")) {
+                      try {
+                        const res = await itineraryApi.regenerateShareToken(itin.id);
+                        setShareToken(res.share_token);
+                        setShareEnabled(res.share_enabled);
+                        alert("A new secure share link has been generated!");
+                      } catch (e: any) {
+                        alert("Failed to regenerate token: " + e.message);
+                      }
+                    }
+                  }}
+                >
+                  🔄 Regenerate Link
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Split pane */}
       <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 20, alignItems: "start" }}>

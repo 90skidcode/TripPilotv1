@@ -8,7 +8,7 @@ import traceback
 from app.core.database import SessionLocal
 from app.core.security import hash_password
 from fastapi.staticfiles import StaticFiles
-from app.api import auth, leads, customers, itinerary, vouchers, invoices, inventory, dashboard, upload, followups, user_groups, superadmin, pricing, webhooks, chats, b2b_partners, lead_costing, flights, lead_partners, lead_payments, org_data, master_data
+from app.api import auth, leads, customers, itinerary, vouchers, invoices, inventory, dashboard, upload, followups, user_groups, superadmin, pricing, webhooks, chats, b2b_partners, lead_costing, flights, lead_partners, lead_payments, org_data, master_data, share
 from app.models import organization, user, lead, customer as customer_model, itinerary as itinerary_model, followup, inventory as inventory_model, user_group, message as message_model
 from app.models import b2b_partner as b2b_partner_model, lead_costing as lead_costing_model
 from app.models.pricing_plan import PricingPlan
@@ -287,6 +287,7 @@ app.include_router(customers.router,   prefix="/customers",    tags=["Customers"
 app.include_router(leads.router,       prefix="/leads",        tags=["Leads"])
 app.include_router(followups.router,                           tags=["Followups"])
 app.include_router(itinerary.router,   prefix="/itinerary",    tags=["Itinerary"])
+app.include_router(share.router,       prefix="/share",        tags=["Share"])
 app.include_router(vouchers.router,    prefix="/vouchers",     tags=["Vouchers"])
 app.include_router(flights.router,     prefix="/flights",      tags=["Flights"])
 app.include_router(invoices.router,    prefix="/invoices",     tags=["Invoices"])

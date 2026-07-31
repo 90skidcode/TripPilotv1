@@ -193,6 +193,10 @@ export const itineraryApi = {
     api.post<any>(`/itinerary/${id}/chat-edit`, { command }),
   imageSearch: (query: string, excludeUrl?: string | null) =>
     api.post<{ url: string }>("/itinerary/image-search", { query, exclude_url: excludeUrl || undefined }),
+  getPublicByToken: (token: string) => api.get<any>(`/share/${token}`),
+  getShareSettings: (id: number) => api.get<any>(`/itinerary/${id}/share-settings`),
+  toggleShare: (id: number, enabled: boolean) => api.post<any>(`/itinerary/${id}/share-toggle`, { enabled }),
+  regenerateShareToken: (id: number) => api.post<any>(`/itinerary/${id}/share-regenerate`, {}),
 };
 
 // ── Vouchers ──

@@ -54,6 +54,13 @@ class ItineraryCreate(BaseModel):
     section_visibility: Optional[Any] = None
 
 
+from app.services.share_service import ensure_share_token, generate_share_token
+
+
+class ShareTogglePayload(BaseModel):
+    enabled: bool
+
+
 class ItineraryOut(BaseModel):
     id: int
     title: str
@@ -85,6 +92,10 @@ class ItineraryOut(BaseModel):
     section_visibility: Optional[Any]
     share_url: Optional[str]
     pdf_url: Optional[str]
+    share_token: Optional[str] = None
+    is_public: Optional[bool] = False
+    share_enabled: Optional[bool] = True
+    share_expiry: Optional[datetime] = None
     created_at: datetime
 
     class Config:
@@ -110,7 +121,10 @@ def list_itineraries(
     else:
         # Default list: only the current user's itineraries
         q = q.filter(Itinerary.created_by == current_user.id)
-    return q.order_by(Itinerary.created_at.desc()).all()
+    items = q.order_by(Itinerary.created_at.desc()).all()
+    for itin in items:
+        ensure_share_token(db, itin)
+    return items
 
 
 @router.post("", response_model=ItineraryOut, status_code=201)
@@ -129,8 +143,75 @@ def create_itinerary(
     db.add(itin)
     db.commit()
     db.refresh(itin)
+    ensure_share_token(db, itin)
     _log_itinerary(db, itin, current_user)
     return itin
+
+
+@router.get("/{itin_id}/share-settings")
+def get_share_settings(
+    itin_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("itinerary", "read")),
+):
+    itin = db.query(Itinerary).filter(Itinerary.id == itin_id, Itinerary.org_id == current_user.org_id).first()
+    if not itin:
+        raise HTTPException(status_code=404, detail="Itinerary not found")
+
+    token = ensure_share_token(db, itin)
+    return {
+        "share_token": token,
+        "share_enabled": itin.share_enabled if itin.share_enabled is not None else True,
+        "is_public": itin.is_public or False,
+        "share_expiry": itin.share_expiry,
+    }
+
+
+@router.post("/{itin_id}/share-toggle")
+def toggle_share(
+    itin_id: int,
+    payload: ShareTogglePayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("itinerary", "write")),
+):
+    itin = db.query(Itinerary).filter(Itinerary.id == itin_id, Itinerary.org_id == current_user.org_id).first()
+    if not itin:
+        raise HTTPException(status_code=404, detail="Itinerary not found")
+
+    ensure_share_token(db, itin)
+    itin.share_enabled = payload.enabled
+    db.commit()
+    db.refresh(itin)
+    return {
+        "share_token": itin.share_token,
+        "share_enabled": itin.share_enabled,
+        "is_public": itin.is_public or False,
+        "share_expiry": itin.share_expiry,
+    }
+
+
+@router.post("/{itin_id}/share-regenerate")
+def regenerate_share_token(
+    itin_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("itinerary", "write")),
+):
+    itin = db.query(Itinerary).filter(Itinerary.id == itin_id, Itinerary.org_id == current_user.org_id).first()
+    if not itin:
+        raise HTTPException(status_code=404, detail="Itinerary not found")
+
+    token = generate_share_token(16)
+    while db.query(Itinerary).filter(Itinerary.share_token == token).first():
+        token = generate_share_token(16)
+    itin.share_token = token
+    db.commit()
+    db.refresh(itin)
+    return {
+        "share_token": itin.share_token,
+        "share_enabled": itin.share_enabled if itin.share_enabled is not None else True,
+        "is_public": itin.is_public or False,
+        "share_expiry": itin.share_expiry,
+    }
 
 
 @router.get("/{itin_id}", response_model=ItineraryOut)
@@ -138,6 +219,7 @@ def get_itinerary(itin_id: int, db: Session = Depends(get_db), current_user: Use
     itin = db.query(Itinerary).filter(Itinerary.id == itin_id, Itinerary.org_id == current_user.org_id).first()
     if not itin:
         raise HTTPException(status_code=404, detail="Itinerary not found")
+    ensure_share_token(db, itin)
     return itin
 
 

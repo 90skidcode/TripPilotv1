@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, JSON, DateTime, ForeignKey, func
+from sqlalchemy import Column, Integer, String, Text, JSON, DateTime, ForeignKey, Boolean, func
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -52,6 +52,13 @@ class Itinerary(Base):
 
     pdf_url = Column(String(500), nullable=True)
     share_url = Column(String(500), nullable=True)
+
+    # Public Share Architecture
+    share_token = Column(String(64), unique=True, index=True, nullable=True)
+    is_public = Column(Boolean, default=False, nullable=False)
+    share_enabled = Column(Boolean, default=True, nullable=False)
+    share_expiry = Column(DateTime(timezone=True), nullable=True)
+    share_password = Column(String(255), nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
