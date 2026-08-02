@@ -343,10 +343,39 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
   useEffect(() => {
     itineraryApi.get(Number(id)).then((data) => {
       setItin(data);
-      if (data.share_token) setShareToken(data.share_token);
+      if (data.share_token) {
+        setShareToken(data.share_token);
+      } else {
+        itineraryApi.getShareSettings(Number(id)).then((s) => {
+          if (s?.share_token) setShareToken(s.share_token);
+          if (s?.share_enabled !== undefined) setShareEnabled(s.share_enabled);
+        }).catch(console.error);
+      }
       if (data.share_enabled !== undefined) setShareEnabled(data.share_enabled);
     }).catch(console.error);
   }, [id]);
+
+  useEffect(() => {
+    if (showShareModal && itin?.id && !shareToken) {
+      itineraryApi.getShareSettings(itin.id).then((s) => {
+        if (s?.share_token) setShareToken(s.share_token);
+        if (s?.share_enabled !== undefined) setShareEnabled(s.share_enabled);
+      }).catch(console.error);
+    }
+  }, [showShareModal, itin?.id, shareToken]);
+
+  async function openShareModal() {
+    setShowShareModal(true);
+    if (itin?.id && !shareToken) {
+      try {
+        const s = await itineraryApi.getShareSettings(itin.id);
+        if (s?.share_token) setShareToken(s.share_token);
+        if (s?.share_enabled !== undefined) setShareEnabled(s.share_enabled);
+      } catch (e) {
+        console.error("Failed to load share settings:", e);
+      }
+    }
+  }
 
   if (!itin) return <AppShell title="Loading…"><div style={{ padding: 80, textAlign: "center" }}>⏳ Loading…</div></AppShell>;
 
@@ -700,7 +729,7 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
         <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
           <button
             className="btn btn-primary btn-sm"
-            onClick={() => setShowShareModal(true)}
+            onClick={openShareModal}
             style={{ background: "linear-gradient(90deg, #00b4d8, #0077b6)", border: "none", color: "white", fontWeight: 700 }}
           >
             🌐 Share Client Link

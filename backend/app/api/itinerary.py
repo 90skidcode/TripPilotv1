@@ -237,6 +237,7 @@ def update_itinerary(
         setattr(itin, field, value)
     db.commit()
     db.refresh(itin)
+    ensure_share_token(db, itin)
     return itin
 
 
@@ -298,6 +299,7 @@ async def generate_itinerary(
     db.add(itin)
     db.commit()
     db.refresh(itin)
+    ensure_share_token(db, itin)
     _log_itinerary(db, itin, current_user)
     return itin
 
@@ -395,4 +397,5 @@ async def chat_edit_itinerary(
 
     db.commit()
     db.refresh(itin)
+    ensure_share_token(db, itin)
     return itin
