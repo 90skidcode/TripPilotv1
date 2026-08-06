@@ -1331,10 +1331,6 @@ function DarkTemplateView({ itin, me, printRef, handlePrint, id }: { itin: any; 
                             {"★".repeat(Math.round(Number(s.google_rating) || 5))} <span style={{ color: "#a0aec0" }}>({s.google_rating} Star)</span>
                           </div>
                         )}
-                        <div style={{ fontFamily: "Outfit, sans-serif", fontSize: "2.4rem", fontWeight: 800, color: isPremium ? "#d4af37" : "#00b4d8", marginBottom: 16 }}>
-                          {s.total_cost ? fmtINR(s.total_cost) : (itin.package_cost ? fmtINR(itin.package_cost) : "On Request")}
-                          <span style={{ fontSize: 13, color: "#a0aec0", fontWeight: 400, marginLeft: 8 }}>/ total</span>
-                        </div>
                         <div style={{ height: 1, background: "rgba(255, 255, 255, 0.08)", margin: "20px 0" }} />
                         <ul style={{ listStyle: "none", padding: 0, margin: "0 0 24px", color: "#f0f4f8", fontSize: 14, display: "flex", flexDirection: "column", gap: 10 }}>
                           <li style={{ display: "flex", alignItems: "center", gap: 10 }}>
