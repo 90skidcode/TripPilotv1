@@ -1,5 +1,5 @@
 import enum
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Enum, Float, func
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Enum, Float, Boolean, func
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -45,6 +45,7 @@ class Lead(Base):
     notes = Column(Text, nullable=True)
     assigned_to = Column(Integer, ForeignKey("users.id"), nullable=True)
     b2b_partner_id = Column(Integer, ForeignKey("b2b_partners.id"), nullable=True)
+    is_deleted = Column(Boolean, default=False, nullable=False, server_default="0", index=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

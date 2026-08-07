@@ -135,7 +135,10 @@ def list_leads(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("leads", "read")),
 ):
-    q = db.query(Lead).filter(Lead.org_id == current_user.org_id)
+    q = db.query(Lead).filter(
+        Lead.org_id == current_user.org_id,
+        or_(Lead.is_deleted == False, Lead.is_deleted == None)
+    )
 
     # Agent data scoping: agents see only their own leads
     perms = current_user.group.permissions if current_user.group else {}
@@ -255,7 +258,7 @@ def get_today_reminders(
 
     leads_with_followups = (
         db.query(Lead)
-        .filter(Lead.org_id == current_user.org_id)
+        .filter(Lead.org_id == current_user.org_id, or_(Lead.is_deleted == False, Lead.is_deleted == None))
         .join(Followup, Lead.id == Followup.lead_id)
         .filter(Followup.created_by == current_user.id)
         .filter(Followup.status == FollowupStatus.pending)
@@ -271,7 +274,11 @@ def get_today_reminders(
 
 @router.get("/{lead_id}", response_model=LeadOut)
 def get_lead(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    lead = db.query(Lead).filter(Lead.id == lead_id, Lead.org_id == current_user.org_id).first()
+    lead = db.query(Lead).filter(
+        Lead.id == lead_id,
+        Lead.org_id == current_user.org_id,
+        or_(Lead.is_deleted == False, Lead.is_deleted == None)
+    ).first()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     return lead
@@ -289,7 +296,9 @@ def get_lead_workspace(
     from app.models.lead_partner import LeadPartner
 
     lead = db.query(Lead).filter(
-        Lead.id == lead_id, Lead.org_id == current_user.org_id
+        Lead.id == lead_id,
+        Lead.org_id == current_user.org_id,
+        or_(Lead.is_deleted == False, Lead.is_deleted == None)
     ).first()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
@@ -410,7 +419,7 @@ def list_lead_activities(
     from app.models.activity import LeadActivity
 
     lead = db.query(Lead).filter(
-        Lead.id == lead_id, Lead.org_id == current_user.org_id
+        Lead.id == lead_id, Lead.org_id == current_user.org_id, or_(Lead.is_deleted == False, Lead.is_deleted == None)
     ).first()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
@@ -446,7 +455,7 @@ def add_lead_note(
 ):
     """Add a manual note to the lead timeline."""
     lead = db.query(Lead).filter(
-        Lead.id == lead_id, Lead.org_id == current_user.org_id
+        Lead.id == lead_id, Lead.org_id == current_user.org_id, or_(Lead.is_deleted == False, Lead.is_deleted == None)
     ).first()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
@@ -476,7 +485,9 @@ def update_lead(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("leads", "write")),
 ):
-    lead = db.query(Lead).filter(Lead.id == lead_id, Lead.org_id == current_user.org_id).first()
+    lead = db.query(Lead).filter(
+        Lead.id == lead_id, Lead.org_id == current_user.org_id, or_(Lead.is_deleted == False, Lead.is_deleted == None)
+    ).first()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
@@ -517,10 +528,12 @@ def delete_lead(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("leads", "write")),
 ):
-    lead = db.query(Lead).filter(Lead.id == lead_id, Lead.org_id == current_user.org_id).first()
+    lead = db.query(Lead).filter(
+        Lead.id == lead_id, Lead.org_id == current_user.org_id, or_(Lead.is_deleted == False, Lead.is_deleted == None)
+    ).first()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
-    db.delete(lead)
+    lead.is_deleted = True
     db.commit()
 
 
@@ -601,7 +614,12 @@ def export_leads_csv(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("leads", "read")),
 ):
-    leads = db.query(Lead).filter(Lead.org_id == current_user.org_id).order_by(Lead.created_at.desc()).all()
+    leads = (
+        db.query(Lead)
+        .filter(Lead.org_id == current_user.org_id, or_(Lead.is_deleted == False, Lead.is_deleted == None))
+        .order_by(Lead.created_at.desc())
+        .all()
+    )
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["ID", "Customer Name", "Phone", "Email", "Source", "Stage", "Destination", "Budget", "Created At"])

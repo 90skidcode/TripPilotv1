@@ -12,6 +12,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Spinner } from "@/components/ui/spinner";
 import { leadsApi, followupsApi, leadCostingApi, b2bPartnersApi, leadPaymentsApi, vouchersApi, flightsApi } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/components/Toast";
 import { cn } from "@/lib/cn";
 import AddFollowupModal from "../AddFollowupModal";
 import FollowupList from "../FollowupList";
@@ -101,6 +102,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   const { id } = use(params);
   const leadId = Number(id);
   const router = useRouter();
+  const { showToast } = useToast();
   const { hasPermission } = useAuth();
   const canWrite = hasPermission("leads", "write");
   const canItinerary = hasPermission("itinerary", "write");
@@ -404,6 +406,31 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
                     </Button>
                     <Button variant="primary" size="lg" onClick={() => setShowAddFollowup(true)}>
                       <Plus className="h-4 w-4" /> Follow-up
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      className="text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30"
+                      onClick={async () => {
+                        if (!confirm("Are you sure you want to delete this lead?\n\nNote: The associated customer profile will remain saved in your system.")) return;
+                        try {
+                          await leadsApi.remove(leadId);
+                          showToast({
+                            type: "success",
+                            message: "✓ Lead deleted successfully (Customer profile preserved)",
+                            duration: 3500,
+                          });
+                          router.push("/leads");
+                        } catch (err: any) {
+                          showToast({
+                            type: "error",
+                            message: `✕ Failed to delete lead: ${err.message}`,
+                            duration: 5000,
+                          });
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" /> Delete Lead
                     </Button>
                   </>
                 )}

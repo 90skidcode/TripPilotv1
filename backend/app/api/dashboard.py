@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import func, case
+from sqlalchemy import func, case, or_, and_
 
 from app.core.database import get_db
 from app.core.security import get_current_user, require_permission
@@ -16,11 +16,12 @@ def dashboard_summary(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("dashboard", "read")),
 ):
-    total_leads = db.query(func.count(Lead.id)).filter(Lead.org_id == current_user.org_id).scalar()
-    won_leads = db.query(func.count(Lead.id)).filter(Lead.org_id == current_user.org_id, Lead.stage == LeadStage.won).scalar()
-    lost_leads = db.query(func.count(Lead.id)).filter(Lead.org_id == current_user.org_id, Lead.stage == LeadStage.lost).scalar()
-    fresh_leads = db.query(func.count(Lead.id)).filter(Lead.org_id == current_user.org_id, Lead.stage == LeadStage.fresh).scalar()
-    not_responding = db.query(func.count(Lead.id)).filter(Lead.org_id == current_user.org_id, Lead.stage == LeadStage.not_responding).scalar()
+    not_deleted = or_(Lead.is_deleted == False, Lead.is_deleted == None)
+    total_leads = db.query(func.count(Lead.id)).filter(Lead.org_id == current_user.org_id, not_deleted).scalar()
+    won_leads = db.query(func.count(Lead.id)).filter(Lead.org_id == current_user.org_id, Lead.stage == LeadStage.won, not_deleted).scalar()
+    lost_leads = db.query(func.count(Lead.id)).filter(Lead.org_id == current_user.org_id, Lead.stage == LeadStage.lost, not_deleted).scalar()
+    fresh_leads = db.query(func.count(Lead.id)).filter(Lead.org_id == current_user.org_id, Lead.stage == LeadStage.fresh, not_deleted).scalar()
+    not_responding = db.query(func.count(Lead.id)).filter(Lead.org_id == current_user.org_id, Lead.stage == LeadStage.not_responding, not_deleted).scalar()
     conversion_rate = round((won_leads / total_leads * 100), 1) if total_leads else 0
 
     return {
@@ -36,23 +37,24 @@ def dashboard_summary(
 
 @router.get("/leads-by-source")
 def leads_by_source(db: Session = Depends(get_db), current_user: User = Depends(require_permission("dashboard", "read"))):
-    rows = db.query(Lead.source, func.count(Lead.id)).filter(Lead.org_id == current_user.org_id).group_by(Lead.source).all()
+    rows = db.query(Lead.source, func.count(Lead.id)).filter(Lead.org_id == current_user.org_id, or_(Lead.is_deleted == False, Lead.is_deleted == None)).group_by(Lead.source).all()
     return [{"source": r[0].value if r[0] else "unknown", "count": r[1]} for r in rows]
 
 
 @router.get("/leads-by-stage")
 def leads_by_stage(db: Session = Depends(get_db), current_user: User = Depends(require_permission("dashboard", "read"))):
-    rows = db.query(Lead.stage, func.count(Lead.id)).filter(Lead.org_id == current_user.org_id).group_by(Lead.stage).all()
+    rows = db.query(Lead.stage, func.count(Lead.id)).filter(Lead.org_id == current_user.org_id, or_(Lead.is_deleted == False, Lead.is_deleted == None)).group_by(Lead.stage).all()
     return [{"stage": r[0].value if r[0] else "unknown", "count": r[1]} for r in rows]
 
 
 @router.get("/leaderboard")
 def team_leaderboard(db: Session = Depends(get_db), current_user: User = Depends(require_permission("dashboard", "read"))):
+    not_deleted = or_(Lead.is_deleted == False, Lead.is_deleted == None)
     rows = db.query(
         User.name,
         func.count(Lead.id).label("leads"),
-        func.sum(case((Lead.stage == LeadStage.won, 1), else_=0)).label("won"),
-    ).filter(User.org_id == current_user.org_id).join(Lead, Lead.assigned_to == User.id, isouter=True).group_by(User.id, User.name).all()
+        func.sum(case((and_(Lead.stage == LeadStage.won, not_deleted), 1), else_=0)).label("won"),
+    ).filter(User.org_id == current_user.org_id).join(Lead, and_(Lead.assigned_to == User.id, not_deleted), isouter=True).group_by(User.id, User.name).all()
     return [{"agent": r[0], "leads": r[1], "won": r[2]} for r in rows]
 
 
@@ -64,7 +66,7 @@ async def get_ai_insights(
     try:
         leads = (
             db.query(Lead)
-            .filter(Lead.org_id == current_user.org_id)
+            .filter(Lead.org_id == current_user.org_id, or_(Lead.is_deleted == False, Lead.is_deleted == None))
             .order_by(Lead.created_at.desc())
             .limit(30)
             .all()

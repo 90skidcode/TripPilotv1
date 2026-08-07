@@ -78,13 +78,13 @@ export default function LeadsPage() {
   }, [fetchLeads]);
 
   async function handleDelete(id: number) {
-    if (!confirm("Delete this lead?")) return;
+    if (!confirm("Are you sure you want to delete this lead?\n\nNote: The associated customer profile will remain saved in your system.")) return;
     try {
       await leadsApi.remove(id);
       showToast({
         type: "success",
-        message: "✓ Lead deleted successfully",
-        duration: 3000,
+        message: "✓ Lead deleted successfully (Customer profile preserved)",
+        duration: 3500,
       });
       fetchLeads();
     } catch (err: any) {

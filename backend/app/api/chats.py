@@ -74,7 +74,8 @@ def get_chat_threads(
 ):
     """Retrieve all active chat threads for the current organization."""
     # Find all leads in organization
-    leads = db.query(Lead).filter(Lead.org_id == current_user.org_id).all()
+    from sqlalchemy import or_
+    leads = db.query(Lead).filter(Lead.org_id == current_user.org_id, or_(Lead.is_deleted == False, Lead.is_deleted == None)).all()
     lead_ids = [l.id for l in leads]
 
     if not lead_ids:
