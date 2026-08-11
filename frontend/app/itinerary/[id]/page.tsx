@@ -952,6 +952,8 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
               />
             )}
 
+
+
             {/* Meal */}
             {isSectionVisible(itin, "meals") && <MealSection meals={itin.meals_summary || {}} />}
 
@@ -1129,6 +1131,10 @@ function SummarySection({ itin, style }: { itin: any; style?: React.CSSPropertie
   );
 }
 
+
+const pricingTH: React.CSSProperties = { padding: "12px 14px", textAlign: "left", fontWeight: 700, color: "#78350f", fontSize: 12 };
+const pricingTD: React.CSSProperties = { padding: "14px", color: "#1f2937", verticalAlign: "top" };
+
 function PackagePricingSection({
   stayOptions,
   onUpdateTotalCost,
@@ -1200,8 +1206,6 @@ function PackagePricingSection({
     </div>
   );
 }
-const pricingTH: React.CSSProperties = { padding: "12px 14px", textAlign: "left", fontWeight: 700, color: "#78350f", fontSize: 12 };
-const pricingTD: React.CSSProperties = { padding: "14px", color: "#1f2937", verticalAlign: "top" };
 
 function MealSection({ meals }: { meals: any }) {
   const items = [

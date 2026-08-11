@@ -338,12 +338,7 @@ export default function PublicShareItineraryPage({ params }: { params: Promise<{
               </div>
             )}
 
-            {/* Package Pricing Table */}
-            {isSectionVisible(itin, "pricing") && stays.length > 0 && (
-              <SharePackagePricing stays={stays} />
-            )}
-
-            {/* Stays */}
+            {/* Stays / Package Pricing Options */}
             {isSectionVisible(itin, "pricing") && stays.length > 0 && (
               <div id="section-stays" style={{ scrollMarginTop: "40px", marginBottom: 48 }}>
                 <h2 style={{ fontFamily: "Outfit, sans-serif", fontSize: "2rem", fontWeight: 700, color: "#fff", textAlign: "center", marginBottom: 8 }}>
@@ -400,13 +395,10 @@ export default function PublicShareItineraryPage({ params }: { params: Promise<{
                               <span style={{ color: "#00b4d8" }}>🍽️</span> Meal Plan: {s.meal_plan}
                             </li>
                           )}
+                          <li style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4, fontWeight: 700, color: "#00b4d8", fontSize: 15 }}>
+                            <span style={{ color: "#d4af37" }}>💰</span> Cost: {optCost ? fmtINR(optCost) : "—"}
+                          </li>
                         </ul>
-                        {optCost && (
-                          <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid rgba(255, 255, 255, 0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <span style={{ fontSize: 13, color: "#a0aec0", fontWeight: 500 }}>Total Cost:</span>
-                            <span style={{ fontSize: 18, fontWeight: 800, color: "#00b4d8", fontFamily: "Outfit, sans-serif" }}>{fmtINR(optCost)}</span>
-                          </div>
-                        )}
                       </div>
                     );
                   })}
@@ -666,60 +658,6 @@ export default function PublicShareItineraryPage({ params }: { params: Promise<{
           .dark-layout-grid { display: block !important; width: 100% !important; }
         }
       `}</style>
-    </div>
-  );
-}
-
-function SharePackagePricing({ stays }: { stays: any[] }) {
-  if (!stays.length) return null;
-  const groups: Record<string, any[]> = {};
-  for (const s of stays) {
-    const key = s.option || "Option";
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(s);
-  }
-  const groupKeys = Object.keys(groups);
-  const cities = Array.from(new Set(stays.map((s) => s.city).filter(Boolean)));
-  if (!cities.length) return null;
-
-  return (
-    <div style={{ background: "#1a222c", border: "1px solid rgba(255, 255, 255, 0.08)", borderRadius: 20, padding: 32, marginBottom: 48, boxShadow: "0 4px 20px rgba(0,0,0,0.4)" }}>
-      <h2 style={{ fontFamily: "Outfit, sans-serif", fontSize: "1.8rem", fontWeight: 700, color: "#fff", marginBottom: 20, display: "flex", alignItems: "center", gap: 12 }}>
-        <span style={{ color: "#00b4d8" }}>📦</span> Package Pricing & Details
-      </h2>
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-          <thead>
-            <tr style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.1)", background: "rgba(0, 180, 216, 0.1)" }}>
-              <th style={{ padding: "12px 14px", textAlign: "left", color: "#00b4d8", fontWeight: 600, fontSize: 12, textTransform: "uppercase" }}>Option</th>
-              {cities.map((c) => (
-                <th key={c} style={{ padding: "12px 14px", textAlign: "left", color: "#00b4d8", fontWeight: 600, fontSize: 12, textTransform: "uppercase" }}>Hotel Details {c}</th>
-              ))}
-              <th style={{ padding: "12px 14px", textAlign: "left", color: "#00b4d8", fontWeight: 600, fontSize: 12, textTransform: "uppercase" }}>Total Cost</th>
-            </tr>
-          </thead>
-          <tbody>
-            {groupKeys.map((opt, i) => {
-              const rows = groups[opt];
-              const totalCost = rows.find((r) => r.total_cost !== undefined && r.total_cost !== null && r.total_cost !== "")?.total_cost;
-              return (
-                <tr key={opt} style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.05)" }}>
-                  <td style={{ padding: 14, color: "#d4af37", fontWeight: 700 }}>{opt}</td>
-                  {cities.map((c) => {
-                    const row = rows.find((r) => r.city === c);
-                    return (
-                      <td key={c} style={{ padding: 14, color: "#a0aec0" }}>
-                        {row ? `${row.nights || 0} N ${c} - ${row.hotel_name || ""}${row.hotel_name ? " /Similar" : ""}` : "—"}
-                      </td>
-                    );
-                  })}
-                  <td style={{ padding: 14, color: "#00b4d8", fontWeight: 800 }}>{totalCost ? fmtINR(totalCost) : "—"}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
     </div>
   );
 }

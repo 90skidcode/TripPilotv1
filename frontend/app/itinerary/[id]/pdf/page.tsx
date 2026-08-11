@@ -436,12 +436,7 @@ export default function ItineraryPDFPage({ params }: { params: Promise<{ id: str
           <PdfSummarySection itin={itin} />
         </div>
 
-        {/* ══════ PACKAGE PRICING TABLE ══════ */}
-        {isSectionVisible(itin, "pricing") && (
-          <div data-pdf-section="preceding">
-            <PdfPackagePricing stayOptions={itin.stay_options || []} />
-          </div>
-        )}
+
 
         {/* ══════ MEAL ══════ */}
         {isSectionVisible(itin, "meals") && (
@@ -823,53 +818,7 @@ function PdfSummarySection({ itin }: { itin: any }) {
   );
 }
 
-function PdfPackagePricing({ stayOptions }: { stayOptions: any[] }) {
-  if (!stayOptions.length) return null;
-  const groups: Record<string, any[]> = {};
-  for (const s of stayOptions) {
-    const key = s.option || "Option";
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(s);
-  }
-  const cities = Array.from(new Set(stayOptions.map((s) => s.city).filter(Boolean)));
-  if (!cities.length) return null;
-  const groupKeys = Object.keys(groups);
-  return (
-    <section style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 16, padding: "20px 24px", marginBottom: 28, pageBreakInside: "avoid" }}>
-      <PdfSectionHeader icon="📦" title="Package Pricing & Details" />
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-        <thead>
-          <tr style={{ background: "#fef3c7" }}>
-            <th style={{ padding: "12px 14px", textAlign: "left", fontWeight: 700, color: "#78350f", fontSize: 12 }}>Option</th>
-            {cities.map((c) => <th key={c} style={{ padding: "12px 14px", textAlign: "left", fontWeight: 700, color: "#78350f", fontSize: 12 }}>Hotel Details {c}</th>)}
-            <th style={{ padding: "12px 14px", textAlign: "left", fontWeight: 700, color: "#78350f", fontSize: 12 }}>Total Cost</th>
-          </tr>
-        </thead>
-        <tbody>
-          {groupKeys.map((opt, i) => {
-            const rowBg = i % 2 === 0 ? "#fff7ed" : "#f0fdf4";
-            const rows = groups[opt];
-            const totalCost = rows.find((r) => r.total_cost)?.total_cost;
-            return (
-              <tr key={opt} style={{ background: rowBg }}>
-                <td style={{ padding: 14, color: "#1f2937", verticalAlign: "top" }}>{opt}</td>
-                {cities.map((c) => {
-                  const row = rows.find((r) => r.city === c);
-                  return (
-                    <td key={c} style={{ padding: 14, color: "#1f2937", verticalAlign: "top" }}>
-                      {row ? `${row.nights || 0} N ${c} - ${row.hotel_name || ""}${row.hotel_name ? " /Similar" : ""}` : "—"}
-                    </td>
-                  );
-                })}
-                <td style={{ padding: 14, color: "#1f2937", verticalAlign: "top", fontWeight: 700 }}>{totalCost ? fmtINR(totalCost) : "—"}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </section>
-  );
-}
+
 
 function PdfMeal({ meals }: { meals: any }) {
   const items = [
@@ -1297,13 +1246,6 @@ function DarkTemplateView({ itin, me, printRef, handlePrint, id }: { itin: any; 
               </div>
             )}
 
-            {/* ══════ PACKAGE PRICING TABLE ══════ */}
-            {isSectionVisible(itin, "pricing") && (
-              <div data-pdf-section="preceding" style={{ marginBottom: 32 }}>
-                <PdfPackagePricing stayOptions={itin.stay_options || []} />
-              </div>
-            )}
-
             {/* ══════ PACKAGE PRICING CARDS ══════ */}
             {isSectionVisible(itin, "pricing") && stays.length > 0 && (
               <div data-pdf-section="preceding" id="section-stays" style={{ scrollMarginTop: "100px", marginBottom: 48, breakInside: "avoid", pageBreakInside: "avoid", breakBefore: "auto" }}>
@@ -1361,13 +1303,10 @@ function DarkTemplateView({ itin, me, printRef, handlePrint, id }: { itin: any; 
                               <span style={{ color: "#00b4d8" }}>🍽️</span> Meal Plan: {s.meal_plan}
                             </li>
                           )}
+                          <li style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4, fontWeight: 700, color: "#00b4d8", fontSize: 15 }}>
+                            <span style={{ color: "#d4af37" }}>💰</span> Cost: {optCost ? fmtINR(optCost) : "—"}
+                          </li>
                         </ul>
-                        {optCost && (
-                          <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid rgba(255, 255, 255, 0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <span style={{ fontSize: 13, color: "#a0aec0", fontWeight: 500 }}>Total Cost:</span>
-                            <span style={{ fontSize: 18, fontWeight: 800, color: "#00b4d8", fontFamily: "Outfit, sans-serif" }}>{fmtINR(optCost)}</span>
-                          </div>
-                        )}
                       </div>
                     );
                   })}
