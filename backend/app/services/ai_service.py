@@ -506,7 +506,8 @@ Return a valid JSON object with these exact keys:
       "city": "City Name",
       "nights": 2,
       "room_category": "Room Category",
-      "meal_plan": "Meal Plan"
+      "meal_plan": "Meal Plan",
+      "total_cost": "Estimated total cost in INR or null"
     }}
   ],
   "days": [

@@ -482,6 +482,11 @@ export default function ItineraryPDFPage({ params }: { params: Promise<{ id: str
                       📍 {s.city || "—"} · 🛏️ {s.room_category || "Standard"} · 🌙 {s.nights || 0} Nights
                       {s.meal_plan && <span> · 🍽️ {s.meal_plan}</span>}
                     </div>
+                    {s.total_cost && (
+                      <div style={{ fontSize: 13, fontWeight: 700, color: BRAND, marginBottom: 6 }}>
+                        💰 Total Cost: {fmtINR(s.total_cost)}
+                      </div>
+                    )}
                     {s.directions_url && (
                       <div>
                         <a href={s.directions_url} target="_blank" rel="noreferrer" style={{ fontSize: 12, fontWeight: 600, color: BRAND, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}>
@@ -1292,6 +1297,13 @@ function DarkTemplateView({ itin, me, printRef, handlePrint, id }: { itin: any; 
               </div>
             )}
 
+            {/* ══════ PACKAGE PRICING TABLE ══════ */}
+            {isSectionVisible(itin, "pricing") && (
+              <div data-pdf-section="preceding" style={{ marginBottom: 32 }}>
+                <PdfPackagePricing stayOptions={itin.stay_options || []} />
+              </div>
+            )}
+
             {/* ══════ PACKAGE PRICING CARDS ══════ */}
             {isSectionVisible(itin, "pricing") && stays.length > 0 && (
               <div data-pdf-section="preceding" id="section-stays" style={{ scrollMarginTop: "100px", marginBottom: 48, breakInside: "avoid", pageBreakInside: "avoid", breakBefore: "auto" }}>
@@ -1304,6 +1316,8 @@ function DarkTemplateView({ itin, me, printRef, handlePrint, id }: { itin: any; 
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 24 }}>
                   {stays.map((s: any, i: number) => {
                     const isPremium = i === 0;
+                    const optKey = s.option || `OPTION ${i + 1}`;
+                    const optCost = s.total_cost || stays.find((st: any) => (st.option || "").toLowerCase() === optKey.toLowerCase() && st.total_cost)?.total_cost;
                     return (
                       <div key={i} style={{
                         background: isPremium ? "linear-gradient(145deg, #1a222c 0%, #0a0e14 100%)" : "rgba(10, 14, 20, 0.6)",
@@ -1321,7 +1335,7 @@ function DarkTemplateView({ itin, me, printRef, handlePrint, id }: { itin: any; 
                           </div>
                         )}
                         <div style={{ fontSize: 12, color: "#00b4d8", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>
-                          {s.option || `OPTION ${i + 1}`}
+                          {optKey}
                         </div>
                         <h3 style={{ fontFamily: "Outfit, sans-serif", fontSize: "1.5rem", fontWeight: 700, color: "#fff", marginBottom: 6 }}>
                           {s.hotel_name || "Luxury Stay"}
@@ -1348,6 +1362,12 @@ function DarkTemplateView({ itin, me, printRef, handlePrint, id }: { itin: any; 
                             </li>
                           )}
                         </ul>
+                        {optCost && (
+                          <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid rgba(255, 255, 255, 0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <span style={{ fontSize: 13, color: "#a0aec0", fontWeight: 500 }}>Total Cost:</span>
+                            <span style={{ fontSize: 18, fontWeight: 800, color: "#00b4d8", fontFamily: "Outfit, sans-serif" }}>{fmtINR(optCost)}</span>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
