@@ -423,6 +423,19 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
     });
   }
   function removeHotel(i: number) { u("stay_options", (itin.stay_options || []).filter((_: any, idx: number) => idx !== i)); }
+  function uHotelCostByOption(optName: string, costVal: string) {
+    setItin((p: any) => {
+      const options = [...(p.stay_options || [])];
+      const updated = options.map((s: any, idx: number) => {
+        const key = s.option || `OPTION ${idx + 1}`;
+        if (key === optName || s.option === optName) {
+          return { ...s, total_cost: costVal };
+        }
+        return s;
+      });
+      return { ...p, stay_options: updated };
+    });
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -668,6 +681,28 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
                 <input className="input" value={itin[k] || ""} onChange={(e) => u(k, e.target.value)} style={{ fontSize: 13 }} disabled={!canWrite} />
               </div>
             ))}
+            {(itin.stay_options || []).length > 0 && (
+              <div style={{ marginTop: 8, paddingTop: 12, borderTop: "1px solid #e4e7ec" }}>
+                <div style={{ ...fieldLabel, color: BRAND, fontSize: 12, marginBottom: 8 }}>Option-Wise Total Cost (Package Pricing)</div>
+                {Array.from(new Set((itin.stay_options || []).map((s: any, idx: number) => s.option || `OPTION ${idx + 1}`))).map((opt: any) => {
+                  const rows = (itin.stay_options || []).filter((s: any, idx: number) => (s.option || `OPTION ${idx + 1}`) === opt);
+                  const cost = rows.find((r: any) => r.total_cost !== undefined && r.total_cost !== null && r.total_cost !== "")?.total_cost || "";
+                  return (
+                    <div key={opt} style={{ marginBottom: 8 }}>
+                      <div style={fieldLabel}>{opt} Total Cost (₹)</div>
+                      <input
+                        className="input"
+                        value={cost}
+                        onChange={(e) => uHotelCostByOption(opt, e.target.value)}
+                        placeholder="e.g. 45000"
+                        style={{ fontSize: 12 }}
+                        disabled={!canWrite}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
@@ -909,7 +944,13 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
             <SummarySection itin={itin} style={{ marginBottom: 20 }} />
 
             {/* Package Pricing & Details */}
-            {isSectionVisible(itin, "pricing") && <PackagePricingSection stayOptions={itin.stay_options || []} />}
+            {isSectionVisible(itin, "pricing") && (
+              <PackagePricingSection
+                stayOptions={itin.stay_options || []}
+                onUpdateTotalCost={uHotelCostByOption}
+                canWrite={canWrite}
+              />
+            )}
 
             {/* Meal */}
             {isSectionVisible(itin, "meals") && <MealSection meals={itin.meals_summary || {}} />}
@@ -1088,7 +1129,15 @@ function SummarySection({ itin, style }: { itin: any; style?: React.CSSPropertie
   );
 }
 
-function PackagePricingSection({ stayOptions }: { stayOptions: any[] }) {
+function PackagePricingSection({
+  stayOptions,
+  onUpdateTotalCost,
+  canWrite = false,
+}: {
+  stayOptions: any[];
+  onUpdateTotalCost?: (opt: string, val: string) => void;
+  canWrite?: boolean;
+}) {
   if (!stayOptions.length) return null;
   // Group by `option`
   const groups: Record<string, any[]> = {};
@@ -1118,7 +1167,7 @@ function PackagePricingSection({ stayOptions }: { stayOptions: any[] }) {
             {groupKeys.map((opt, i) => {
               const rowBg = i % 2 === 0 ? "#fff7ed" : "#f0fdf4";
               const rows = groups[opt];
-              const totalCost = rows.find((r) => r.total_cost)?.total_cost;
+              const totalCost = rows.find((r) => r.total_cost !== undefined && r.total_cost !== null && r.total_cost !== "")?.total_cost;
               return (
                 <tr key={opt} style={{ background: rowBg }}>
                   <td style={pricingTD}>{opt}</td>
@@ -1130,7 +1179,18 @@ function PackagePricingSection({ stayOptions }: { stayOptions: any[] }) {
                       </td>
                     );
                   })}
-                  <td style={{ ...pricingTD, fontWeight: 700 }}>{totalCost ? fmtINR(totalCost) : "—"}</td>
+                  <td style={{ ...pricingTD, fontWeight: 700 }}>
+                    {canWrite && onUpdateTotalCost ? (
+                      <InlineText
+                        value={totalCost ? String(totalCost) : ""}
+                        onChange={(v) => onUpdateTotalCost(opt, v)}
+                        placeholder="Enter total cost…"
+                        style={{ fontWeight: 700, color: totalCost ? "#16a34a" : "#94a3b8" }}
+                      />
+                    ) : (
+                      totalCost ? fmtINR(totalCost) : "—"
+                    )}
+                  </td>
                 </tr>
               );
             })}

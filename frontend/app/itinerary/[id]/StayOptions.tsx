@@ -9,6 +9,7 @@ interface StayOption {
   meal_plan?: string;
   check_in?: string;
   check_out?: string;
+  total_cost?: string | number;
 }
 
 interface Props {
@@ -89,6 +90,10 @@ export default function StayOptions({ options, onChange }: Props) {
             <div className="input-group">
               <label className="input-label">Check-out</label>
               <input id={`stay-checkout-${i}`} className="input" type="date" value={opt.check_out || ""} onChange={(e) => update(i, "check_out", e.target.value)} />
+            </div>
+            <div className="input-group">
+              <label className="input-label">Total Cost (₹)</label>
+              <input id={`stay-cost-${i}`} className="input" type="text" value={opt.total_cost || ""} onChange={(e) => update(i, "total_cost", e.target.value)} placeholder="e.g. 45000" />
             </div>
           </div>
         </div>
