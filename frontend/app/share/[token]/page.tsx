@@ -119,7 +119,7 @@ export default function PublicShareItineraryPage({ params }: { params: Promise<{
       <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
       <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 24px 64px" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 24px 64px" }} className="dark-share-container">
         {/* ══════ HERO BANNER ══════ */}
         <div style={{
           minHeight: "75vh",
@@ -151,7 +151,7 @@ export default function PublicShareItineraryPage({ params }: { params: Promise<{
             {itin.destination ? `EXPLORE ${itin.destination.toUpperCase()}` : "TRAVEL ITINERARY"}
           </div>
 
-          <h1 style={{
+          <h1 className="dark-hero-title" style={{
             fontFamily: "Outfit, sans-serif", fontSize: "3.5rem", fontWeight: 800,
             letterSpacing: "4px", textTransform: "uppercase", margin: "0 0 16px",
             background: "linear-gradient(180deg, #ffffff 0%, #d1d5db 100%)",
@@ -201,8 +201,8 @@ export default function PublicShareItineraryPage({ params }: { params: Promise<{
 
         {/* ══════ MAIN CONTENT WITH SIDEBAR NAV ══════ */}
         <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 48, position: "relative" }} className="dark-layout-grid">
-          {/* Sidebar Navigation */}
-          <div style={{ position: "sticky", top: "40px", height: "fit-content" }} className="no-print">
+          {/* Desktop Sidebar Navigation */}
+          <div className="no-print dark-sidebar-desktop">
             <div style={{ background: "#1a222c", border: "1px solid rgba(255, 255, 255, 0.08)", borderRadius: 20, padding: "24px 20px" }}>
               <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5, color: "#d4af37", marginBottom: 16 }}>
                 TRIP SECTIONS
@@ -261,8 +261,43 @@ export default function PublicShareItineraryPage({ params }: { params: Promise<{
 
           {/* Main Content */}
           <div style={{ minWidth: 0 }}>
+            {/* Mobile Horizontal Chip Navigation */}
+            <div className="no-print dark-chips-mobile">
+              <a href="#section-summary" className="dark-chip-item">
+                <span>⚡</span> Summary
+              </a>
+              {isSectionVisible(itin, "flights") && (flights.onward?.from || flights.return?.from) && (
+                <a href="#section-flights" className="dark-chip-item">
+                  <span>✈️</span> Flights
+                </a>
+              )}
+              {isSectionVisible(itin, "stay") && stays.length > 0 && (
+                <a href="#section-stays" className="dark-chip-item">
+                  <span>🏨</span> Accommodations
+                </a>
+              )}
+              {days.map((day: any, i: number) => {
+                const dayNum = day.day || i + 1;
+                return (
+                  <a key={i} href={`#day-${dayNum}`} className="dark-chip-item">
+                    <span>🗓️</span> Day {dayNum}{day.city ? ` (${day.city})` : ""}
+                  </a>
+                );
+              })}
+              {(inclusionsList.length > 0 || exclusionsList.length > 0) && (
+                <a href="#section-inclusions" className="dark-chip-item">
+                  <span>✨</span> Inclusions
+                </a>
+              )}
+              {paymentTermsList.length > 0 && (
+                <a href="#section-policies" className="dark-chip-item">
+                  <span>📋</span> Notes
+                </a>
+              )}
+            </div>
+
             {/* Summary Card */}
-            <div id="section-summary" style={{
+            <div id="section-summary" className="dark-card-box" style={{
               scrollMarginTop: "40px",
               background: "#1a222c", border: "1px solid rgba(255, 255, 255, 0.08)",
               borderRadius: 20, padding: 32, marginBottom: 48, boxShadow: "0 4px 20px rgba(0,0,0,0.4)"
@@ -294,7 +329,7 @@ export default function PublicShareItineraryPage({ params }: { params: Promise<{
 
             {/* Flights */}
             {isSectionVisible(itin, "flights") && (flights.onward?.from || flights.return?.from) && (
-              <div id="section-flights" style={{
+              <div id="section-flights" className="dark-card-box" style={{
                 scrollMarginTop: "40px",
                 background: "#1a222c", border: "1px solid rgba(255, 255, 255, 0.08)",
                 borderRadius: 20, padding: 32, marginBottom: 48, boxShadow: "0 4px 20px rgba(0,0,0,0.4)"
@@ -642,9 +677,77 @@ export default function PublicShareItineraryPage({ params }: { params: Promise<{
       </div>
 
       <style>{`
+        .dark-sidebar-desktop {
+          position: sticky;
+          top: 40px;
+          height: fit-content;
+        }
+        .dark-chips-mobile {
+          display: none;
+        }
         @media (max-width: 768px) {
-          .dark-layout-grid { grid-template-columns: 1fr !important; }
-          .dark-inc-grid { grid-template-columns: 1fr !important; }
+          .dark-sidebar-desktop {
+            display: none !important;
+          }
+          .dark-chips-mobile {
+            display: flex !important;
+            overflow-x: auto !important;
+            white-space: nowrap !important;
+            gap: 8px !important;
+            padding: 4px 4px 12px 4px !important;
+            margin-bottom: 20px !important;
+            -webkit-overflow-scrolling: touch !important;
+            scrollbar-width: none !important;
+          }
+          .dark-chips-mobile::-webkit-scrollbar {
+            display: none !important;
+          }
+          .dark-chip-item {
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 6px !important;
+            background: #1a222c !important;
+            border: 1px solid rgba(0, 180, 216, 0.3) !important;
+            color: #00b4d8 !important;
+            padding: 8px 16px !important;
+            border-radius: 999px !important;
+            font-size: 13px !important;
+            font-weight: 600 !important;
+            text-decoration: none !important;
+            flex-shrink: 0 !important;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+            transition: all 0.2s ease !important;
+          }
+          .dark-chip-item:active {
+            background: #00b4d8 !important;
+            color: #0a0e14 !important;
+          }
+          .dark-share-container {
+            padding: 0 12px 36px !important;
+          }
+          .dark-layout-grid {
+            grid-template-columns: 1fr !important;
+            gap: 16px !important;
+          }
+          .dark-hero-banner {
+            min-height: auto !important;
+            padding: 32px 16px !important;
+            margin-bottom: 24px !important;
+            border-radius: 16px !important;
+          }
+          .dark-hero-title {
+            font-size: 2.1rem !important;
+            letter-spacing: 2px !important;
+          }
+          .dark-card-box {
+            padding: 20px 16px !important;
+            border-radius: 16px !important;
+            margin-bottom: 24px !important;
+          }
+          .dark-inc-grid {
+            grid-template-columns: 1fr !important;
+            gap: 16px !important;
+          }
         }
         @media print {
           .no-print { display: none !important; }
