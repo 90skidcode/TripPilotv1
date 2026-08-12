@@ -414,7 +414,53 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
   }
 
   // Hotels
-  function addHotel() { u("stay_options", [...(itin.stay_options || []), { option: `OPTION ${(itin.stay_options?.length || 0) + 1}`, hotel_name: "", city: "", nights: 1, room_category: "Deluxe", meal_plan: "" }]); }
+  function addHotel(optTarget?: string) {
+    setItin((p: any) => {
+      const existing = p.stay_options || [];
+      let optionName = optTarget;
+      if (!optionName) {
+        const existingOpts = Array.from(new Set(existing.map((s: any, idx: number) => (s.option || `OPTION ${idx + 1}`).trim())));
+        optionName = existingOpts.length > 0 ? (existingOpts[0] as string) : "OPTION 1";
+      }
+      return {
+        ...p,
+        stay_options: [
+          ...existing,
+          {
+            option: optionName,
+            hotel_name: "",
+            city: "",
+            nights: 1,
+            room_category: "Standard Room",
+            meal_plan: "Breakfast Included"
+          }
+        ]
+      };
+    });
+  }
+
+  function addNextOptionPackage() {
+    setItin((p: any) => {
+      const existing = p.stay_options || [];
+      const existingOpts = Array.from(new Set(existing.map((s: any, idx: number) => (s.option || `OPTION ${idx + 1}`).trim())));
+      const nextOptNumber = existingOpts.length + 1;
+      const nextOptName = `OPTION ${nextOptNumber}`;
+      return {
+        ...p,
+        stay_options: [
+          ...existing,
+          {
+            option: nextOptName,
+            hotel_name: "",
+            city: "",
+            nights: 1,
+            room_category: "Standard Room",
+            meal_plan: "Breakfast Included"
+          }
+        ]
+      };
+    });
+  }
   function uHotel(i: number, k: string, v: any) {
     setItin((p: any) => {
       const o = [...(p.stay_options || [])];
@@ -605,71 +651,168 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
         )}
 
         {leftTab === "stay" && (
-          <div>
-            {(itin.stay_options || []).map((s: any, i: number) => (
-              <div key={i} style={{ marginBottom: 12, padding: 14, border: "1.5px solid #e4e7ec", borderRadius: 12 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                  <span style={{ fontWeight: 700, fontSize: 12, color: BRAND }}>{s.option || `Hotel ${i + 1}`}</span>
-                  {canWrite && <button onClick={() => removeHotel(i)} style={{ background: "none", border: "none", cursor: "pointer", color: "#f87171", fontSize: 13 }}>✕</button>}
-                </div>
-                {[["hotel_name","Hotel Name"],["city","City"],["room_category","Room Type"], ["meal_plan", "Meal Plan"], ["google_rating", "Google Rating (e.g. 4.5)"], ["directions_url", "Google Maps URL"]].map(([k, lbl]) => (
-                  <div key={k} style={{ marginBottom: 6 }}>
-                    <div style={fieldLabel}>{lbl}</div>
-                    <input className="input" value={s[k] || ""} onChange={(e) => uHotel(i, k, e.target.value)} style={{ fontSize: 12 }} disabled={!canWrite} />
-                  </div>
-                ))}
-                <div style={{ marginBottom: 6 }}>
-                  <div style={fieldLabel}>Hotel Image URL</div>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <input className="input" value={s.image_url || ""} onChange={(e) => uHotel(i, "image_url", e.target.value)} style={{ fontSize: 12, flex: 1 }} placeholder="https://..." disabled={!canWrite} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {(() => {
+              const stayList = itin.stay_options || [];
+              if (!stayList.length) {
+                return (
+                  <div>
+                    <div style={{ fontSize: 13, color: "#64748b", marginBottom: 12 }}>No hotel options added yet.</div>
                     {canWrite && (
-                      <label className="btn btn-outline btn-sm" style={{ padding: "4px 8px", cursor: "pointer" }}>
-                        Upload
-                        <input type="file" accept="image/*" style={{ display: "none" }} onChange={async (e) => {
-                          if (e.target.files?.[0]) {
-                            const url = await uploadFile(e.target.files[0]);
-                            if (url) uHotel(i, "image_url", url);
-                          }
-                        }} />
-                      </label>
+                      <button onClick={() => addHotel("OPTION 1")} style={{ ...addBtn, marginTop: 4 }}>
+                        ＋ Add First Hotel (OPTION 1)
+                      </button>
                     )}
-                    <RegenerateImageButton
-                      query={[s.hotel_name, s.city, "hotel"].filter(Boolean).join(" ")}
-                      currentUrl={s.image_url}
-                      onResult={(url) => uHotel(i, "image_url", url)}
-                      canWrite={canWrite}
-                    />
                   </div>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 6 }}>
-                  <div>
-                    <div style={fieldLabel}>Google Rating (1-5)</div>
-                    <input className="input" type="number" step="0.1" value={s.google_rating || ""} onChange={(e) => uHotel(i, "google_rating", e.target.value)} style={{ fontSize: 12 }} disabled={!canWrite} />
-                  </div>
-                  <div>
-                    <div style={fieldLabel}>Directions URL</div>
-                    <input className="input" value={s.directions_url || ""} onChange={(e) => uHotel(i, "directions_url", e.target.value)} style={{ fontSize: 12 }} placeholder="https://maps.google..." disabled={!canWrite} />
-                  </div>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                  <div>
-                    <div style={fieldLabel}>Nights</div>
-                    <input className="input" type="number" value={s.nights || ""} onChange={(e) => uHotel(i, "nights", Number(e.target.value))} style={{ fontSize: 12 }} disabled={!canWrite} />
-                  </div>
-                  <div>
-                    <div style={fieldLabel}>Meal Plan</div>
-                    <select className="input" value={s.meal_plan || ""} onChange={(e) => uHotel(i, "meal_plan", e.target.value)} style={{ fontSize: 12 }} disabled={!canWrite}>
-                      {["","Room Only","Breakfast","Half Board","Full Board"].map((o) => <option key={o}>{o}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div style={{ marginTop: 8 }}>
-                  <div style={fieldLabel}>Total Cost for this option (₹) — shown in Package Pricing table</div>
-                  <input className="input" type="number" value={s.total_cost || ""} onChange={(e) => uHotel(i, "total_cost", e.target.value)} style={{ fontSize: 12 }} disabled={!canWrite} />
-                </div>
-              </div>
-            ))}
-            {canWrite && <button onClick={addHotel} style={{ ...addBtn, marginTop: 8 }}>＋ Add Hotel</button>}
+                );
+              }
+
+              // Group indices by option name
+              const optionGroups: { name: string; indices: number[] }[] = [];
+              const groupMap: Record<string, number[]> = {};
+
+              stayList.forEach((s: any, idx: number) => {
+                const optName = (s.option || `OPTION ${idx + 1}`).trim();
+                if (!groupMap[optName]) {
+                  groupMap[optName] = [];
+                  optionGroups.push({ name: optName, indices: groupMap[optName] });
+                }
+                groupMap[optName].push(idx);
+              });
+
+              return (
+                <>
+                  {optionGroups.map((grp) => (
+                    <div key={grp.name} style={{ border: "1.5px solid #cbd5e1", borderRadius: 14, padding: 14, background: "#f8fafc" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontSize: 13, fontWeight: 800, color: BRAND, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                            📦 {grp.name}
+                          </span>
+                          <span style={{ fontSize: 11, color: "#64748b" }}>
+                            ({grp.indices.length} {grp.indices.length === 1 ? "hotel" : "hotels"})
+                          </span>
+                        </div>
+                        {canWrite && (
+                          <button
+                            onClick={() => addHotel(grp.name)}
+                            className="btn btn-outline btn-sm"
+                            style={{ fontSize: 11, padding: "3px 10px", borderColor: BRAND, color: BRAND, fontWeight: 700 }}
+                          >
+                            ＋ Add Hotel to {grp.name}
+                          </button>
+                        )}
+                      </div>
+
+                      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                        {grp.indices.map((i) => {
+                          const s = stayList[i];
+                          return (
+                            <div key={i} style={{ padding: 12, border: "1px solid #e2e8f0", borderRadius: 10, background: "white" }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1 }}>
+                                  <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b" }}>Option Category:</span>
+                                  <input
+                                    className="input"
+                                    value={s.option || grp.name}
+                                    onChange={(e) => uHotel(i, "option", e.target.value)}
+                                    placeholder="e.g. OPTION 1"
+                                    style={{ fontSize: 12, padding: "2px 8px", width: 130, fontWeight: 700, color: BRAND }}
+                                    disabled={!canWrite}
+                                  />
+                                </div>
+                                {canWrite && (
+                                  <button onClick={() => removeHotel(i)} style={{ background: "none", border: "none", cursor: "pointer", color: "#f87171", fontSize: 14 }} title="Remove Hotel">✕</button>
+                                )}
+                              </div>
+
+                              <div style={{ marginBottom: 6 }}>
+                                <div style={fieldLabel}>Hotel Name</div>
+                                <input className="input" value={s.hotel_name || ""} onChange={(e) => uHotel(i, "hotel_name", e.target.value)} style={{ fontSize: 12 }} placeholder="e.g. Stay Villa" disabled={!canWrite} />
+                              </div>
+
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 6 }}>
+                                <div>
+                                  <div style={fieldLabel}>City</div>
+                                  <input className="input" value={s.city || ""} onChange={(e) => uHotel(i, "city", e.target.value)} style={{ fontSize: 12 }} placeholder="e.g. Srinagar" disabled={!canWrite} />
+                                </div>
+                                <div>
+                                  <div style={fieldLabel}>Room Type</div>
+                                  <input className="input" value={s.room_category || ""} onChange={(e) => uHotel(i, "room_category", e.target.value)} style={{ fontSize: 12 }} placeholder="e.g. Deluxe Room" disabled={!canWrite} />
+                                </div>
+                              </div>
+
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 6 }}>
+                                <div>
+                                  <div style={fieldLabel}>Nights</div>
+                                  <input className="input" type="number" min={1} value={s.nights || ""} onChange={(e) => uHotel(i, "nights", Number(e.target.value))} style={{ fontSize: 12 }} disabled={!canWrite} />
+                                </div>
+                                <div>
+                                  <div style={fieldLabel}>Meal Plan</div>
+                                  <select className="input" value={s.meal_plan || ""} onChange={(e) => uHotel(i, "meal_plan", e.target.value)} style={{ fontSize: 12 }} disabled={!canWrite}>
+                                    {["","Room Only","Breakfast Included","Half Board","Full Board","All Inclusive"].map((o) => <option key={o}>{o}</option>)}
+                                  </select>
+                                </div>
+                              </div>
+
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 6 }}>
+                                <div>
+                                  <div style={fieldLabel}>Google Rating (1-5)</div>
+                                  <input className="input" type="number" step="0.1" value={s.google_rating || ""} onChange={(e) => uHotel(i, "google_rating", e.target.value)} style={{ fontSize: 12 }} placeholder="e.g. 4.2" disabled={!canWrite} />
+                                </div>
+                                <div>
+                                  <div style={fieldLabel}>Directions / Google Maps URL</div>
+                                  <input className="input" value={s.directions_url || ""} onChange={(e) => uHotel(i, "directions_url", e.target.value)} style={{ fontSize: 12 }} placeholder="https://maps.google..." disabled={!canWrite} />
+                                </div>
+                              </div>
+
+                              <div style={{ marginBottom: 6 }}>
+                                <div style={fieldLabel}>Hotel Image URL</div>
+                                <div style={{ display: "flex", gap: 6 }}>
+                                  <input className="input" value={s.image_url || ""} onChange={(e) => uHotel(i, "image_url", e.target.value)} style={{ fontSize: 12, flex: 1 }} placeholder="https://..." disabled={!canWrite} />
+                                  {canWrite && (
+                                    <label className="btn btn-outline btn-sm" style={{ padding: "4px 8px", cursor: "pointer" }}>
+                                      Upload
+                                      <input type="file" accept="image/*" style={{ display: "none" }} onChange={async (e) => {
+                                        if (e.target.files?.[0]) {
+                                          const url = await uploadFile(e.target.files[0]);
+                                          if (url) uHotel(i, "image_url", url);
+                                        }
+                                      }} />
+                                    </label>
+                                  )}
+                                  <RegenerateImageButton
+                                    query={[s.hotel_name, s.city, "hotel"].filter(Boolean).join(" ")}
+                                    currentUrl={s.image_url}
+                                    onResult={(url) => uHotel(i, "image_url", url)}
+                                    canWrite={canWrite}
+                                  />
+                                </div>
+                              </div>
+
+                              <div style={{ marginTop: 8 }}>
+                                <div style={fieldLabel}>Total Cost for {grp.name} (₹)</div>
+                                <input className="input" type="text" value={s.total_cost || ""} onChange={(e) => uHotel(i, "total_cost", e.target.value)} placeholder="e.g. 45000" style={{ fontSize: 12 }} disabled={!canWrite} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+
+                  {canWrite && (
+                    <button
+                      onClick={addNextOptionPackage}
+                      className="btn btn-outline"
+                      style={{ marginTop: 4, padding: "10px 0", fontSize: 13, fontWeight: 700, color: BRAND, borderColor: BRAND }}
+                    >
+                      ＋ Add New Option Package (OPTION {optionGroups.length + 1})
+                    </button>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
 
