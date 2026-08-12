@@ -1237,93 +1237,6 @@ function DarkTemplateView({ itin, me, printRef, handlePrint, id }: { itin: any; 
               </div>
             )}
 
-            {/* ══════ PACKAGE PRICING CARDS ══════ */}
-            {isSectionVisible(itin, "pricing") && stays.length > 0 && (
-              <div data-pdf-section="preceding" id="section-stays" style={{ scrollMarginTop: "100px", marginBottom: 48, breakInside: "avoid", pageBreakInside: "avoid", breakBefore: "auto" }}>
-                <h2 style={{ fontFamily: "Outfit, sans-serif", fontSize: "1.8rem", fontWeight: 700, color: "#fff", marginBottom: 8, display: "flex", alignItems: "center", gap: 12 }}>
-                  <span style={{ color: "#00b4d8" }}>🏨</span> Package Pricing Options
-                </h2>
-                <p style={{ color: "#a0aec0", marginBottom: 28, fontSize: "1rem" }}>
-                  Select from our curated accommodation packages
-                </p>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 24 }}>
-                  {groupStaysByOption(stays).map((grp, i) => {
-                    const isPremium = i === 0;
-                    const pax = itin.num_travellers || (Number(itin.num_adults || 0) + Number(itin.num_children || 0));
-                    const rawCost = Number(String(grp.totalCost || "").replace(/[^\d.]/g, ""));
-                    const perPersonCost = (pax > 0 && rawCost > 0) ? Math.round(rawCost / pax) : null;
-                    return (
-                      <div key={grp.optionName} style={{
-                        background: isPremium ? "linear-gradient(145deg, #121820 0%, #0a0e14 100%)" : "rgba(10, 14, 20, 0.6)",
-                        border: `1px solid ${isPremium ? "rgba(212, 175, 55, 0.5)" : "rgba(255, 255, 255, 0.08)"}`,
-                        borderRadius: 16, padding: 24, position: "relative",
-                        boxShadow: "0 4px 20px rgba(0,0,0,0.4)"
-                      }}>
-                        {isPremium && (
-                          <div style={{
-                            background: "#d4af37", color: "#0a0e14", borderRadius: 999,
-                            padding: "3px 12px", fontSize: 10, fontWeight: 800, textTransform: "uppercase",
-                            letterSpacing: 1, position: "absolute", top: -10, right: 20
-                          }}>
-                            POPULAR
-                          </div>
-                        )}
-                        <div style={{ fontSize: 13, color: "#00b4d8", fontWeight: 800, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 16 }}>
-                          {grp.optionName}
-                        </div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                          {grp.hotels.map((h: any, hIdx: number) => (
-                            <div key={hIdx} style={{
-                              borderBottom: hIdx < grp.hotels.length - 1 ? "1px solid rgba(255, 255, 255, 0.08)" : "none",
-                              paddingBottom: hIdx < grp.hotels.length - 1 ? 14 : 0
-                            }}>
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8, marginBottom: 4 }}>
-                                <h3 style={{ fontFamily: "Outfit, sans-serif", fontSize: "1.15rem", fontWeight: 700, color: "#fff", margin: 0 }}>
-                                  {h.directions_url ? (
-                                    <a href={h.directions_url} target="_blank" rel="noreferrer" style={{ color: "#fff", textDecoration: "none" }}>
-                                      🏨 {h.hotel_name || "Hotel"} {h.city ? `(${h.city})` : ""} 📍
-                                    </a>
-                                  ) : (
-                                    <span>🏨 {h.hotel_name || "Hotel"} {h.city ? `(${h.city})` : ""}</span>
-                                  )}
-                                </h3>
-                                {h.google_rating && (
-                                  <div style={{ color: "#d4af37", fontSize: 12, fontWeight: 600 }}>
-                                    {"★".repeat(Math.round(Number(h.google_rating) || 5))} <span style={{ color: "#a0aec0" }}>({h.google_rating} Star)</span>
-                                  </div>
-                                )}
-                              </div>
-                              <ul style={{ listStyle: "none", padding: 0, margin: 0, color: "#a0aec0", fontSize: 13, display: "flex", flexDirection: "column", gap: 4 }}>
-                                <li>🛏️ Room: <strong style={{ color: "#f0f4f8" }}>{h.room_category || "Standard Room"}</strong></li>
-                                <li>🌙 Duration: <strong style={{ color: "#f0f4f8" }}>{h.nights || 1} Night(s)</strong></li>
-                                {h.meal_plan && <li>🍽️ Meal Plan: <strong style={{ color: "#f0f4f8" }}>{h.meal_plan}</strong></li>}
-                              </ul>
-                            </div>
-                          ))}
-                        </div>
-                        <div style={{
-                          marginTop: 18, paddingTop: 14, borderTop: "1.5px solid rgba(0, 180, 216, 0.2)",
-                          display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8
-                        }}>
-                          <div>
-                            <span style={{ fontSize: 11, color: "#a0aec0", textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Total Cost</span>
-                            {perPersonCost && (
-                              <div style={{ fontSize: 12, color: "#d4af37", marginTop: 2, fontWeight: 600 }}>
-                                ({fmtINR(perPersonCost)} / Person)
-                              </div>
-                            )}
-                          </div>
-                          <div style={{ fontSize: "1.3rem", fontWeight: 800, color: "#00b4d8", fontFamily: "Outfit, sans-serif" }}>
-                            {grp.totalCost ? fmtINR(grp.totalCost) : "On Request"}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
             {/* ══════ DAY BY DAY ITINERARY ══════ */}
             {days.length > 0 && (
               <div id="section-itinerary" style={{ scrollMarginTop: "100px", marginBottom: 48 }}>
@@ -1498,6 +1411,93 @@ function DarkTemplateView({ itin, me, printRef, handlePrint, id }: { itin: any; 
                             📌 <strong>Note:</strong> {day.notes}
                           </div>
                         )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ══════ PACKAGE PRICING CARDS ══════ */}
+            {isSectionVisible(itin, "pricing") && stays.length > 0 && (
+              <div data-pdf-section="preceding" id="section-stays" style={{ scrollMarginTop: "100px", marginBottom: 48, breakInside: "avoid", pageBreakInside: "avoid", breakBefore: "auto" }}>
+                <h2 style={{ fontFamily: "Outfit, sans-serif", fontSize: "1.8rem", fontWeight: 700, color: "#fff", marginBottom: 8, display: "flex", alignItems: "center", gap: 12 }}>
+                  <span style={{ color: "#00b4d8" }}>🏨</span> Package Pricing Options
+                </h2>
+                <p style={{ color: "#a0aec0", marginBottom: 28, fontSize: "1rem" }}>
+                  Select from our curated accommodation packages
+                </p>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 24 }}>
+                  {groupStaysByOption(stays).map((grp, i) => {
+                    const isPremium = i === 0;
+                    const pax = itin.num_travellers || (Number(itin.num_adults || 0) + Number(itin.num_children || 0));
+                    const rawCost = Number(String(grp.totalCost || "").replace(/[^\d.]/g, ""));
+                    const perPersonCost = (pax > 0 && rawCost > 0) ? Math.round(rawCost / pax) : null;
+                    return (
+                      <div key={grp.optionName} style={{
+                        background: isPremium ? "linear-gradient(145deg, #121820 0%, #0a0e14 100%)" : "rgba(10, 14, 20, 0.6)",
+                        border: `1px solid ${isPremium ? "rgba(212, 175, 55, 0.5)" : "rgba(255, 255, 255, 0.08)"}`,
+                        borderRadius: 16, padding: 24, position: "relative",
+                        boxShadow: "0 4px 20px rgba(0,0,0,0.4)"
+                      }}>
+                        {isPremium && (
+                          <div style={{
+                            background: "#d4af37", color: "#0a0e14", borderRadius: 999,
+                            padding: "3px 12px", fontSize: 10, fontWeight: 800, textTransform: "uppercase",
+                            letterSpacing: 1, position: "absolute", top: -10, right: 20
+                          }}>
+                            POPULAR
+                          </div>
+                        )}
+                        <div style={{ fontSize: 13, color: "#00b4d8", fontWeight: 800, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 16 }}>
+                          {grp.optionName}
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                          {grp.hotels.map((h: any, hIdx: number) => (
+                            <div key={hIdx} style={{
+                              borderBottom: hIdx < grp.hotels.length - 1 ? "1px solid rgba(255, 255, 255, 0.08)" : "none",
+                              paddingBottom: hIdx < grp.hotels.length - 1 ? 14 : 0
+                            }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8, marginBottom: 4 }}>
+                                <h3 style={{ fontFamily: "Outfit, sans-serif", fontSize: "1.15rem", fontWeight: 700, color: "#fff", margin: 0 }}>
+                                  {h.directions_url ? (
+                                    <a href={h.directions_url} target="_blank" rel="noreferrer" style={{ color: "#fff", textDecoration: "none" }}>
+                                      🏨 {h.hotel_name || "Hotel"} {h.city ? `(${h.city})` : ""} 📍
+                                    </a>
+                                  ) : (
+                                    <span>🏨 {h.hotel_name || "Hotel"} {h.city ? `(${h.city})` : ""}</span>
+                                  )}
+                                </h3>
+                                {h.google_rating && (
+                                  <div style={{ color: "#d4af37", fontSize: 12, fontWeight: 600 }}>
+                                    {"★".repeat(Math.round(Number(h.google_rating) || 5))} <span style={{ color: "#a0aec0" }}>({h.google_rating} Star)</span>
+                                  </div>
+                                )}
+                              </div>
+                              <ul style={{ listStyle: "none", padding: 0, margin: 0, color: "#a0aec0", fontSize: 13, display: "flex", flexDirection: "column", gap: 4 }}>
+                                <li>🛏️ Room: <strong style={{ color: "#f0f4f8" }}>{h.room_category || "Standard Room"}</strong></li>
+                                <li>🌙 Duration: <strong style={{ color: "#f0f4f8" }}>{h.nights || 1} Night(s)</strong></li>
+                                {h.meal_plan && <li>🍽️ Meal Plan: <strong style={{ color: "#f0f4f8" }}>{h.meal_plan}</strong></li>}
+                              </ul>
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{
+                          marginTop: 18, paddingTop: 14, borderTop: "1.5px solid rgba(0, 180, 216, 0.2)",
+                          display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8
+                        }}>
+                          <div>
+                            <span style={{ fontSize: 11, color: "#a0aec0", textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Total Cost</span>
+                            {perPersonCost && (
+                              <div style={{ fontSize: 12, color: "#d4af37", marginTop: 2, fontWeight: 600 }}>
+                                ({fmtINR(perPersonCost)} / Person)
+                              </div>
+                            )}
+                          </div>
+                          <div style={{ fontSize: "1.3rem", fontWeight: 800, color: "#00b4d8", fontFamily: "Outfit, sans-serif" }}>
+                            {grp.totalCost ? fmtINR(grp.totalCost) : "On Request"}
+                          </div>
+                        </div>
                       </div>
                     );
                   })}
