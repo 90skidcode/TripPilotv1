@@ -691,11 +691,18 @@ export default function PublicShareItineraryPage({ params }: { params: Promise<{
           }
           .dark-chips-mobile {
             display: flex !important;
+            position: sticky !important;
+            top: 0 !important;
+            z-index: 100 !important;
+            background: rgba(10, 14, 20, 0.85) !important;
+            backdrop-filter: blur(12px) !important;
+            -webkit-backdrop-filter: blur(12px) !important;
             overflow-x: auto !important;
             white-space: nowrap !important;
             gap: 8px !important;
-            padding: 4px 4px 12px 4px !important;
+            padding: 10px 4px 10px 4px !important;
             margin-bottom: 20px !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
             -webkit-overflow-scrolling: touch !important;
             scrollbar-width: none !important;
           }
