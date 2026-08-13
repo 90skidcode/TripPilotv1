@@ -94,11 +94,14 @@ function isSectionVisible(itin: any, key: string): boolean {
 }
 
 function groupStaysByOption(stays: any[]) {
+  if (!Array.isArray(stays)) return [];
   const groupsMap: Record<string, any[]> = {};
   const order: string[] = [];
   for (let i = 0; i < stays.length; i++) {
     const s = stays[i];
-    const key = (s.option || `OPTION ${i + 1}`).trim();
+    if (!s || typeof s !== "object") continue;
+    const rawOpt = s.option !== undefined && s.option !== null ? String(s.option) : `OPTION ${i + 1}`;
+    const key = rawOpt.trim() || `OPTION ${i + 1}`;
     if (!groupsMap[key]) {
       groupsMap[key] = [];
       order.push(key);
@@ -107,7 +110,7 @@ function groupStaysByOption(stays: any[]) {
   }
   return order.map((name) => {
     const hotels = groupsMap[name];
-    const costItem = hotels.find((h) => h.total_cost !== undefined && h.total_cost !== null && h.total_cost !== "");
+    const costItem = hotels.find((h) => h && h.total_cost !== undefined && h.total_cost !== null && h.total_cost !== "");
     return {
       optionName: name,
       hotels,
