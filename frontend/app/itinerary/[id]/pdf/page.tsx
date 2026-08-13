@@ -322,7 +322,7 @@ export default function ItineraryPDFPage({ params }: { params: Promise<{ id: str
   const flights = itin.flights || {};
   const meals = itin.meals_summary || {};
 
-  const rawAgencyName = itin.agency_name || me?.agency_name;
+  const rawAgencyName = itin.agency_name || me?.agency_name || me?.name || "";
   const agencyName = (rawAgencyName && rawAgencyName.trim().toLowerCase() !== "trippilot") ? rawAgencyName.trim() : "";
   const agencyLogoSrc = resolveAssetUrl(itin.logo_url || me?.logo_url);
   const agencyAddress = itin.agency_office_address || me?.agency_office_address;
@@ -999,7 +999,7 @@ function DarkTemplateView({ itin, me, printRef, handlePrint, id }: { itin: any; 
   const stays: any[] = itin.stay_options || [];
   const flights = itin.flights || {};
 
-  const rawAgencyName = itin.agency_name || me?.agency_name;
+  const rawAgencyName = itin.agency_name || me?.agency_name || me?.name || "";
   const agencyName = (rawAgencyName && rawAgencyName.trim().toLowerCase() !== "trippilot") ? rawAgencyName.trim() : "";
   const agencyLogoSrc = resolveAssetUrl(itin.logo_url || me?.logo_url);
   const agencyAddress = itin.agency_office_address || me?.agency_office_address;

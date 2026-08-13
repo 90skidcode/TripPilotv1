@@ -55,19 +55,47 @@ def get_public_itinerary_data(db: Session, share_token: str) -> dict:
         if now > expiry:
             raise HTTPException(status_code=410, detail="This itinerary link has expired")
 
-    # Fetch agency & advisor branding without exposing sensitive user/org data
+    # Fetch agency & advisor branding with complete fallback resolution
     org = db.query(Organization).filter(Organization.id == itin.org_id).first() if itin.org_id else None
     creator = db.query(User).filter(User.id == itin.created_by).first() if itin.created_by else None
 
-    raw_agency_name = (creator and getattr(creator, "agency_name", None)) or (org and getattr(org, "name", None)) or ""
+    raw_agency_name = (
+        getattr(itin, "agency_name", None)
+        or (org and getattr(org, "agency_name", None))
+        or (org and getattr(org, "name", None))
+        or ""
+    )
     agency_name = raw_agency_name.strip() if raw_agency_name and raw_agency_name.strip().lower() != "trippilot" else ""
 
-    logo_url = (creator and getattr(creator, "logo_url", None)) or (org and getattr(org, "logo_url", None)) or ""
-    office_address = (creator and getattr(creator, "agency_office_address", None)) or (org and getattr(org, "office_address", None)) or ""
+    logo_url = (
+        getattr(itin, "logo_url", None)
+        or (org and getattr(org, "logo_url", None))
+        or ""
+    )
+    office_address = (
+        getattr(itin, "agency_office_address", None)
+        or (org and getattr(org, "agency_office_address", None))
+        or ""
+    )
 
-    advisor_name = (creator and getattr(creator, "name", None)) or ""
-    advisor_email = (creator and getattr(creator, "email", None)) or ""
-    advisor_phone = (creator and getattr(creator, "phone", None)) or ""
+    advisor_name = (
+        getattr(itin, "advisor_name", None)
+        or (org and getattr(org, "advisor_name", None))
+        or (creator and getattr(creator, "name", None))
+        or ""
+    )
+    advisor_email = (
+        getattr(itin, "advisor_email", None)
+        or (org and getattr(org, "advisor_email", None))
+        or (creator and getattr(creator, "email", None))
+        or ""
+    )
+    advisor_phone = (
+        getattr(itin, "advisor_phone", None)
+        or (org and getattr(org, "advisor_phone", None))
+        or (creator and getattr(creator, "phone_number", None))
+        or ""
+    )
 
     # Build public payload strictly excluding internal IDs
     return {

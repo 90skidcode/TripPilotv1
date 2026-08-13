@@ -130,12 +130,16 @@ export default function PublicShareItineraryPage({ params }: { params: Promise<{
   const stays: any[] = itin.stay_options || [];
   const flights = itin.flights || {};
 
-  const agencyName = itin.agency?.name || "";
-  const agencyLogoSrc = resolveAssetUrl(itin.agency?.logo_url);
-  const agencyAddress = itin.agency?.office_address || "";
+  const agencyName = itin.agency?.name || itin.agency_name || "";
+  const agencyLogoSrc = resolveAssetUrl(itin.agency?.logo_url || itin.logo_url);
+  const agencyAddress = itin.agency?.office_address || itin.agency_office_address || "";
   const hasAgencyBranding = Boolean(agencyName || agencyLogoSrc);
 
-  const advisor = itin.advisor || {};
+  const advisor = {
+    name: itin.advisor?.name || itin.advisor_name || "",
+    email: itin.advisor?.email || itin.advisor_email || "",
+    phone: itin.advisor?.phone || itin.advisor_phone || "",
+  };
   const inclusionsList = bulletList(itin.inclusions);
   const exclusionsList = bulletList(itin.exclusions);
   const paymentTermsList = bulletList(itin.payment_terms);
