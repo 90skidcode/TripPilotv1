@@ -14,7 +14,7 @@ import { useAuth } from "@/context/AuthContext";
 import { SkeletonTable } from "@/components/SkeletonLoader";
 import {
   Globe, Hotel, Target, Car, FileText, Plane, Package,
-  Edit, Trash2, Handshake, ChevronLeft, ChevronRight, X, MapPin,
+  Edit, Trash2, Handshake, ChevronLeft, ChevronRight, X, MapPin, Users,
 } from "lucide-react";
 
 const CATEGORIES = [
@@ -240,6 +240,7 @@ export default function B2BPartnersPage() {
                       <th className="px-4 py-3 w-[130px]">Phone</th>
                       <th className="px-4 py-3 w-[90px]">Category</th>
                       <th className="px-4 py-3">Countries</th>
+                      <th className="px-4 py-3 w-[80px] text-center">Leads</th>
                       <th className="px-4 py-3 w-[100px] text-center">Commission</th>
                       <th className="px-4 py-3 w-[80px] text-center">Status</th>
                       <th className="px-4 py-3 w-[90px] text-right">Actions</th>
@@ -276,6 +277,16 @@ export default function B2BPartnersPage() {
                             ) : (
                               <span className="text-muted-foreground text-xs">{p.country || "—"}</span>
                             )}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              (p.leads_count || 0) > 0
+                                ? "bg-indigo-100 text-indigo-800 font-bold border border-indigo-200"
+                                : "bg-gray-100 text-gray-400"
+                            }`}>
+                              <Users className="w-3 h-3" />
+                              {p.leads_count || 0}
+                            </span>
                           </td>
                           <td className="px-4 py-3 text-center">
                             {p.commission_pct != null ? `${p.commission_pct}%` : "—"}

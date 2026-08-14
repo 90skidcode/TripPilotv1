@@ -4,9 +4,12 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from datetime import datetime
 
+from collections import defaultdict
 from app.core.database import get_db
 from app.core.security import require_permission
 from app.models.b2b_partner import B2BPartner, B2BCategory
+from app.models.lead import Lead
+from app.models.lead_partner import LeadPartner
 from app.models.user import User
 
 router = APIRouter()
@@ -56,6 +59,7 @@ class B2BPartnerOut(BaseModel):
     commission_pct: Optional[float] = None
     notes: Optional[str] = None
     is_active: bool = True
+    leads_count: int = 0
     created_at: Optional[datetime] = None
 
     class Config:
@@ -111,6 +115,35 @@ def list_b2b_partners(
     total = len(all_partners)
     partners = all_partners[(page - 1) * per_page: page * per_page]
 
+    # Calculate unique active leads count per partner
+    partner_leads_map = defaultdict(set)
+
+    direct_leads = (
+        db.query(Lead.b2b_partner_id, Lead.id)
+        .filter(
+            Lead.org_id == current_user.org_id,
+            Lead.is_deleted == False,
+            Lead.b2b_partner_id.isnot(None)
+        )
+        .all()
+    )
+    for p_id, l_id in direct_leads:
+        if p_id:
+            partner_leads_map[p_id].add(l_id)
+
+    assoc_leads = (
+        db.query(LeadPartner.b2b_partner_id, LeadPartner.lead_id)
+        .join(Lead, Lead.id == LeadPartner.lead_id)
+        .filter(
+            Lead.org_id == current_user.org_id,
+            Lead.is_deleted == False
+        )
+        .all()
+    )
+    for p_id, l_id in assoc_leads:
+        if p_id:
+            partner_leads_map[p_id].add(l_id)
+
     items = []
     for p in partners:
         items.append({
@@ -127,6 +160,7 @@ def list_b2b_partners(
             "commission_pct": p.commission_pct,
             "notes": p.notes,
             "is_active": p.is_active,
+            "leads_count": len(partner_leads_map.get(p.id, set())),
             "created_at": p.created_at,
         })
 
