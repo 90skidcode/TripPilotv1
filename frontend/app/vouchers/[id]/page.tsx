@@ -55,7 +55,7 @@ export default function VoucherEditPage({ params }: { params: Promise<{ id: stri
     if (!confirm("Are you sure you want to delete this voucher?")) return;
     try {
       await vouchersApi.delete(Number(id));
-      router.push(voucher.lead_id ? `/leads/${voucher.lead_id}` : "/vouchers");
+      router.push(voucher.lead_id ? `/leads/${voucher.lead_id}?tab=vouchers` : "/vouchers");
     } catch {
       alert("Failed to delete voucher.");
     }
@@ -67,7 +67,7 @@ export default function VoucherEditPage({ params }: { params: Promise<{ id: stri
     <AppShell title="Edit Voucher">
       {/* Top Bar */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
-        <button className="btn btn-ghost btn-sm" onClick={() => router.push(voucher.lead_id ? `/leads/${voucher.lead_id}` : "/vouchers")}>← Back</button>
+        <button className="btn btn-ghost btn-sm" onClick={() => router.push(voucher.lead_id ? `/leads/${voucher.lead_id}?tab=vouchers` : "/vouchers")}>← Back</button>
         <div style={{ fontWeight: 800, fontSize: 24, color: "#1a1a1a", flex: 1 }}>
           Edit Voucher: {voucher.hotel_name || "Unknown Hotel"}
         </div>

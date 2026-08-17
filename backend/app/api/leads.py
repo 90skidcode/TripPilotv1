@@ -309,8 +309,15 @@ def get_lead_workspace(
         Itinerary.org_id == org_id, Itinerary.lead_id == lead_id
     ).order_by(Itinerary.created_at.desc()).all()
 
+    vouchers_filter = (HotelVoucher.lead_id == lead_id)
+    if lead and lead.customer_id:
+        vouchers_filter = or_(
+            HotelVoucher.lead_id == lead_id,
+            and_(HotelVoucher.customer_id == lead.customer_id, HotelVoucher.customer_id != None)
+        )
+
     vouchers = db.query(HotelVoucher).filter(
-        HotelVoucher.org_id == org_id, HotelVoucher.lead_id == lead_id
+        HotelVoucher.org_id == org_id, vouchers_filter
     ).order_by(HotelVoucher.created_at.desc()).all()
 
     invoices = db.query(Invoice).filter(

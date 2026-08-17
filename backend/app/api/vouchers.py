@@ -46,6 +46,8 @@ class VoucherCreate(BaseModel):
 
 class VoucherOut(BaseModel):
     id: int
+    lead_id: Optional[int] = None
+    customer_id: Optional[int] = None
     guest_name: Optional[str] = None
     hotel_name: str
     hotel_stars: Optional[int]
@@ -60,7 +62,6 @@ class VoucherOut(BaseModel):
     special_requests: Optional[str]
     extra_data: Optional[Any]
     pdf_url: Optional[str]
-    customer_id: Optional[int] = None
     customer_name: Optional[str] = None
     customer_phone: Optional[str] = None
     created_at: datetime
@@ -104,6 +105,8 @@ def list_vouchers(
         cust_name = v.customer.name if v.customer else None
         d = {
             "id": v.id,
+            "lead_id": v.lead_id,
+            "customer_id": v.customer_id,
             "guest_name": v.guest_name or cust_name,
             "hotel_name": v.hotel_name,
             "hotel_stars": v.hotel_stars,
@@ -118,7 +121,6 @@ def list_vouchers(
             "special_requests": v.special_requests,
             "extra_data": v.extra_data,
             "pdf_url": v.pdf_url,
-            "customer_id": v.customer_id,
             "customer_name": cust_name,
             "customer_phone": v.customer.phone if v.customer else None,
             "created_at": v.created_at,
@@ -149,10 +151,13 @@ def create_voucher(
         raise HTTPException(status_code=403, detail=error_msg)
 
     data = payload.dict()
-    if not data.get("guest_name") and data.get("lead_id"):
+    if data.get("lead_id"):
         lead = db.query(Lead).filter(Lead.id == data["lead_id"], Lead.org_id == current_user.org_id).first()
-        if lead and lead.customer:
-            data["guest_name"] = lead.customer.name
+        if lead:
+            if not data.get("guest_name") and lead.customer:
+                data["guest_name"] = lead.customer.name
+            if not data.get("customer_id") and lead.customer_id:
+                data["customer_id"] = lead.customer_id
 
     voucher = HotelVoucher(**data, created_by=current_user.id, org_id=current_user.org_id)
     db.add(voucher)
@@ -190,8 +195,10 @@ def update_voucher(
     if not v:
         raise HTTPException(status_code=404, detail="Voucher not found")
     
-    # Update all attributes from payload
+    # Update attributes from payload, preserving lead_id and customer_id if not passed
     for k, val in payload.dict().items():
+        if k in ("lead_id", "customer_id") and val is None:
+            continue
         setattr(v, k, val)
         
     db.commit()
@@ -227,15 +234,19 @@ async def ai_voucher(
 
     from app.models.lead import Lead
     guest_name = payload.guest_name
-    if not guest_name and payload.lead_id:
+    customer_id = payload.customer_id
+    if payload.lead_id:
         lead = db.query(Lead).filter(Lead.id == payload.lead_id, Lead.org_id == current_user.org_id).first()
         if lead and lead.customer:
-            guest_name = lead.customer.name
+            if not guest_name:
+                guest_name = lead.customer.name
+            if not customer_id:
+                customer_id = lead.customer_id
 
     voucher = HotelVoucher(
         org_id=current_user.org_id,
         lead_id=payload.lead_id,
-        customer_id=payload.customer_id,
+        customer_id=customer_id,
         guest_name=guest_name,
         hotel_name=parsed.get("hotel_name") or "Unknown Hotel",
         hotel_stars=parsed.get("hotel_stars"),

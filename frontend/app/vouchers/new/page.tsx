@@ -28,7 +28,7 @@ function VoucherForm() {
     try {
       const res = await vouchersApi.aiEntry(text, { lead_id: leadId, customer_id: customerId });
       if (res && res.id) {
-        router.push(leadId ? `/leads/${leadId}` : `/vouchers/${res.id}`);
+        router.push(leadId ? `/leads/${leadId}?tab=vouchers` : `/vouchers/${res.id}`);
       } else {
         throw new Error("Failed to generate voucher. No ID returned.");
       }

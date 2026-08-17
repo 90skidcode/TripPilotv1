@@ -133,6 +133,13 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   const [showAddPayment, setShowAddPayment] = useState(false);
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const urlTab = new URLSearchParams(window.location.search).get("tab");
+      const validTabs = ["overview", "itineraries", "vouchers", "flights", "b2b", "invoices", "payments", "timeline"];
+      if (urlTab && validTabs.includes(urlTab)) {
+        setTab(urlTab as any);
+      }
+    }
     fetchLead();
     fetchFollowups();
     fetchCosting();
