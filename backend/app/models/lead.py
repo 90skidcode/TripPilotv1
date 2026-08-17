@@ -23,6 +23,7 @@ class LeadStage(str, enum.Enum):
     not_responding = "not_responding"
     disqualified = "disqualified"
     future_prospect = "future_prospect"
+    hold = "hold"
 
 
 class Lead(Base):
