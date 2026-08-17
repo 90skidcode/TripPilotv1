@@ -1,6 +1,6 @@
 import io
 import csv
-from typing import Optional, List
+from typing import Optional, List, Union
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -20,12 +20,26 @@ from app.services.activity import log_activity
 router = APIRouter()
 
 
+def _parse_stage(val: Optional[Union[LeadStage, str]]) -> Optional[Union[LeadStage, str]]:
+    if not val:
+        return None
+    if isinstance(val, LeadStage):
+        return val
+    s_str = str(val).strip().lower()
+    if s_str in ("hold", "on_hold", "on hold"):
+        return LeadStage.hold
+    for s in LeadStage:
+        if s.value == s_str or s.name == s_str:
+            return s
+    return s_str
+
+
 # ─── Schemas ─────────────────────────────────────────────────────────────────
 
 class LeadCreate(BaseModel):
     customer_id: int
     source: LeadSource = LeadSource.manual
-    stage: LeadStage = LeadStage.fresh
+    stage: Union[LeadStage, str] = LeadStage.fresh
     destination: Optional[str] = None
     trip_type: Optional[str] = None
     travel_date: Optional[datetime] = None
@@ -43,7 +57,7 @@ class LeadCreate(BaseModel):
 class LeadUpdate(BaseModel):
     customer_id: Optional[int] = None
     source: Optional[LeadSource] = None
-    stage: Optional[LeadStage] = None
+    stage: Optional[Union[LeadStage, str]] = None
     destination: Optional[str] = None
     trip_type: Optional[str] = None
     travel_date: Optional[datetime] = None
@@ -235,7 +249,10 @@ def create_lead(
     if not allowed:
         raise HTTPException(status_code=403, detail=error_msg)
 
-    lead = Lead(**payload.dict(), created_by=current_user.id, org_id=current_user.org_id)
+    lead_data = payload.dict()
+    if "stage" in lead_data and lead_data["stage"]:
+        lead_data["stage"] = _parse_stage(lead_data["stage"])
+    lead = Lead(**lead_data, created_by=current_user.id, org_id=current_user.org_id)
     db.add(lead)
     db.commit()
     db.refresh(lead)
@@ -509,6 +526,8 @@ def update_lead(
 
     old_stage = lead.stage
     updates = payload.dict(exclude_unset=True)
+    if "stage" in updates and updates["stage"] is not None:
+        updates["stage"] = _parse_stage(updates["stage"])
     for field, value in updates.items():
         setattr(lead, field, value)
     db.commit()
