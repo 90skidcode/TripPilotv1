@@ -1,0 +1,178 @@
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+from sqlalchemy import func, extract, or_, desc
+from datetime import datetime
+import calendar
+
+from app.core.database import get_db
+from app.core.security import get_current_user, require_permission
+from app.models.lead_payment import LeadPayment
+from app.models.lead import Lead
+from app.models.customer import Customer
+from app.models.user import User
+
+router = APIRouter()
+
+
+@router.get("/payment")
+def get_payment_report(
+    year: Optional[int] = Query(None, description="Filter by year e.g. 2026"),
+    month: Optional[int] = Query(None, description="Filter by month 1-12"),
+    payment_method: Optional[str] = Query(None, description="Filter by payment method"),
+    payment_type: Optional[str] = Query(None, description="Filter by payment type"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("leads", "read")),
+):
+    not_deleted = or_(Lead.is_deleted == False, Lead.is_deleted == None)
+
+    # Extract distinct payment years for this org
+    years_query = (
+        db.query(extract("year", LeadPayment.payment_date).label("yr"))
+        .join(Lead, LeadPayment.lead_id == Lead.id)
+        .filter(LeadPayment.org_id == current_user.org_id, not_deleted)
+        .distinct()
+        .all()
+    )
+    available_years = sorted(
+        list(set([int(y[0]) for y in years_query if y[0] is not None])), reverse=True
+    )
+    current_yr = datetime.utcnow().year
+    if current_yr not in available_years:
+        available_years.insert(0, current_yr)
+
+    # Base query for filtering payments
+    query = (
+        db.query(LeadPayment, Lead, Customer, User)
+        .join(Lead, LeadPayment.lead_id == Lead.id)
+        .join(Customer, Lead.customer_id == Customer.id)
+        .outerjoin(User, LeadPayment.created_by == User.id)
+        .filter(LeadPayment.org_id == current_user.org_id, not_deleted)
+    )
+
+    if year:
+        query = query.filter(extract("year", LeadPayment.payment_date) == year)
+    if month:
+        query = query.filter(extract("month", LeadPayment.payment_date) == month)
+    if payment_method and payment_method != "all":
+        query = query.filter(LeadPayment.payment_method == payment_method)
+    if payment_type and payment_type != "all":
+        query = query.filter(LeadPayment.payment_type == payment_type)
+
+    results = query.order_by(desc(LeadPayment.payment_date)).all()
+
+    total_earnings = 0.0
+    total_transactions = len(results)
+    full_payments_total = 0.0
+    partial_payments_total = 0.0
+
+    by_method_map: dict[str, float] = {}
+    by_type_map: dict[str, float] = {}
+    by_month_map = {m: 0.0 for m in range(1, 13)}
+    by_day_map: dict[int, float] = {}
+
+    if year and month:
+        _, num_days = calendar.monthrange(year, month)
+        for d in range(1, num_days + 1):
+            by_day_map[d] = 0.0
+
+    payments_list = []
+
+    for payment, lead, customer, creator in results:
+        amt = float(payment.amount or 0.0)
+        total_earnings += amt
+
+        # Payment type
+        ptype = payment.payment_type.value if hasattr(payment.payment_type, "value") else str(payment.payment_type)
+        if ptype == "full":
+            full_payments_total += amt
+        else:
+            partial_payments_total += amt
+
+        by_type_map[ptype] = by_type_map.get(ptype, 0.0) + amt
+
+        # Payment method
+        pmethod = payment.payment_method.value if hasattr(payment.payment_method, "value") else str(payment.payment_method)
+        by_method_map[pmethod] = by_method_map.get(pmethod, 0.0) + amt
+
+        # Date breakdown
+        if payment.payment_date:
+            pdate = payment.payment_date
+            by_month_map[pdate.month] = by_month_map.get(pdate.month, 0.0) + amt
+            if year and month and pdate.year == year and pdate.month == month:
+                by_day_map[pdate.day] = by_day_map.get(pdate.day, 0.0) + amt
+
+        payments_list.append({
+            "id": payment.id,
+            "lead_id": payment.lead_id,
+            "customer_name": customer.name if customer else "Unknown",
+            "customer_phone": customer.phone if customer else "",
+            "destination": lead.destination if lead else "",
+            "amount": amt,
+            "payment_type": ptype,
+            "payment_method": pmethod,
+            "payment_date": payment.payment_date.isoformat() if payment.payment_date else None,
+            "reference_number": payment.reference_number,
+            "notes": payment.notes,
+            "created_by_name": creator.name if creator else "System",
+            "created_at": payment.created_at.isoformat() if payment.created_at else None,
+        })
+
+    avg_payment = round(total_earnings / total_transactions, 2) if total_transactions > 0 else 0.0
+
+    month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    by_month_list = [
+        {
+            "month": m,
+            "month_name": month_names[m - 1],
+            "total_amount": round(by_month_map[m], 2),
+        }
+        for m in range(1, 13)
+    ]
+
+    by_day_list = []
+    if year and month:
+        by_day_list = [
+            {
+                "day": d,
+                "label": f"{d} {month_names[month - 1]}",
+                "total_amount": round(by_day_map.get(d, 0.0), 2),
+            }
+            for d in sorted(by_day_map.keys())
+        ]
+
+    by_method_list = [
+        {
+            "method": method,
+            "label": method.replace("_", " ").title(),
+            "total_amount": round(amt, 2),
+            "percentage": round((amt / total_earnings * 100), 1) if total_earnings > 0 else 0.0,
+        }
+        for method, amt in by_method_map.items()
+    ]
+
+    by_type_list = [
+        {
+            "type": ptype,
+            "label": ptype.title() + " Payment",
+            "total_amount": round(amt, 2),
+            "percentage": round((amt / total_earnings * 100), 1) if total_earnings > 0 else 0.0,
+        }
+        for ptype, amt in by_type_map.items()
+    ]
+
+    return {
+        "summary": {
+            "total_earnings": round(total_earnings, 2),
+            "total_transactions": total_transactions,
+            "avg_payment": avg_payment,
+            "full_payments_total": round(full_payments_total, 2),
+            "partial_payments_total": round(partial_payments_total, 2),
+        },
+        "available_years": available_years,
+        "by_month": by_month_list,
+        "by_day": by_day_list,
+        "by_method": by_method_list,
+        "by_type": by_type_list,
+        "payments": payments_list,
+    }

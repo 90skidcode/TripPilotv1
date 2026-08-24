@@ -234,6 +234,22 @@ export const dashboardApi = {
   aiInsights: () => api.get<any>("/dashboard/ai-insights"),
 };
 
+// ── Reports ──
+export const reportsApi = {
+  paymentReport: (params?: Record<string, string | number | boolean | undefined>) => {
+    const cleanParams: Record<string, string> = {};
+    if (params) {
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== "" && v !== "all") {
+          cleanParams[k] = String(v);
+        }
+      });
+    }
+    const qs = Object.keys(cleanParams).length ? "?" + new URLSearchParams(cleanParams).toString() : "";
+    return api.get<any>(`/reports/payment${qs}`);
+  },
+};
+
 // ── Inventory ──
 export const inventoryApi = {
   hotels: (params?: Record<string, string | number | boolean>) => {

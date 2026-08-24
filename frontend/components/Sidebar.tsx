@@ -20,6 +20,7 @@ import {
   ChevronDown,
   LogOut,
   Plane,
+  TrendingUp,
 } from "lucide-react";
 
 const NAV = [
@@ -27,16 +28,12 @@ const NAV = [
   { icon: Users, label: "Customer Master", href: "/customers", screen: "leads" },
   { icon: Users2, label: "Master Leads", href: "/leads", screen: "leads" },
   { icon: Handshake, label: "B2B Partners", href: "/b2b-partners", screen: "leads" },
-// { icon: MessageCircle, label: "WhatsApp", href: "/whatsapp", screen: null },
-  // { icon: Paintbrush, label: "WA Studio", href: "/whatsapp-studio", screen: null },
-  // { icon: Camera, label: "Instagram", href: "/instagram", screen: null },
-  // {
-  //   icon: Hotel, label: "Inventory", href: "/inventory", screen: "inventory",
-  //   sub: [
-  //     { label: "Hotel Inventory", href: "/inventory?tab=hotels", screen: "inventory" },
-  //     { label: "Activity Inventory", href: "/inventory?tab=activities", screen: "inventory" },
-  //   ],
-  // },
+  {
+    icon: TrendingUp, label: "Reports", href: "/reports", screen: "leads",
+    sub: [
+      { label: "Payment Report", href: "/reports/payment", screen: "leads" },
+    ],
+  },
   {
     icon: Wrench, label: "Tools", href: "/tools", screen: null,
     sub: [

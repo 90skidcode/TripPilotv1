@@ -16,6 +16,8 @@ import {
   Tag,
   AlertTriangle,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -81,6 +83,14 @@ export default function LeadTable({
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const triggerRefs = useRef<Record<number, HTMLButtonElement | null>>({});
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [leads.length]);
+
   function toggleStageMenu(leadId: number) {
     if (openDropdown === leadId) {
       setOpenDropdown(null);
@@ -135,6 +145,9 @@ export default function LeadTable({
     );
   }
 
+  const totalPages = Math.ceil(leads.length / pageSize) || 1;
+  const paginatedLeads = leads.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
   // Count leads per customer (by phone or email) on the current page to detect duplicates
   const customerCounts = leads.reduce((acc: Record<string, number>, item) => {
     const phone = item.customer?.phone;
@@ -163,7 +176,7 @@ export default function LeadTable({
           </tr>
         </thead>
         <tbody>
-          {leads.map((lead) => {
+          {paginatedLeads.map((lead) => {
             const stage = STAGE_STYLES[lead.stage] || { label: lead.stage || "—", className: "bg-gray-100 text-gray-600 border-gray-200" };
             const customer = lead.customer;
             const phone = customer?.phone;
@@ -366,6 +379,79 @@ export default function LeadTable({
           })}
         </tbody>
       </table>
+
+      {/* Pagination Controls */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t border-border text-xs text-muted-foreground bg-muted/20">
+        <div className="flex items-center gap-2">
+          <span>Rows per page:</span>
+          <select
+            value={pageSize}
+            onChange={(e) => {
+              setPageSize(Number(e.target.value));
+              setCurrentPage(1);
+            }}
+            className="h-8 px-2 py-1 bg-background border border-input rounded-md font-medium text-foreground focus:outline-none"
+          >
+            {[10, 20, 50, 100].map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+          <span className="ml-2">
+            Showing <span className="font-semibold text-foreground">{leads.length > 0 ? (currentPage - 1) * pageSize + 1 : 0}</span> to{" "}
+            <span className="font-semibold text-foreground">{Math.min(currentPage * pageSize, leads.length)}</span> of{" "}
+            <span className="font-semibold text-foreground">{leads.length}</span> leads
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+            disabled={currentPage === 1}
+            className="h-8 px-2.5 flex items-center gap-1 text-xs"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            Previous
+          </Button>
+
+          <div className="flex items-center gap-1">
+            {Array.from({ length: Math.min(totalPages, 5) }).map((_, i) => {
+              let pageNum = i + 1;
+              if (totalPages > 5 && currentPage > 3) {
+                pageNum = currentPage - 3 + i;
+                if (pageNum > totalPages) pageNum = totalPages - (4 - i);
+              }
+              return (
+                <button
+                  key={pageNum}
+                  onClick={() => setCurrentPage(pageNum)}
+                  className={`w-8 h-8 rounded-md text-xs font-semibold transition-colors ${
+                    currentPage === pageNum
+                      ? "bg-primary text-primary-foreground"
+                      : "hover:bg-muted text-foreground"
+                  }`}
+                >
+                  {pageNum}
+                </button>
+              );
+            })}
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+            disabled={currentPage === totalPages}
+            className="h-8 px-2.5 flex items-center gap-1 text-xs"
+          >
+            Next
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
