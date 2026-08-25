@@ -1,8 +1,8 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, extract, or_, desc
-from datetime import datetime
+from sqlalchemy import or_, desc
+from datetime import datetime, date
 import calendar
 
 from app.core.database import get_db
@@ -13,6 +13,22 @@ from app.models.customer import Customer
 from app.models.user import User
 
 router = APIRouter()
+
+
+def _parse_date(dt_val) -> Optional[datetime]:
+    if dt_val is None:
+        return None
+    if isinstance(dt_val, datetime):
+        return dt_val
+    if isinstance(dt_val, date):
+        return datetime(dt_val.year, dt_val.month, dt_val.day)
+    if isinstance(dt_val, str):
+        try:
+            clean_str = dt_val.replace("Z", "").replace(" ", "T")
+            return datetime.fromisoformat(clean_str)
+        except Exception:
+            return None
+    return None
 
 
 @router.get("/payment")
@@ -26,43 +42,45 @@ def get_payment_report(
 ):
     not_deleted = or_(Lead.is_deleted == False, Lead.is_deleted == None)
 
-    # Extract distinct payment years for this org
-    years_query = (
-        db.query(extract("year", LeadPayment.payment_date).label("yr"))
-        .join(Lead, LeadPayment.lead_id == Lead.id)
-        .filter(LeadPayment.org_id == current_user.org_id, not_deleted)
-        .distinct()
-        .all()
-    )
-    available_years = sorted(
-        list(set([int(y[0]) for y in years_query if y[0] is not None])), reverse=True
-    )
-    current_yr = datetime.utcnow().year
-    if current_yr not in available_years:
-        available_years.insert(0, current_yr)
-
-    # Base query for filtering payments
+    # Base query joined with Lead, Customer, and User using OUTERJOINs for safety
     query = (
         db.query(LeadPayment, Lead, Customer, User)
         .join(Lead, LeadPayment.lead_id == Lead.id)
-        .join(Customer, Lead.customer_id == Customer.id)
+        .outerjoin(Customer, Lead.customer_id == Customer.id)
         .outerjoin(User, LeadPayment.created_by == User.id)
         .filter(LeadPayment.org_id == current_user.org_id, not_deleted)
     )
 
-    if year:
-        query = query.filter(extract("year", LeadPayment.payment_date) == year)
-    if month:
-        query = query.filter(extract("month", LeadPayment.payment_date) == month)
     if payment_method and payment_method != "all":
         query = query.filter(LeadPayment.payment_method == payment_method)
     if payment_type and payment_type != "all":
         query = query.filter(LeadPayment.payment_type == payment_type)
 
-    results = query.order_by(desc(LeadPayment.payment_date)).all()
+    all_records = query.order_by(desc(LeadPayment.payment_date)).all()
+
+    # Calculate available years dynamically across all org payment records
+    extracted_years = set()
+    for payment, _, _, _ in all_records:
+        pdate = _parse_date(payment.payment_date)
+        if pdate:
+            extracted_years.add(pdate.year)
+
+    current_yr = datetime.utcnow().year
+    extracted_years.add(current_yr)
+    available_years = sorted(list(extracted_years), reverse=True)
+
+    # Perform year & month filtering in Python for 100% DB engine independence (SQLite / MySQL / Postgres)
+    filtered_results = []
+    for payment, lead, customer, creator in all_records:
+        pdate = _parse_date(payment.payment_date)
+        if year is not None and pdate and pdate.year != year:
+            continue
+        if month is not None and pdate and pdate.month != month:
+            continue
+        filtered_results.append((payment, lead, customer, creator))
 
     total_earnings = 0.0
-    total_transactions = len(results)
+    total_transactions = len(filtered_results)
     full_payments_total = 0.0
     partial_payments_total = 0.0
 
@@ -78,7 +96,7 @@ def get_payment_report(
 
     payments_list = []
 
-    for payment, lead, customer, creator in results:
+    for payment, lead, customer, creator in filtered_results:
         amt = float(payment.amount or 0.0)
         total_earnings += amt
 
@@ -96,8 +114,8 @@ def get_payment_report(
         by_method_map[pmethod] = by_method_map.get(pmethod, 0.0) + amt
 
         # Date breakdown
-        if payment.payment_date:
-            pdate = payment.payment_date
+        pdate = _parse_date(payment.payment_date)
+        if pdate:
             by_month_map[pdate.month] = by_month_map.get(pdate.month, 0.0) + amt
             if year and month and pdate.year == year and pdate.month == month:
                 by_day_map[pdate.day] = by_day_map.get(pdate.day, 0.0) + amt
@@ -111,7 +129,7 @@ def get_payment_report(
             "amount": amt,
             "payment_type": ptype,
             "payment_method": pmethod,
-            "payment_date": payment.payment_date.isoformat() if payment.payment_date else None,
+            "payment_date": pdate.isoformat() if pdate else None,
             "reference_number": payment.reference_number,
             "notes": payment.notes,
             "created_by_name": creator.name if creator else "System",
