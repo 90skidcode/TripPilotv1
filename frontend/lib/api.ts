@@ -232,6 +232,7 @@ export const dashboardApi = {
   byStage: () => api.get<any[]>("/dashboard/leads-by-stage"),
   leaderboard: () => api.get<any[]>("/dashboard/leaderboard"),
   aiInsights: () => api.get<any>("/dashboard/ai-insights"),
+  activeTours: () => api.get<any[]>("/dashboard/active-tours"),
 };
 
 // ── Reports ──

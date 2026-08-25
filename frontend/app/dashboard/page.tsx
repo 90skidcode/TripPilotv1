@@ -39,6 +39,7 @@ export default function DashboardPage() {
   const [insights, setInsights] = useState<any[]>([]);
   const [todayFollowups, setTodayFollowups] = useState<any[]>([]);
   const [todayLeadsMap, setTodayLeadsMap] = useState<Record<number, any>>({});
+  const [activeTours, setActiveTours] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingInsights, setLoadingInsights] = useState(true);
 
@@ -50,8 +51,9 @@ export default function DashboardPage() {
       dashboardApi.leaderboard(),
       followupsApi.getToday(),
       leadsApi.getTodayReminders(),
+      dashboardApi.activeTours(),
     ])
-      .then(([s, src, stg, lb, followups, reminderLeads]) => {
+      .then(([s, src, stg, lb, followups, reminderLeads, tours]) => {
         if (s.status === "fulfilled") setSummary(s.value);
         if (src.status === "fulfilled") setBySource(src.value);
         if (stg.status === "fulfilled") setByStage(stg.value);
@@ -62,6 +64,7 @@ export default function DashboardPage() {
           (reminderLeads.value || []).forEach((lead: any) => { leadMap[lead.id] = lead; });
           setTodayLeadsMap(leadMap);
         }
+        if (tours.status === "fulfilled") setActiveTours(tours.value || []);
       })
       .finally(() => setLoading(false));
 
@@ -563,6 +566,103 @@ export default function DashboardPage() {
                                     </Button>
                                   )}
                                 </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Active Tours — full-width tile */}
+            <Card className="md:col-span-2 lg:col-span-4">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <span>🧳</span> Active Tours
+                  </CardTitle>
+                  <Badge variant="primary">{activeTours.length}</Badge>
+                </div>
+                <CardDescription>Confirmed trips for Won leads active up to their final travel date</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {activeTours.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">
+                    No active tours at the moment 🌴
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="text-left font-semibold py-3 px-4">Customer</th>
+                          <th className="text-left font-semibold py-3 px-4">Destination</th>
+                          <th className="text-left font-semibold py-3 px-4">Trip Duration</th>
+                          <th className="text-left font-semibold py-3 px-4">Travel Dates</th>
+                          <th className="text-left font-semibold py-3 px-4">Status &amp; Remaining Days</th>
+                          <th className="text-left font-semibold py-3 px-4">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {activeTours.map((tour) => {
+                          const startDateFormatted = new Date(tour.start_date).toLocaleDateString("en-IN", {
+                            day: "numeric",
+                            month: "short",
+                          });
+                          const endDateFormatted = new Date(tour.end_date).toLocaleDateString("en-IN", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          });
+
+                          return (
+                            <tr key={tour.lead_id} className="border-b border-border hover:bg-muted/50 transition-colors">
+                              {/* Customer Name & Phone */}
+                              <td className="py-3 px-4">
+                                <div className="font-semibold text-foreground">{tour.customer_name}</div>
+                                {tour.customer_phone && (
+                                  <div className="text-xs text-muted-foreground">{tour.customer_phone}</div>
+                                )}
+                              </td>
+
+                              {/* Destination */}
+                              <td className="py-3 px-4">
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-muted text-foreground">
+                                  ✈️ {tour.destination}
+                                </span>
+                              </td>
+
+                              {/* Duration */}
+                              <td className="py-3 px-4 font-medium text-foreground">
+                                {tour.num_days} Days {tour.num_nights ? `/ ${tour.num_nights} Nights` : ""}
+                              </td>
+
+                              {/* Dates */}
+                              <td className="py-3 px-4 text-xs font-medium text-muted-foreground whitespace-nowrap">
+                                📅 {startDateFormatted} – {endDateFormatted}
+                              </td>
+
+                              {/* Remaining Days & Status */}
+                              <td className="py-3 px-4 whitespace-nowrap">
+                                {tour.is_ongoing ? (
+                                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                    🟢 Ongoing ({tour.remaining_days === 0 ? "Ends Today" : `${tour.remaining_days} days left`})
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                                    🔵 Starts in {tour.starts_in_days} {tour.starts_in_days === 1 ? "day" : "days"}
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* Action */}
+                              <td className="py-3 px-4 whitespace-nowrap">
+                                <Button asChild variant="outline" size="sm" className="text-xs h-7">
+                                  <a href={`/leads/${tour.lead_id}`}>View Lead</a>
+                                </Button>
                               </td>
                             </tr>
                           );

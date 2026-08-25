@@ -1,3 +1,4 @@
+from datetime import datetime, date, timedelta
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import func, case, or_, and_
@@ -5,6 +6,7 @@ from sqlalchemy import func, case, or_, and_
 from app.core.database import get_db
 from app.core.security import get_current_user, require_permission
 from app.models.lead import Lead, LeadStage, LeadSource
+from app.models.customer import Customer
 from app.models.user import User
 from app.services.ai_service import generate_dashboard_insights
 
@@ -90,3 +92,58 @@ async def get_ai_insights(
     except Exception as e:
         print(f"[ai-insights] Error: {e}")
         return {"insights": []}
+
+
+@router.get("/active-tours")
+def get_active_tours(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("dashboard", "read")),
+):
+    not_deleted = or_(Lead.is_deleted == False, Lead.is_deleted == None)
+    rows = (
+        db.query(Lead, Customer)
+        .outerjoin(Customer, Lead.customer_id == Customer.id)
+        .filter(
+            Lead.org_id == current_user.org_id,
+            Lead.stage == LeadStage.won,
+            Lead.travel_date != None,
+            not_deleted,
+        )
+        .all()
+    )
+
+    today = datetime.utcnow().date()
+    tours = []
+
+    for lead, customer in rows:
+        dt = lead.travel_date
+        if not dt:
+            continue
+        start_date = dt.date() if isinstance(dt, datetime) else dt
+
+        days = lead.num_days or (lead.num_nights + 1 if lead.num_nights else 1)
+        end_date = start_date + timedelta(days=max(days - 1, 0))
+
+        # Condition 2: Active until last date (today <= end_date)
+        if today <= end_date:
+            days_remaining = (end_date - today).days
+            starts_in = (start_date - today).days if start_date > today else 0
+            is_ongoing = start_date <= today <= end_date
+
+            tours.append({
+                "lead_id": lead.id,
+                "customer_name": customer.name if customer else "Unknown",
+                "customer_phone": customer.phone if customer else "",
+                "destination": lead.destination or "Destination Not Set",
+                "num_days": days,
+                "num_nights": lead.num_nights or (days - 1 if days > 1 else 0),
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat(),
+                "is_ongoing": is_ongoing,
+                "status": "ongoing" if is_ongoing else "upcoming",
+                "remaining_days": days_remaining,
+                "starts_in_days": starts_in,
+            })
+
+    tours.sort(key=lambda t: t["start_date"])
+    return tours
