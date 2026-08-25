@@ -121,7 +121,12 @@ def get_active_tours(
             continue
         start_date = dt.date() if isinstance(dt, datetime) else dt
 
-        days = lead.num_days or (lead.num_nights + 1 if lead.num_nights else 1)
+        if lead.num_days and lead.num_days > 0:
+            days = lead.num_days
+        elif lead.num_nights and lead.num_nights > 0:
+            days = lead.num_nights + 1
+        else:
+            days = 1
         end_date = start_date + timedelta(days=max(days - 1, 0))
 
         # Condition 2: Active until last date (today <= end_date)
