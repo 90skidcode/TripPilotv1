@@ -4,13 +4,13 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import AppShell from "@/components/AppShell";
 import { PageContainer } from "@/components/layout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar } from "@/components/ui/avatar";
 import { Spinner } from "@/components/ui/spinner";
-import { leadsApi, followupsApi, leadCostingApi, b2bPartnersApi, leadPaymentsApi, vouchersApi, flightsApi } from "@/lib/api";
+import { leadsApi, followupsApi, leadCostingApi, b2bPartnersApi, leadPaymentsApi, leadExpensesApi, vouchersApi, flightsApi } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/components/Toast";
 import { cn } from "@/lib/cn";
@@ -18,6 +18,7 @@ import AddFollowupModal from "../AddFollowupModal";
 import FollowupList from "../FollowupList";
 import AddLeadSidePanel from "../AddLeadSidePanel";
 import AddPaymentModal from "../AddPaymentModal";
+import AddExpenseModal from "../AddExpenseModal";
 import {
   ArrowLeft,
   Pencil,
@@ -131,6 +132,8 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   const [payments, setPayments] = useState<any[]>([]);
   const [totalPaid, setTotalPaid] = useState(0);
   const [showAddPayment, setShowAddPayment] = useState(false);
+  const [financials, setFinancials] = useState<any>(null);
+  const [showAddExpense, setShowAddExpense] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -146,6 +149,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
     fetchWorkspace();
     fetchActivities();
     fetchPayments();
+    fetchFinancials();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leadId]);
 
@@ -278,13 +282,32 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
     } catch { /* no payments yet */ }
   }
 
+  async function fetchFinancials() {
+    try {
+      const data = await leadExpensesApi.getFinancials(leadId);
+      setFinancials(data);
+    } catch { /* no financials yet */ }
+  }
+
   async function handleDeletePayment(paymentId: number) {
     if (!confirm("Delete this payment record?")) return;
     try {
       await leadPaymentsApi.delete(leadId, paymentId);
       fetchPayments();
+      fetchFinancials();
     } catch (err) {
       console.error("Failed to delete payment:", err);
+    }
+  }
+
+  async function handleDeleteExpense(expenseId: number) {
+    if (!confirm("Delete this expense record?")) return;
+    try {
+      await leadExpensesApi.deleteExpense(leadId, expenseId);
+      showToast({ type: "success", message: "✓ Expense deleted" });
+      fetchFinancials();
+    } catch (err: any) {
+      showToast({ type: "error", message: err.message || "Failed to delete expense" });
     }
   }
 
@@ -335,7 +358,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
     { id: "flights", label: "Flights", count: counts.flights ?? 0 },
     { id: "b2b", label: "B2B Partners", count: counts.partners ?? 0 },
     { id: "invoices", label: "Invoices", count: counts.invoices },
-    { id: "payments", label: "Payments", count: payments.length },
+    { id: "payments", label: "Financials & Profit 💰", count: null },
     { id: "timeline", label: "Timeline", count: activities.length },
   ] as const;
 
@@ -912,65 +935,108 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
             </Card>
           )}
 
-          {/* Payments tab */}
+          {/* Financials & Profitability tab */}
           {tab === "payments" && (() => {
-            const customerPrice = costing.customer_price || 0;
-            const outstanding = Math.max(0, customerPrice - totalPaid);
-            const isPaidFull = customerPrice > 0 && outstanding === 0;
-            const paidPct = customerPrice > 0 ? Math.min(100, (totalPaid / customerPrice) * 100) : 0;
+            const summary = financials?.summary || {
+              customer_price: costing.customer_price || 0,
+              total_received: totalPaid,
+              total_expenses: 0,
+              net_profit: (costing.customer_price || 0) - 0,
+              margin_percent: 0,
+              customer_outstanding: Math.max(0, (costing.customer_price || 0) - totalPaid),
+            };
+
+            const expenses: any[] = financials?.expenses || [];
+            const isProfit = summary.net_profit >= 0;
+            const paidPct = summary.customer_price > 0 ? Math.min(100, (summary.total_received / summary.customer_price) * 100) : 0;
+
+            const categoryMeta: Record<string, { label: string; icon: string }> = {
+              b2b_partner: { label: "B2B Partner / DMC", icon: "🤝" },
+              visa: { label: "Visa Processing", icon: "🛂" },
+              insurance: { label: "Travel Insurance", icon: "🛡️" },
+              flight: { label: "Flight Cost", icon: "✈️" },
+              hotel: { label: "Hotel Cost", icon: "🏨" },
+              activity: { label: "Activity Cost", icon: "🎟️" },
+              other: { label: "Other Expense", icon: "📌" },
+            };
 
             return (
-              <div className="space-y-4">
-                {/* Summary cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <Card>
+              <div className="space-y-6">
+                {/* 1. Executive Summary Cards (Top Row) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Total Package Revenue */}
+                  <Card className="border-l-4 border-l-blue-500">
                     <CardContent className="py-4 flex items-center gap-3">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-700">
                         <Wallet className="h-5 w-5" />
                       </div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total Price</p>
-                        <p className="text-lg font-bold text-foreground">₹{customerPrice.toLocaleString("en-IN")}</p>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Package Price (Revenue)</p>
+                        <p className="text-lg font-bold text-foreground">₹{summary.customer_price.toLocaleString("en-IN")}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Received: ₹{summary.total_received.toLocaleString("en-IN")}</p>
                       </div>
                     </CardContent>
                   </Card>
-                  <Card>
+
+                  {/* Total Lead Expenses */}
+                  <Card className="border-l-4 border-l-purple-500">
                     <CardContent className="py-4 flex items-center gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-green-100 text-green-700">
-                        <CheckCircle2 className="h-5 w-5" />
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-purple-100 text-purple-700">
+                        <CreditCard className="h-5 w-5" />
                       </div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total Paid</p>
-                        <p className="text-lg font-bold text-green-700">₹{totalPaid.toLocaleString("en-IN")}</p>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total Costs (Expenses)</p>
+                        <p className="text-lg font-bold text-purple-700">₹{summary.total_expenses.toLocaleString("en-IN")}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{expenses.length} Expense items recorded</p>
                       </div>
                     </CardContent>
                   </Card>
-                  <Card>
+
+                  {/* Net Profit & Profit Margin */}
+                  <Card className={cn("border-l-4", isProfit ? "border-l-emerald-500 bg-emerald-50/20" : "border-l-red-500 bg-red-50/20")}>
                     <CardContent className="py-4 flex items-center gap-3">
-                      <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-full", isPaidFull ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700")}>
+                      <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-full font-bold text-base", isProfit ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700")}>
+                        {isProfit ? "📈" : "📉"}
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Net Profit &amp; Margin</p>
+                        <p className={cn("text-lg font-extrabold", isProfit ? "text-emerald-700" : "text-red-600")}>
+                          ₹{summary.net_profit.toLocaleString("en-IN")}
+                          <span className="text-xs font-medium ml-1.5 opacity-90">({summary.margin_percent}%)</span>
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{isProfit ? "Profitable Lead 🎉" : "Loss / Negative Margin ⚠️"}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Customer Outstanding Balance */}
+                  <Card className="border-l-4 border-l-amber-500">
+                    <CardContent className="py-4 flex items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
                         <AlertCircle className="h-5 w-5" />
                       </div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Outstanding</p>
-                        <p className={cn("text-lg font-bold", isPaidFull ? "text-green-700" : "text-red-600")}>
-                          {isPaidFull ? "Fully Paid" : `₹${outstanding.toLocaleString("en-IN")}`}
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Customer Balance Due</p>
+                        <p className={cn("text-lg font-bold", summary.customer_outstanding === 0 ? "text-emerald-700" : "text-amber-700")}>
+                          {summary.customer_outstanding === 0 ? "Fully Paid" : `₹${summary.customer_outstanding.toLocaleString("en-IN")}`}
                         </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{paidPct.toFixed(0)}% Revenue Collected</p>
                       </div>
                     </CardContent>
                   </Card>
                 </div>
 
-                {/* Progress bar */}
-                {customerPrice > 0 && (
+                {/* 2. Customer Payment Progress Bar */}
+                {summary.customer_price > 0 && (
                   <Card>
                     <CardContent className="py-4">
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-semibold text-foreground">Payment Progress</span>
+                        <span className="text-sm font-semibold text-foreground">Customer Payment Collection Progress</span>
                         <span className="text-sm font-bold text-primary">{paidPct.toFixed(0)}%</span>
                       </div>
                       <div className="h-2.5 w-full rounded-full bg-muted overflow-hidden">
                         <div
-                          className={cn("h-full rounded-full transition-all duration-500", isPaidFull ? "bg-green-500" : "bg-primary")}
+                          className={cn("h-full rounded-full transition-all duration-500", paidPct >= 100 ? "bg-emerald-500" : "bg-primary")}
                           style={{ width: `${paidPct}%` }}
                         />
                       </div>
@@ -978,67 +1044,147 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
                   </Card>
                 )}
 
-                {/* Payment list */}
-                <Card>
-                  <CardHeader className="flex-row items-center justify-between">
-                    <CardTitle className="flex items-center gap-2"><CreditCard className="h-4 w-4" /> Payment Records</CardTitle>
-                    {canWrite && (
-                      <Button variant="primary" size="sm" onClick={() => setShowAddPayment(true)}>
-                        <Plus className="h-4 w-4" /> Add Payment
-                      </Button>
-                    )}
-                  </CardHeader>
-                  <CardContent className={cn(payments.length ? "space-y-2.5" : "p-0")}>
-                    {payments.length === 0 ? (
-                      <EmptyTab
-                        icon={CreditCard}
-                        label="No payments recorded yet."
-                        action={canWrite ? (
-                          <Button variant="primary" size="sm" onClick={() => setShowAddPayment(true)}>
-                            <Plus className="h-4 w-4" /> Record First Payment
-                          </Button>
-                        ) : undefined}
-                      />
-                    ) : (
-                      payments.map((p: any) => (
-                        <div key={p.id} className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3.5">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold", p.payment_type === "full" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700")}>
-                              {p.payment_type === "full" ? "F" : "P"}
-                            </div>
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-bold text-foreground">₹{Number(p.amount).toLocaleString("en-IN")}</span>
-                                <Badge className={cn("capitalize text-[10px]", p.payment_type === "full" ? "bg-green-50 text-green-700 border-green-200" : "bg-blue-50 text-blue-700 border-blue-200")}>
-                                  {p.payment_type}
-                                </Badge>
-                                <Badge className="bg-muted text-muted-foreground border-border text-[10px] capitalize">
-                                  {p.payment_method?.replace("_", " ")}
-                                </Badge>
-                              </div>
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                {p.payment_date ? new Date(p.payment_date).toLocaleDateString("en-IN") : "—"}
-                                {p.reference_number ? ` • Ref: ${p.reference_number}` : ""}
-                                {p.notes ? ` • ${p.notes}` : ""}
-                              </p>
-                            </div>
-                          </div>
-                          {canWrite && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDeletePayment(p.id)}
-                              title="Delete payment"
-                              className="hover:bg-destructive/10 hover:text-destructive shrink-0"
-                            >
-                              <Trash2 className="h-4 w-4" />
+                {/* 3. Inflow vs Outflow Tables (2 Columns) */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Column A: Customer Payments (Inflow) */}
+                  <Card>
+                    <CardHeader className="flex-row items-center justify-between">
+                      <div>
+                        <CardTitle className="flex items-center gap-2 text-base">
+                          <span>📥</span> Customer Payments ({payments.length})
+                        </CardTitle>
+                        <CardDescription>Money received from customer</CardDescription>
+                      </div>
+                      {canWrite && (
+                        <Button variant="primary" size="sm" onClick={() => setShowAddPayment(true)}>
+                          <Plus className="h-4 w-4" /> Record Payment
+                        </Button>
+                      )}
+                    </CardHeader>
+                    <CardContent className={cn(payments.length ? "space-y-2.5" : "p-0")}>
+                      {payments.length === 0 ? (
+                        <EmptyTab
+                          icon={CreditCard}
+                          label="No customer payments recorded yet."
+                          action={canWrite ? (
+                            <Button variant="primary" size="sm" onClick={() => setShowAddPayment(true)}>
+                              <Plus className="h-4 w-4" /> Record Payment
                             </Button>
-                          )}
-                        </div>
-                      ))
-                    )}
-                  </CardContent>
-                </Card>
+                          ) : undefined}
+                        />
+                      ) : (
+                        payments.map((p: any) => (
+                          <div key={p.id} className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3.5">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold", p.payment_type === "full" ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700")}>
+                                {p.payment_type === "full" ? "F" : "P"}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-bold text-foreground">₹{Number(p.amount).toLocaleString("en-IN")}</span>
+                                  <Badge className={cn("capitalize text-[10px]", p.payment_type === "full" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-blue-50 text-blue-700 border-blue-200")}>
+                                    {p.payment_type}
+                                  </Badge>
+                                  <Badge className="bg-muted text-muted-foreground border-border text-[10px] capitalize">
+                                    {p.payment_method?.replace("_", " ")}
+                                  </Badge>
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  {p.payment_date ? new Date(p.payment_date).toLocaleDateString("en-IN") : "—"}
+                                  {p.reference_number ? ` • Ref: ${p.reference_number}` : ""}
+                                  {p.notes ? ` • ${p.notes}` : ""}
+                                </p>
+                              </div>
+                            </div>
+                            {canWrite && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDeletePayment(p.id)}
+                                title="Delete payment"
+                                className="hover:bg-destructive/10 hover:text-destructive shrink-0"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Column B: Lead Expenses & Vendor Costs (Outflow) */}
+                  <Card>
+                    <CardHeader className="flex-row items-center justify-between">
+                      <div>
+                        <CardTitle className="flex items-center gap-2 text-base">
+                          <span>📤</span> Lead Expenses &amp; Vendor Costs ({expenses.length})
+                        </CardTitle>
+                        <CardDescription>B2B Partner, Visa, Insurance, Flight, Hotel costs</CardDescription>
+                      </div>
+                      {canWrite && (
+                        <Button variant="primary" size="sm" onClick={() => setShowAddExpense(true)}>
+                          <Plus className="h-4 w-4" /> Add Expense
+                        </Button>
+                      )}
+                    </CardHeader>
+                    <CardContent className={cn(expenses.length ? "space-y-2.5" : "p-0")}>
+                      {expenses.length === 0 ? (
+                        <EmptyTab
+                          icon={Receipt}
+                          label="No vendor or service expenses recorded yet."
+                          action={canWrite ? (
+                            <Button variant="primary" size="sm" onClick={() => setShowAddExpense(true)}>
+                              <Plus className="h-4 w-4" /> Add First Expense
+                            </Button>
+                          ) : undefined}
+                        />
+                      ) : (
+                        expenses.map((e: any) => {
+                          const meta = categoryMeta[e.category] || { label: e.category, icon: "📌" };
+
+                          return (
+                            <div key={e.id} className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3.5">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-purple-100 text-purple-700 text-sm">
+                                  {meta.icon}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-semibold text-foreground text-sm">{e.title}</span>
+                                    <Badge className="bg-purple-50 text-purple-700 border-purple-200 text-[10px]">
+                                      {meta.label}
+                                    </Badge>
+                                    <Badge className={cn("text-[10px] capitalize", e.payment_status === "paid" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200")}>
+                                      {e.payment_status}
+                                    </Badge>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    <span className="font-bold text-foreground">₹{Number(e.amount).toLocaleString("en-IN")}</span>
+                                    {e.payment_method ? ` • ${e.payment_method.replace("_", " ")}` : ""}
+                                    {e.payment_date ? ` • ${new Date(e.payment_date).toLocaleDateString("en-IN")}` : ""}
+                                    {e.notes ? ` • ${e.notes}` : ""}
+                                  </p>
+                                </div>
+                              </div>
+                              {canWrite && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDeleteExpense(e.id)}
+                                  title="Delete expense"
+                                  className="hover:bg-destructive/10 hover:text-destructive shrink-0"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
               </div>
             );
           })()}
@@ -1133,6 +1279,18 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
           onSaved={() => {
             setShowAddPayment(false);
             fetchPayments();
+            fetchFinancials();
+          }}
+        />
+      )}
+
+      {showAddExpense && (
+        <AddExpenseModal
+          leadId={leadId}
+          onClose={() => setShowAddExpense(false)}
+          onSaved={() => {
+            setShowAddExpense(false);
+            fetchFinancials();
           }}
         />
       )}

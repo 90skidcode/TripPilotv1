@@ -8,7 +8,7 @@ import traceback
 from app.core.database import SessionLocal
 from app.core.security import hash_password
 from fastapi.staticfiles import StaticFiles
-from app.api import auth, leads, customers, itinerary, vouchers, invoices, inventory, dashboard, upload, followups, user_groups, superadmin, pricing, webhooks, chats, b2b_partners, lead_costing, flights, lead_partners, lead_payments, org_data, master_data, share, reports
+from app.api import auth, leads, customers, itinerary, vouchers, invoices, inventory, dashboard, upload, followups, user_groups, superadmin, pricing, webhooks, chats, b2b_partners, lead_costing, flights, lead_partners, lead_payments, org_data, master_data, share, reports, lead_expenses
 from app.models import organization, user, lead, customer as customer_model, itinerary as itinerary_model, followup, inventory as inventory_model, user_group, message as message_model
 from app.models import b2b_partner as b2b_partner_model, lead_costing as lead_costing_model
 from app.models.pricing_plan import PricingPlan
@@ -230,10 +230,10 @@ def seed_master_data(db: Session):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Schema is managed by Alembic (`alembic upgrade head` runs at container
-    # start — see backend/Dockerfile). We intentionally do NOT call
-    # Base.metadata.create_all here so migrations remain the single source of
-    # truth and missing-migration bugs surface instead of being silently masked.
+    from app.core.database import engine, Base
+    from app.models import lead_expense
+    Base.metadata.create_all(bind=engine)
+
     db = SessionLocal()
     try:
         seed_pricing_plans(db)
@@ -301,6 +301,7 @@ app.include_router(b2b_partners.router, prefix="/b2b-partners", tags=["B2B Partn
 app.include_router(lead_costing.router, prefix="/leads",        tags=["Lead Costing"])
 app.include_router(lead_partners.router, prefix="/leads",       tags=["Lead Partners"])
 app.include_router(lead_payments.router, prefix="/leads",       tags=["Lead Payments"])
+app.include_router(lead_expenses.router, prefix="/leads",       tags=["Lead Expenses"])
 app.include_router(reports.router,       prefix="/reports",     tags=["Reports"])
 app.include_router(org_data.router,                             tags=["Org Data"])
 

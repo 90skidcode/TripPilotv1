@@ -156,6 +156,13 @@ export const leadPaymentsApi = {
   delete: (leadId: number, paymentId: number) => api.delete(`/leads/${leadId}/payments/${paymentId}`),
 };
 
+// ── Lead Expenses & Financials ──
+export const leadExpensesApi = {
+  getFinancials: (leadId: number) => api.get<any>(`/leads/${leadId}/financials`),
+  createExpense: (leadId: number, data: any) => api.post<any>(`/leads/${leadId}/expenses`, data),
+  deleteExpense: (leadId: number, expenseId: number) => api.delete(`/leads/${leadId}/expenses/${expenseId}`),
+};
+
 // ── Follow-ups ──
 export const followupsApi = {
   // Get all follow-ups for a lead
