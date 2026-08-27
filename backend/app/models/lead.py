@@ -12,6 +12,11 @@ class LeadSource(str, enum.Enum):
     advertisement = "advertisement"
     manual = "manual"
     email = "email"
+    phone = "phone"
+    social_media = "social_media"
+    walk_in = "walk_in"
+    event = "event"
+    other = "other"
 
 
 class LeadStage(str, enum.Enum):
@@ -32,8 +37,8 @@ class Lead(Base):
     id = Column(Integer, primary_key=True, index=True)
     org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
-    source = Column(Enum(LeadSource), default=LeadSource.manual)
-    stage = Column(Enum(LeadStage), default=LeadStage.fresh)
+    source = Column(String(50), default="manual", nullable=True)
+    stage = Column(String(50), default="fresh", nullable=True)
     destination = Column(String(200), nullable=True)
     trip_type = Column(String(100), nullable=True)
     travel_date = Column(DateTime(timezone=True), nullable=True)

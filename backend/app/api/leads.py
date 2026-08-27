@@ -20,26 +20,24 @@ from app.services.activity import log_activity
 router = APIRouter()
 
 
-def _parse_stage(val: Optional[Union[LeadStage, str]]) -> Optional[Union[LeadStage, str]]:
+def _parse_stage(val: Optional[str]) -> Optional[str]:
     if not val:
-        return None
-    if isinstance(val, LeadStage):
-        return val
-    s_str = str(val).strip().lower()
-    if s_str in ("hold", "on_hold", "on hold"):
-        return LeadStage.hold
-    for s in LeadStage:
-        if s.value == s_str or s.name == s_str:
-            return s
-    return s_str
+        return "fresh"
+    return str(val).strip().lower()
+
+
+def _parse_source(val: Optional[str]) -> Optional[str]:
+    if not val:
+        return "manual"
+    return str(val).strip().lower()
 
 
 # ─── Schemas ─────────────────────────────────────────────────────────────────
 
 class LeadCreate(BaseModel):
     customer_id: int
-    source: LeadSource = LeadSource.manual
-    stage: Union[LeadStage, str] = LeadStage.fresh
+    source: Optional[str] = "manual"
+    stage: Optional[str] = "fresh"
     destination: Optional[str] = None
     trip_type: Optional[str] = None
     travel_date: Optional[datetime] = None
@@ -56,8 +54,8 @@ class LeadCreate(BaseModel):
 
 class LeadUpdate(BaseModel):
     customer_id: Optional[int] = None
-    source: Optional[LeadSource] = None
-    stage: Optional[Union[LeadStage, str]] = None
+    source: Optional[str] = None
+    stage: Optional[str] = None
     destination: Optional[str] = None
     trip_type: Optional[str] = None
     travel_date: Optional[datetime] = None
@@ -252,6 +250,8 @@ def create_lead(
     lead_data = payload.dict()
     if "stage" in lead_data and lead_data["stage"]:
         lead_data["stage"] = _parse_stage(lead_data["stage"])
+    if "source" in lead_data and lead_data["source"]:
+        lead_data["source"] = _parse_source(lead_data["source"])
     lead = Lead(**lead_data, created_by=current_user.id, org_id=current_user.org_id)
     db.add(lead)
     db.commit()
@@ -528,6 +528,8 @@ def update_lead(
     updates = payload.dict(exclude_unset=True)
     if "stage" in updates and updates["stage"] is not None:
         updates["stage"] = _parse_stage(updates["stage"])
+    if "source" in updates and updates["source"] is not None:
+        updates["source"] = _parse_source(updates["source"])
     for field, value in updates.items():
         setattr(lead, field, value)
     db.commit()
