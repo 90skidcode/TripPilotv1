@@ -223,6 +223,18 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleDeleteMember(memberId: number, memberName: string) {
+    if (!confirm(`Are you sure you want to delete user "${memberName}"?`)) return;
+
+    try {
+      await authApi.deleteUser(memberId);
+      showToast({ type: "success", message: `User "${memberName}" deleted successfully.` });
+      loadTeamMembers();
+    } catch (err: any) {
+      showToast({ type: "error", message: err.message || "Failed to delete user." });
+    }
+  }
+
   async function handleUpdateProfile() {
     if (!name || !email) {
       showToast({ type: "error", message: "Name and Email are required fields." });
@@ -581,9 +593,22 @@ export default function SettingsPage() {
                               <p className="font-medium text-sm">{member.name}</p>
                               <p className="text-xs text-muted-foreground">{member.email}</p>
                             </div>
-                            <span className="text-xs px-2 py-1 bg-primary/10 text-primary rounded-full font-semibold">
-                              {groupName}
-                            </span>
+                            <div className="flex items-center gap-3">
+                              <span className="text-xs px-2 py-1 bg-primary/10 text-primary rounded-full font-semibold">
+                                {groupName}
+                              </span>
+                              {canManageTeam && user?.id !== member.id && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDeleteMember(member.id, member.name)}
+                                  className="text-destructive hover:bg-destructive/10 hover:text-destructive text-xs h-7 px-2"
+                                  title="Delete Team Member"
+                                >
+                                  Delete
+                                </Button>
+                              )}
+                            </div>
                           </div>
                         );
                       })}

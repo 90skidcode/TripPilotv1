@@ -213,6 +213,35 @@ def list_users(
     return [_user_with_permissions(u, db) for u in users]
 
 
+@router.delete("/users/{user_id}", status_code=204)
+def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("users", "write")),
+):
+    """Delete a user from the current organization."""
+    if current_user.id == user_id:
+        raise HTTPException(status_code=400, detail="You cannot delete your own account")
+
+    target_user = db.query(User).filter(
+        User.id == user_id,
+        User.org_id == current_user.org_id,
+    ).first()
+
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found in your organization")
+
+    from app.models.lead import Lead
+    from app.models.followup import Followup
+    db.query(Lead).filter(Lead.assigned_to == user_id).update({"assigned_to": None}, synchronize_session=False)
+    db.query(Lead).filter(Lead.created_by == user_id).update({"created_by": None}, synchronize_session=False)
+    db.query(Followup).filter(Followup.created_by == user_id).update({"created_by": None}, synchronize_session=False)
+
+    db.delete(target_user)
+    db.commit()
+    return None
+
+
 @router.put("/me", response_model=UserOut)
 def update_me(
     payload: UserUpdate,

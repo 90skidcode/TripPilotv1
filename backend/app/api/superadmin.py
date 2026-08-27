@@ -652,20 +652,18 @@ def update_agency_user(
     current_user: User = Depends(require_superadmin),
 ):
     """Update user profile role and group assignments."""
-    user = db.query(User).filter(User.id == user_id, User.is_superadmin == False).first()
+    user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     if payload.name is not None:
         user.name = payload.name
     if payload.email is not None:
-        # Check uniqueness
         existing = db.query(User).filter(User.email == payload.email, User.id != user_id).first()
         if existing:
             raise HTTPException(status_code=400, detail="Email address is already in use by another user")
         user.email = payload.email
     if payload.group_id is not None:
-        # Verify group exists in organization
         group = db.query(UserGroup).filter(
             UserGroup.id == payload.group_id,
             UserGroup.org_id == user.org_id
@@ -677,6 +675,31 @@ def update_agency_user(
     db.commit()
     db.refresh(user)
     return user
+
+
+@router.delete("/users/{user_id}", status_code=204)
+def delete_agency_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_superadmin),
+):
+    """Delete a user from an agency (superadmin)."""
+    if current_user.id == user_id:
+        raise HTTPException(status_code=400, detail="You cannot delete your own superadmin account")
+
+    target_user = db.query(User).filter(User.id == user_id).first()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    from app.models.lead import Lead
+    from app.models.followup import Followup
+    db.query(Lead).filter(Lead.assigned_to == user_id).update({"assigned_to": None}, synchronize_session=False)
+    db.query(Lead).filter(Lead.created_by == user_id).update({"created_by": None}, synchronize_session=False)
+    db.query(Followup).filter(Followup.created_by == user_id).update({"created_by": None}, synchronize_session=False)
+
+    db.delete(target_user)
+    db.commit()
+    return None
 
 
 # ── Subscription management (manual renewals — no auto-pay) ──────────────────

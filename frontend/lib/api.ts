@@ -43,6 +43,7 @@ export const authApi = {
   updateMe: (data: any) => api.put<any>("/auth/me", data),
   listUsers: () => api.get<any[]>("/auth/users"),
   register: (data: any) => api.post<any>("/auth/register", data),
+  deleteUser: (id: number) => api.delete(`/auth/users/${id}`),
   createUser: (data: { name: string; email: string; password: string; group_id?: number | null }) =>
     api.post<any>("/auth/register", data),
 };
