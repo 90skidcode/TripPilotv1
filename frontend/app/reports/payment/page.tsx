@@ -563,24 +563,22 @@ export default function PaymentReportPage() {
                                 style={{ height: `${heightPct}%` }}
                               />
 
-                              {/* X-axis: Label and Amount */}
+                              {/* X-axis: Label and Transaction Count */}
                               <div className="flex flex-col items-center mt-2 w-full text-center">
                                 <span className="text-[10px] md:text-xs font-semibold text-foreground truncate w-full">
                                   {label}
                                 </span>
                                 <span
                                   className={`text-[9px] md:text-[11px] truncate w-full mt-0.5 ${
-                                    amt > 0 ? "text-primary font-bold" : "text-muted-foreground/50 font-medium"
+                                    txCount > 0 ? "text-primary font-bold" : "text-muted-foreground/50 font-medium"
                                   }`}
                                 >
-                                  {amt > 0 ? (
-                                    <>
-                                      <span className="hidden xl:inline">{formatCurrency(amt)}</span>
-                                      <span className="inline xl:hidden">{formatCompactCurrency(amt)}</span>
-                                    </>
-                                  ) : (
-                                    "₹0"
-                                  )}
+                                  <span className="hidden sm:inline">
+                                    {txCount} {txCount === 1 ? "txn" : "txns"}
+                                  </span>
+                                  <span className="inline sm:hidden">
+                                    {txCount}
+                                  </span>
                                 </span>
                               </div>
                             </div>
